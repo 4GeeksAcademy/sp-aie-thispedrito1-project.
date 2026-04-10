@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Formulario seguro de registro HealthCore Digital con validación para cumplimiento HIPAA y UK GDPR." />
+  <title>Registro Seguro | HealthCore Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="validation.js" defer></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased font-['Manrope']">
+  <header class="border-b border-slate-800 bg-slate-950/95">
+    <div class="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
+      <a href="index.html" class="inline-flex items-center gap-3" aria-label="Volver a HealthCore Digital">
+        <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400 text-slate-900 font-extrabold">HC</span>
+        <span class="text-base font-bold">HealthCore Digital</span>
+      </a>
+      <a href="index.html" class="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium hover:border-cyan-300 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Volver al inicio</a>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-4xl px-6 py-10">
+    <section aria-labelledby="registro-titulo" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-cyan-900/20 sm:p-8">
+      <h1 id="registro-titulo" class="text-3xl font-extrabold text-white">Registro de paciente digital</h1>
+      <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Completa los datos esenciales para habilitar reservas online y verificación clínica. La región determina el marco regulatorio aplicable: HIPAA (EE.UU.) o UK GDPR (Reino Unido).</p>
+
+      <div id="formStatus" class="mt-5 hidden rounded-lg border px-4 py-3 text-sm" role="status" aria-live="polite" aria-atomic="true"></div>
+
+      <form id="applicationForm" class="mt-6 space-y-8" novalidate aria-describedby="formAyuda" aria-labelledby="registro-titulo">
+        <p id="formAyuda" class="text-sm text-slate-400">Los campos marcados con * son obligatorios.</p>
+
+        <fieldset class="space-y-5" aria-labelledby="datos-personales">
+          <legend id="datos-personales" class="text-lg font-bold text-cyan-200">Datos personales esenciales</legend>
+
+          <div class="grid gap-5 sm:grid-cols-2">
+            <div>
+              <label for="firstName" class="mb-2 block text-sm font-semibold text-slate-100">Nombre *</label>
+              <input id="firstName" name="firstName" type="text" autocomplete="given-name" required minlength="2" maxlength="60" aria-describedby="firstNameHelp firstNameError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="Ej. María" />
+              <p id="firstNameHelp" class="mt-1 text-xs text-slate-400">Solo letras, espacios, apóstrofe y guion.</p>
+              <p id="firstNameError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="lastName" class="mb-2 block text-sm font-semibold text-slate-100">Apellidos *</label>
+              <input id="lastName" name="lastName" type="text" autocomplete="family-name" required minlength="2" maxlength="80" aria-describedby="lastNameHelp lastNameError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="Ej. García López" />
+              <p id="lastNameHelp" class="mt-1 text-xs text-slate-400">Usa tu apellido legal como aparece en tu documento.</p>
+              <p id="lastNameError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="dateOfBirth" class="mb-2 block text-sm font-semibold text-slate-100">Fecha de nacimiento *</label>
+              <input id="dateOfBirth" name="dateOfBirth" type="date" required aria-describedby="dateOfBirthHelp dateOfBirthError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" />
+              <p id="dateOfBirthHelp" class="mt-1 text-xs text-slate-400">Debes tener al menos 18 años para completar este registro digital.</p>
+              <p id="dateOfBirthError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="nationalId" class="mb-2 block text-sm font-semibold text-slate-100">Documento de identidad *</label>
+              <input id="nationalId" name="nationalId" type="text" autocomplete="off" required minlength="6" maxlength="20" aria-describedby="nationalIdHelp nationalIdError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="Ej. A12345678" />
+              <p id="nationalIdHelp" class="mt-1 text-xs text-slate-400">Evita errores para reducir rechazos de facturación y fallos de EHR.</p>
+              <p id="nationalIdError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="space-y-5" aria-labelledby="contacto">
+          <legend id="contacto" class="text-lg font-bold text-cyan-200">Contacto y región regulatoria</legend>
+
+          <div class="grid gap-5 sm:grid-cols-2">
+            <div>
+              <label for="email" class="mb-2 block text-sm font-semibold text-slate-100">Correo electrónico *</label>
+              <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="120" aria-describedby="emailHelp emailError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="tu.nombre@dominio.com" />
+              <p id="emailHelp" class="mt-1 text-xs text-slate-400">No se aceptan dominios temporales (ej. mailinator).</p>
+              <p id="emailError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="phone" class="mb-2 block text-sm font-semibold text-slate-100">Teléfono móvil *</label>
+              <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required aria-describedby="phoneHelp phoneError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="EE.UU.: +1..., Reino Unido: +44..." />
+              <p id="phoneHelp" class="mt-1 text-xs text-slate-400">El formato se valida según la región seleccionada.</p>
+              <p id="phoneError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="region" class="mb-2 block text-sm font-semibold text-slate-100">Región de atención *</label>
+              <select id="region" name="region" required aria-describedby="regionHelp regionError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300">
+                <option value="">Selecciona una región</option>
+                <option value="US">Estados Unidos (HIPAA)</option>
+                <option value="UK">Reino Unido (UK GDPR)</option>
+              </select>
+              <p id="regionHelp" class="mt-1 text-xs text-slate-400">Define la normativa legal y reglas de validación aplicables.</p>
+              <p id="regionError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div>
+              <label for="postalCode" class="mb-2 block text-sm font-semibold text-slate-100">Código postal *</label>
+              <input id="postalCode" name="postalCode" type="text" autocomplete="postal-code" required maxlength="10" aria-describedby="postalCodeHelp postalCodeError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300" placeholder="Se valida por región" />
+              <p id="postalCodeHelp" class="mt-1 text-xs text-slate-400">EE.UU.: 12345 o 12345-6789 · Reino Unido: SW1A 1AA.</p>
+              <p id="postalCodeError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div class="sm:col-span-2">
+              <label for="preferredClinic" class="mb-2 block text-sm font-semibold text-slate-100">Clínica preferida *</label>
+              <select id="preferredClinic" name="preferredClinic" required aria-describedby="preferredClinicHelp preferredClinicError" class="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 outline-none transition focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300">
+                <option value="">Selecciona una clínica</option>
+                <optgroup label="Estados Unidos">
+                  <option value="Houston, TX">Houston, TX</option>
+                  <option value="Dallas, TX">Dallas, TX</option>
+                  <option value="Austin, TX">Austin, TX</option>
+                  <option value="Miami, FL">Miami, FL</option>
+                  <option value="Orlando, FL">Orlando, FL</option>
+                  <option value="Tampa, FL">Tampa, FL</option>
+                  <option value="Atlanta, GA">Atlanta, GA</option>
+                  <option value="Savannah, GA">Savannah, GA</option>
+                  <option value="Augusta, GA">Augusta, GA</option>
+                </optgroup>
+                <optgroup label="Reino Unido">
+                  <option value="London Central">London Central</option>
+                  <option value="Manchester North">Manchester North</option>
+                  <option value="Manchester South">Manchester South</option>
+                </optgroup>
+              </select>
+              <p id="preferredClinicHelp" class="mt-1 text-xs text-slate-400">Esto facilita coordinación de agenda y equipo clínico local.</p>
+              <p id="preferredClinicError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="space-y-4" aria-labelledby="consentimiento">
+          <legend id="consentimiento" class="text-lg font-bold text-cyan-200">Consentimiento y cumplimiento</legend>
+
+          <div>
+            <label for="dataConsent" class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+              <input id="dataConsent" name="dataConsent" type="checkbox" required aria-describedby="dataConsentError" class="mt-1 h-4 w-4 rounded border-slate-500 bg-slate-900 text-cyan-400 focus:ring-2 focus:ring-cyan-300" />
+              <span class="text-sm text-slate-200">Acepto el tratamiento de mis datos para prestación asistencial y coordinación operativa conforme al marco regulatorio de mi región. *</span>
+            </label>
+            <p id="dataConsentError" class="mt-1 hidden text-xs font-semibold text-red-300" role="alert" aria-live="assertive"></p>
+          </div>
+
+          <div>
+            <label for="reminderConsent" class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+              <input id="reminderConsent" name="reminderConsent" type="checkbox" aria-describedby="reminderConsentHelp" class="mt-1 h-4 w-4 rounded border-slate-500 bg-slate-900 text-cyan-400 focus:ring-2 focus:ring-cyan-300" />
+              <span class="text-sm text-slate-200">Acepto recibir recordatorios de cita por correo y teléfono para reducir ausencias.</span>
+            </label>
+            <p id="reminderConsentHelp" class="mt-1 text-xs text-slate-400">Recomendado para mejorar puntualidad y continuidad clínica.</p>
+          </div>
+        </fieldset>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button type="reset" id="clearButton" class="rounded-lg border border-slate-600 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:border-slate-400 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Limpiar formulario</button>
+          <button type="submit" class="rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Enviar registro</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
