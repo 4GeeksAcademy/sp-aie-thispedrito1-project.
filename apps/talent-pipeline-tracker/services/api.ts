@@ -1,7 +1,9 @@
 // /services/api.ts
 import { Candidate, CandidateNote, CandidateFormData } from '../types/tracker';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://playground.4geeks.com/tracker/api/v1';
+const BASE_URL =
+  (globalThis as { process?: { env?: { NEXT_PUBLIC_API_URL?: string } } }).process?.env?.NEXT_PUBLIC_API_URL ||
+  'https://playground.4geeks.com/tracker/api/v1';
 
 const normalizeNote = (raw: any): CandidateNote => ({
   id: raw?.id,
