@@ -100,22 +100,22 @@ export default function CandidateForm({ initialData, isEditing = false }: Candid
           
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Nombre *</label>
-            <input required type="text" name="firstName" value={formData.firstName} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej. Sandra" />
+            <input required type="text" name="firstName" value={formData.firstName} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="Ej. Sandra" />
           </div>
           
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Apellidos *</label>
-            <input required type="text" name="lastName" value={formData.lastName} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej. Okonkwo" />
+            <input required type="text" name="lastName" value={formData.lastName} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="Ej. Okonkwo" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico *</label>
-            <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="sandra@ejemplo.com" />
+            <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="sandra@ejemplo.com" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
-            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="+1 (555) 000-0000" />
+            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="+1 (555) 000-0000" />
           </div>
         </div>
 
@@ -125,22 +125,22 @@ export default function CandidateForm({ initialData, isEditing = false }: Candid
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Posición Clínica / Admin *</label>
-            <input required type="text" name="position" value={formData.position} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej. Enfermera de Práctica Avanzada" />
+            <input required type="text" name="position" value={formData.position} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="Ej. Enfermera de Práctica Avanzada" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Años de Experiencia *</label>
-            <input required type="number" min="0" name="experience_years" value={formData.experience_years} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <input required type="number" min="0" name="experience_years" value={formData.experience_years} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">URL de LinkedIn</label>
-            <input type="url" name="linkedin" value={formData.linkedin} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://linkedin.com/in/perfil" />
+            <input type="url" name="linkedin" value={formData.linkedin} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="https://linkedin.com/in/perfil" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">URL del CV Documentado</label>
-            <input type="url" name="cv_url" value={formData.cv_url} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://enlace-al-documento.com/cv.pdf" />
+            <input type="url" name="cv_url" value={formData.cv_url} onChange={handleChange} className="w-full p-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-black placeholder-slate-600" placeholder="https://enlace-al-documento.com/cv.pdf" />
           </div>
         </div>
       </div>

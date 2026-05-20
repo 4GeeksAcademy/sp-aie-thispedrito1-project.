@@ -173,7 +173,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
         <div className="flex items-center gap-3">
           <Link
             href={`/candidates/${candidate.id}/edit`}
-            className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+            className="text-sm px-3 py-1.5 rounded-lg border border-slate-600 text-slate-700 hover:bg-slate-100"
           >
             Editar candidatura
           </Link>
@@ -213,7 +213,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Estado del Proceso</label>
                 <select 
-                  className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 bg-white"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 bg-white text-black"
                   value={candidate.status || 'received'}
                   onChange={(e) => handleUpdatePipeline('status', e.target.value)}
                   disabled={actionLoading}
@@ -228,7 +228,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Etapa Actual</label>
                 <select 
-                  className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 bg-white"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 bg-white text-black"
                   value={candidate.stage || candidate.step || 'pending'}
                   onChange={(e) => handleUpdatePipeline('stage', e.target.value)}
                   disabled={actionLoading}
@@ -284,7 +284,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
           <form onSubmit={handleAddNote} className="mb-6">
             <textarea
-              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+              className="w-full p-3 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none text-black placeholder-slate-600"
               rows={3}
               placeholder="Añadir nota de entrevista, compliance, o requerimientos..."
               value={newNote}
@@ -306,7 +306,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
             ) : (
               safeNotes.map((note) => (
                 <div key={note.id} className="bg-slate-50 p-4 rounded-lg border border-slate-100 group relative">
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{note.content}</p>
+                  <p className="text-sm text-black whitespace-pre-wrap">{note.content}</p>
                   <div className="mt-2 flex justify-between items-center text-xs text-slate-400">
                     <span>{note.created_at ? new Date(note.created_at).toLocaleString('es-ES') : 'Fecha de nota'}</span>
                     <button

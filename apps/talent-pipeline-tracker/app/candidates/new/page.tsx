@@ -102,7 +102,7 @@ export default function NewCandidatePage() {
                   type="text"
                   required
                   placeholder="Ej: Pedro"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                 />
@@ -113,7 +113,7 @@ export default function NewCandidatePage() {
                   type="text"
                   required
                   placeholder="Ej: Sánchez"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                 />
@@ -127,7 +127,7 @@ export default function NewCandidatePage() {
                   type="email"
                   required
                   placeholder="ejemplo@correo.com"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -137,7 +137,7 @@ export default function NewCandidatePage() {
                 <input
                   type="text"
                   placeholder="+34 600 000 000"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
@@ -154,7 +154,7 @@ export default function NewCandidatePage() {
                 <input
                   type="text"
                   placeholder="Ej: Enfermero de Quirófano"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
                 />
@@ -165,7 +165,7 @@ export default function NewCandidatePage() {
                   type="number"
                   min="0"
                   placeholder="0"
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={years === 0 ? '' : years}
                   onChange={(e) => setYears(Number(e.target.value))}
                 />
@@ -178,7 +178,7 @@ export default function NewCandidatePage() {
                 <input
                   type="url"
                   placeholder="https://linkedin.com/in/..."
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={linkedin}
                   onChange={(e) => setLinkedin(e.target.value)}
                 />
@@ -188,7 +188,7 @@ export default function NewCandidatePage() {
                 <input
                   type="url"
                   placeholder="https://..."
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                  className="w-full p-2.5 border border-slate-600 rounded-lg text-sm bg-white text-slate-900 placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   value={cvUrl}
                   onChange={(e) => setCvUrl(e.target.value)}
                 />

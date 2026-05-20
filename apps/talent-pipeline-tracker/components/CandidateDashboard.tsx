@@ -217,7 +217,7 @@ export default function CandidateDashboard() {
             <input
               type="text"
               placeholder="Buscar por nombre o email..."
-              className="w-full pl-4 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-900 font-medium"
+              className="w-full pl-4 pr-4 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-900 font-medium"
               value={searchQuery}
               onChange={(e) => updateFilters('search', e.target.value)}
             />
@@ -226,7 +226,7 @@ export default function CandidateDashboard() {
           <div className="w-full md:w-auto flex flex-wrap gap-3 items-center">
             <button 
               onClick={handleManualRefresh}
-              className="p-2 text-slate-700 hover:text-blue-600 border border-slate-300 rounded-lg bg-white text-sm font-semibold transition-colors mt-5 flex items-center gap-1 shadow-sm"
+              className="p-2 text-slate-700 hover:text-blue-600 border border-slate-600 rounded-lg bg-white text-sm font-semibold transition-colors mt-5 flex items-center gap-1 shadow-sm"
             >
               🔄 Sincronizar
             </button>
@@ -234,7 +234,7 @@ export default function CandidateDashboard() {
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Estado</label>
               <select
-                className="p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-800"
+                className="p-2 border border-slate-600 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-800"
                 value={currentStatus}
                 onChange={(e) => updateFilters('status', e.target.value)}
               >
@@ -249,7 +249,7 @@ export default function CandidateDashboard() {
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Etapa Clínica</label>
               <select
-                className="p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-800"
+                className="p-2 border border-slate-600 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-800"
                 value={currentStage}
                 onChange={(e) => updateFilters('step', e.target.value)}
               >
