@@ -1,0 +1,14 @@
+{
+  "name": "healthcore-project",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "dev": "tsx src/demo.ts"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "tsx": "^4.19.2"
+  }
+}
