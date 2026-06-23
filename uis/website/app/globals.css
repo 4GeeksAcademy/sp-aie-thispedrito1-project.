@@ -1,0 +1,38 @@
+:root {
+  --bg: #020617;
+  --panel: #0f172a;
+  --muted: #94a3b8;
+  --text: #e2e8f0;
+  --brand: #22d3ee;
+  --accent: #34d399;
+  --line: #1e293b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(34, 211, 238, 0.16), transparent),
+    radial-gradient(1000px 500px at 100% 0%, rgba(52, 211, 153, 0.12), transparent),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  width: min(1120px, 92vw);
+  margin: 0 auto;
+}
