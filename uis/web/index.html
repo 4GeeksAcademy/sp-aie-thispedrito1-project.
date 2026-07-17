@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HealthCore - Analisis de Incidencias</title>
+    <style>
+      :root {
+        --bg: #f5f1e8;
+        --surface: #fff8ee;
+        --ink: #1d1b17;
+        --accent: #0f766e;
+        --accent-2: #b45309;
+        --danger: #b91c1c;
+        --line: #d6cfc1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 10% 10%, #ffeecf 0%, transparent 30%),
+          radial-gradient(circle at 90% 90%, #d9f3ef 0%, transparent 35%),
+          var(--bg);
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 2rem auto;
+        padding: 1rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 1rem;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.7rem;
+      }
+      .sub { margin: 0 0 1rem; opacity: 0.8; }
+      .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+      input[type="file"] { padding: 0.5rem; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+      button {
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+        padding: 0.6rem 0.95rem;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.secondary { background: var(--accent-2); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .err { color: var(--danger); font-weight: 600; min-height: 1.4rem; }
+      .ok { color: var(--accent); font-weight: 600; min-height: 1.4rem; }
+      .grid {
+        margin-top: 1rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.75rem;
+        background: #fff;
+      }
+      .metric h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+      ul { margin: 0; padding-left: 1.2rem; }
+      li { margin: 0.2rem 0; }
+      @media (max-width: 600px) {
+        .wrap { margin: 1rem auto; }
+        h1 { font-size: 1.4rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>HealthCore - Analisis de Incidencias</h1>
+        <p class="sub">Sube un CSV, revisa el resumen y exporta resultados.</p>
+
+        <div class="row">
+          <input id="csvFile" type="file" accept=".csv,text/csv" />
+          <button id="analyzeBtn">Analizar CSV</button>
+          <button id="exportBtn" class="secondary" disabled>Descargar CSV</button>
+        </div>
+
+        <p id="error" class="err"></p>
+        <p id="ok" class="ok"></p>
+
+        <div id="summary" class="grid" hidden></div>
+      </section>
+    </main>
+
+    <script>
+      const resolveApiBase = () => {
+        if (window.API_BASE) return window.API_BASE;
+
+        const { hostname } = window.location;
+        if (!hostname) return "http://localhost:8000";
+
+        const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+        const protocol = isLocal ? "http:" : "https:";
+
+        // GitHub Codespaces host pattern: <name>-<port>.app.github.dev
+        if (hostname.endsWith(".app.github.dev")) {
+          const mappedHost = hostname.replace(/-\d+\./, "-8000.");
+          return `${protocol}//${mappedHost}`;
+        }
+
+        return `${protocol}//${hostname}:8000`;
+      };
+
+      const API_BASE = resolveApiBase();
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const exportBtn = document.getElementById("exportBtn");
+      const csvFile = document.getElementById("csvFile");
+      const errorEl = document.getElementById("error");
+      const okEl = document.getElementById("ok");
+      const summaryEl = document.getElementById("summary");
+
+      const printList = (obj, order = null) => {
+        const keys = order || Object.keys(obj || {});
+        return `<ul>${keys.map((k) => `<li><strong>${k}</strong>: ${obj[k] ?? 0}</li>`).join("")}</ul>`;
+      };
+
+      const renderSummary = (payload) => {
+        const s = payload.summary;
+        summaryEl.hidden = false;
+        summaryEl.innerHTML = `
+          <article class="metric">
+            <h3>Totales</h3>
+            <ul>
+              <li><strong>Total</strong>: ${s.total_records}</li>
+              <li><strong>Validos</strong>: ${s.valid_records}</li>
+              <li><strong>Invalidos</strong>: ${s.invalid_records}</li>
+            </ul>
+          </article>
+          <article class="metric">
+            <h3>Invalidos por regla</h3>
+            ${printList(s.invalid_reasons, [
+              "invalid_clinic",
+              "country_clinic_mismatch",
+              "invalid_category",
+              "empty_description",
+              "missing_patient_id",
+              "closed_without_score",
+              "score_out_of_range",
+              "invalid_status",
+            ])}
+          </article>
+          <article class="metric">
+            <h3>Por categoria</h3>
+            ${printList(s.category_counts, [
+              "APPOINTMENT",
+              "BILLING",
+              "CLINICAL_CARE",
+              "ACCESSIBILITY",
+              "ADMINISTRATIVE",
+            ])}
+          </article>
+          <article class="metric">
+            <h3>Por estado</h3>
+            ${printList(s.status_counts, ["OPEN", "CLOSED", "DISCARDED"])}
+          </article>
+          <article class="metric">
+            <h3>Por pais</h3>
+            ${printList(s.country_counts, ["US", "UK"])}
+          </article>
+          <article class="metric">
+            <h3>Satisfaccion</h3>
+            <ul>
+              <li><strong>Scored</strong>: ${s.scored_closed_cases} de ${s.total_closed}</li>
+              <li><strong>Promedio</strong>: ${Number(s.average_score).toFixed(2)}</li>
+              <li><strong>Score 1</strong>: ${s.score_counts["1"]}</li>
+              <li><strong>Score 2</strong>: ${s.score_counts["2"]}</li>
+              <li><strong>Score 3</strong>: ${s.score_counts["3"]}</li>
+              <li><strong>Score 4</strong>: ${s.score_counts["4"]}</li>
+              <li><strong>Score 5</strong>: ${s.score_counts["5"]}</li>
+            </ul>
+          </article>
+        `;
+      };
+
+      const setStatus = (ok = "", err = "") => {
+        okEl.textContent = ok;
+        errorEl.textContent = err;
+      };
+
+      analyzeBtn.addEventListener("click", async () => {
+        const file = csvFile.files?.[0];
+        if (!file) {
+          setStatus("", "Selecciona un CSV antes de analizar.");
+          return;
+        }
+
+        setStatus("Analizando...", "");
+        exportBtn.disabled = true;
+        summaryEl.hidden = true;
+
+        const form = new FormData();
+        form.append("file", file);
+
+        try {
+          const res = await fetch(`${API_BASE}/api/incidents/analyze`, {
+            method: "POST",
+            body: form,
+          });
+          const data = await res.json();
+
+          if (!res.ok) {
+            setStatus("", data.detail || "Error al analizar el archivo.");
+            return;
+          }
+
+          renderSummary(data);
+          exportBtn.disabled = false;
+          setStatus(`Analisis completado para ${data.source_file}.`, "");
+        } catch (err) {
+          setStatus("", `No se pudo conectar al API (${API_BASE}): ${err.message}`);
+        }
+      });
+
+      exportBtn.addEventListener("click", async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/incidents/results/export`);
+          if (!res.ok) {
+            const data = await res.json();
+            setStatus("", data.detail || "No hay resultados para exportar.");
+            return;
+          }
+
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "results.csv";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          setStatus("CSV exportado correctamente.", "");
+        } catch (err) {
+          setStatus("", `Error exportando CSV (${API_BASE}): ${err.message}`);
+        }
+      });
+    </script>
+  </body>
+</html>
