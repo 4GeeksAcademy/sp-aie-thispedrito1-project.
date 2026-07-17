@@ -19,6 +19,7 @@ from shared.incidents_analysis import (  # noqa: E402
     csv_results_content,
     load_csv_rows_from_bytes,
 )
+from routes.suppliers import router as suppliers_router  # noqa: E402
 
 app = FastAPI(title="HealthCore Incidents API", version="1.0.0")
 
@@ -29,6 +30,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(suppliers_router)
 
 _last_analysis_lock = Lock()
 _last_analysis: Dict[str, Any] | None = None
