@@ -17,6 +17,8 @@
 - Estructura frontend inicial creada en uis/ con dos apps Next.js + TypeScript (website y backoffice).
 - Web corporativa de Hito 1 migrada a uis/website en componentes React reutilizables y ruta /.
 - Backoffice inicial en uis/backoffice con layout propio y vista / conectada a la logica de negocio del Hito 2 sin copiar codigo.
+- AUTH-01 implementado en services/api con JWT stateless, usuarios/perfiles en TinyDB, dependencia get_current_user y proteccion de rutas sensibles existentes.
+- Nuevos modulos backend activos bajo /auth, /users y /profiles con validacion de credenciales hasheadas y expiracion de token por entorno.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
@@ -24,6 +26,7 @@
 - Preparacion para observabilidad y trazabilidad orientadas a cumplimiento.
 - Estandarizacion del flujo operativo del agente mediante skills reutilizables para memoria y validacion.
 - Evolucion de UI interna del backoffice desde vista base hacia dashboard operativo por modulo.
+- Endurecimiento del flujo de validacion manual en /docs para registro, login, autorizacion Bearer y pruebas de 401/403.
 
 ## Proximos pasos previstos (prioridad)
 1. Resolver errores de lint relacionados con any y migrar a unknown + narrowing.

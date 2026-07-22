@@ -6,6 +6,8 @@
 - Calidad de codigo con ESLint 9 + configuraciones de Next (core web vitals y TypeScript).
 - Capa de consumo de datos via fetch HTTP hacia API externa configurada con NEXT_PUBLIC_API_URL.
 - Repositorio con estructura multi-area: app web en apps/talent-pipeline-tracker y utilidades/tipos en raiz.
+- Backend API en FastAPI con TinyDB para persistencia operativa local de proveedores, usuarios y perfiles.
+- Seguridad backend con JWT stateless (python-jose), hash de contrasenas con passlib+bcrypt y dependencia OAuth2PasswordBearer.
 
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:
@@ -35,3 +37,4 @@
 - Reducir deuda tecnica de tipado en componentes y servicios.
 - Evaluar BFF o backend propio para control de seguridad, trazabilidad y cumplimiento.
 - Mantener arquitectura por capas para escalar a nuevos modulos del dominio HealthCore.
+- Mantener User/Profile exclusivamente en TinyDB y reutilizar user_id como user_uuid de referencia en otros modulos para evitar migraciones inconsistentes de auth.

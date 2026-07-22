@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
@@ -19,7 +19,11 @@ from shared.incidents_analysis import (  # noqa: E402
     csv_results_content,
     load_csv_rows_from_bytes,
 )
+from routes.auth import router as auth_router  # noqa: E402
+from routes.profiles import router as profiles_router  # noqa: E402
 from routes.suppliers import router as suppliers_router  # noqa: E402
+from routes.users import router as users_router  # noqa: E402
+from security import get_current_user  # noqa: E402
 
 app = FastAPI(title="HealthCore Incidents API", version="1.0.0")
 
@@ -32,6 +36,9 @@ app.add_middleware(
 )
 
 app.include_router(suppliers_router)
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(profiles_router)
 
 _last_analysis_lock = Lock()
 _last_analysis: Dict[str, Any] | None = None
@@ -51,7 +58,11 @@ def web_home() -> Response:
 
 
 @app.post("/api/incidents/analyze")
-async def analyze_incidents(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def analyze_incidents(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    _ = current_user
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing file name")
 
@@ -82,7 +93,8 @@ async def analyze_incidents(file: UploadFile = File(...)) -> Dict[str, Any]:
 
 
 @app.get("/api/incidents/results/export")
-def export_last_results() -> Response:
+def export_last_results(current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:
+    _ = current_user
     with _last_analysis_lock:
         if _last_analysis is None:
             raise HTTPException(status_code=404, detail="No analysis available yet")

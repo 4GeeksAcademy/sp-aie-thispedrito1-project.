@@ -92,3 +92,77 @@ class SupplierSeed(SupplierBase):
         payload = self.model_dump(mode="json", exclude_none=True)
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()
         return payload
+
+
+class UserRole(str, Enum):
+    admin = "admin"
+    manager = "manager"
+    user = "user"
+
+
+class ProfileBase(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=160)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    address: Optional[str] = Field(default=None, max_length=300)
+
+
+class ProfileCreate(ProfileBase):
+    pass
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=160)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    address: Optional[str] = Field(default=None, max_length=300)
+
+
+class ProfileRead(ProfileBase):
+    id: str
+    user_id: str
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
+    name: Optional[str] = Field(default=None, max_length=160)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    address: Optional[str] = Field(default=None, max_length=300)
+
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    role: Optional[UserRole] = None
+
+
+class UserPublic(BaseModel):
+    id: str
+    email: EmailStr
+    is_active: bool
+    role: UserRole
+    created_at: datetime
+
+
+class UserWithProfile(BaseModel):
+    id: str
+    email: EmailStr
+    is_active: bool
+    role: UserRole
+    created_at: datetime
+    profile: ProfileRead
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class AuthMeResponse(BaseModel):
+    id: str
+    email: EmailStr
+    role: UserRole
+    profile: ProfileRead
