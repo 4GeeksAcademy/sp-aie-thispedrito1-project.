@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from models import Supplier, SupplierCreate, SupplierRateUpdate, SupplierStatusUpdate
 from repository import SupplierRepository
+from security import get_current_user
 
-router = APIRouter(prefix="/suppliers", tags=["suppliers"])
+router = APIRouter(prefix="/suppliers", tags=["suppliers"], dependencies=[Depends(get_current_user)])
 repo = SupplierRepository()
 
 
