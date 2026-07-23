@@ -235,6 +235,14 @@
             "is_active": true,
             "role": "user",
             "created_at": "2026-07-22T20:04:39.816610+00:00"
+        },
+        "4": {
+            "id": "da3a9f39-1894-4fea-9e3d-359f5e902df7",
+            "email": "thispedrito1@gmail.com",
+            "hashed_password": "$2b$12$2IbQStgKUX79lbJTBxgng.dAEkPOoI47G4146RULM2XBu2RbkJzDi",
+            "is_active": true,
+            "role": "user",
+            "created_at": "2026-07-23T09:57:27.256053+00:00"
         }
     },
     "profiles": {
@@ -258,6 +266,13 @@
             "name": "Manual Test",
             "phone": null,
             "address": null
+        },
+        "4": {
+            "id": "05153483-7196-49ff-bfda-11b51e73c1d5",
+            "user_id": "da3a9f39-1894-4fea-9e3d-359f5e902df7",
+            "name": "pedro",
+            "phone": "612626126",
+            "address": "espa\u00f1a"
         }
     }
 }

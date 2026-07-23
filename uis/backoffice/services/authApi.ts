@@ -1,4 +1,4 @@
-import type { AuthMeResponse, LoginPayload, ProfileUpdatePayload, RegisterPayload, TokenResponse } from "../types/auth";
+import type { AuthMeResponse, ForgotPasswordPayload, LoginPayload, MessageResponse, ProfileUpdatePayload, RegisterPayload, ResetPasswordPayload, TokenResponse } from "../types/auth";
 import { requestJson } from "./http";
 
 export const authApi = {
@@ -11,6 +11,20 @@ export const authApi = {
 
   register(payload: RegisterPayload): Promise<void> {
     return requestJson<void>("/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  forgotPassword(payload: ForgotPasswordPayload): Promise<MessageResponse> {
+    return requestJson<MessageResponse>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  resetPassword(payload: ResetPasswordPayload): Promise<MessageResponse> {
+    return requestJson<MessageResponse>("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify(payload),
     });

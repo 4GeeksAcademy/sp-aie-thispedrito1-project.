@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { clearAuthToken, hasValidSession } from "../services/session";
 
-const PUBLIC_ROUTES = new Set(["/login", "/register"]);
+const PUBLIC_ROUTES = new Set(["/login", "/register", "/forgot-password", "/reset-password"]);
 
 function isSafeRedirectPath(candidate: string | null): candidate is string {
   return Boolean(candidate && candidate.startsWith("/") && !candidate.startsWith("//"));
