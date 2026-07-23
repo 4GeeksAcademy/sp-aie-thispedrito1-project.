@@ -1,34 +1,5 @@
 import type { Supplier, SupplierCreateInput, SupplierFilters, SupplierStatus } from "../types/supplier";
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api-proxy";
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
-
-  if (!response.ok) {
-    let message = "Request failed";
-    try {
-      const data = await response.json();
-      message = data.detail || message;
-    } catch {
-      // Keep fallback message.
-    }
-    throw new Error(message);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
+import { requestJson } from "./http";
 
 export function getSuppliers(filters: SupplierFilters): Promise<Supplier[]> {
   const params = new URLSearchParams();
@@ -36,32 +7,32 @@ export function getSuppliers(filters: SupplierFilters): Promise<Supplier[]> {
   if (filters.category) params.set("category", filters.category);
 
   const query = params.toString();
-  return request<Supplier[]>(`/suppliers${query ? `?${query}` : ""}`);
+  return requestJson<Supplier[]>(`/suppliers${query ? `?${query}` : ""}`, undefined, { authRequired: true });
 }
 
 export function createSupplier(payload: SupplierCreateInput): Promise<Supplier> {
-  return request<Supplier>("/suppliers", {
+  return requestJson<Supplier>("/suppliers", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, { authRequired: true });
 }
 
 export function updateSupplierRate(id: number, monthlyRate: number): Promise<Supplier> {
-  return request<Supplier>(`/suppliers/${id}/rate`, {
+  return requestJson<Supplier>(`/suppliers/${id}/rate`, {
     method: "PATCH",
     body: JSON.stringify({ monthly_rate: monthlyRate }),
-  });
+  }, { authRequired: true });
 }
 
 export function updateSupplierStatus(id: number, status: SupplierStatus): Promise<Supplier> {
-  return request<Supplier>(`/suppliers/${id}/status`, {
+  return requestJson<Supplier>(`/suppliers/${id}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
-  });
+  }, { authRequired: true });
 }
 
 export function deleteSupplier(id: number): Promise<void> {
-  return request<void>(`/suppliers/${id}`, {
+  return requestJson<void>(`/suppliers/${id}`, {
     method: "DELETE",
-  });
+  }, { authRequired: true });
 }

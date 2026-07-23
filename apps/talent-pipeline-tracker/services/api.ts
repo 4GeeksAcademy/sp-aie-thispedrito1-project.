@@ -1,24 +1,80 @@
 // /services/api.ts
-import { Candidate, CandidateNote, CandidateFormData } from '../types/tracker';
+import { clearAuthToken, getAuthToken } from "./session";
+import { Candidate, CandidateFormData, CandidateNote } from "../types/tracker";
+import {
+  AuthMeResponse,
+  LoginPayload,
+  ProfileUpdatePayload,
+  RegisterPayload,
+  TokenResponse,
+} from "../types/auth";
 
-const BASE_URL =
+const TRACKER_BASE_URL =
   (globalThis as { process?: { env?: { NEXT_PUBLIC_API_URL?: string } } }).process?.env?.NEXT_PUBLIC_API_URL ||
-  'https://playground.4geeks.com/tracker/api/v1';
+  "https://playground.4geeks.com/tracker/api/v1";
 
-const normalizeNote = (raw: any): CandidateNote => ({
-  id: raw?.id,
-  candidate_id: raw?.candidate_id || raw?.record_id || '',
-  record_id: raw?.record_id || raw?.candidate_id || '',
-  content: raw?.content || '',
-  created_at: raw?.created_at || '',
-});
+const AUTH_BASE_URL =
+  (globalThis as { process?: { env?: { NEXT_PUBLIC_AUTH_API_URL?: string } } }).process?.env?.NEXT_PUBLIC_AUTH_API_URL ||
+  "/api-proxy";
 
-const parseNotesPayload = (payload: any): CandidateNote[] => {
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === "object" && value !== null
+);
+
+const redirectToLogin = () => {
+  if (typeof window === "undefined") return;
+  clearAuthToken();
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login");
+  }
+};
+
+const extractErrorMessage = (status: number, payload: unknown): string => {
+  if (isObjectRecord(payload) && payload.detail !== undefined) {
+    if (typeof payload.detail === "string") {
+      return payload.detail;
+    }
+    if (status === 422) {
+      return `API_422_DETAIL: ${JSON.stringify(payload.detail)}`;
+    }
+  }
+  return `Error HTTP: ${status}`;
+};
+
+const normalizeNote = (raw: unknown): CandidateNote => {
+  if (!isObjectRecord(raw)) {
+    return {
+      id: "",
+      candidate_id: "",
+      record_id: "",
+      content: "",
+      created_at: "",
+    };
+  }
+
+  return {
+    id: typeof raw.id === "string" || typeof raw.id === "number" ? raw.id : "",
+    candidate_id: typeof raw.candidate_id === "string"
+      ? raw.candidate_id
+      : typeof raw.record_id === "string"
+        ? raw.record_id
+        : "",
+    record_id: typeof raw.record_id === "string"
+      ? raw.record_id
+      : typeof raw.candidate_id === "string"
+        ? raw.candidate_id
+        : "",
+    content: typeof raw.content === "string" ? raw.content : "",
+    created_at: typeof raw.created_at === "string" ? raw.created_at : "",
+  };
+};
+
+const parseNotesPayload = (payload: unknown): CandidateNote[] => {
   if (Array.isArray(payload)) {
     return payload.map(normalizeNote);
   }
 
-  if (payload && typeof payload === 'object') {
+  if (isObjectRecord(payload)) {
     const nested = Array.isArray(payload.data)
       ? payload.data
       : Array.isArray(payload.records)
@@ -30,79 +86,148 @@ const parseNotesPayload = (payload: any): CandidateNote[] => {
   return [];
 };
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    // TRUCO DIAGNÓSTICO: Si es un error 422, serializamos el objeto "detail" completo 
-    // que envía FastAPI para saber exactamente qué campo está fallando.
-    if (response.status === 422 && errorData.detail) {
-      throw new Error(`API_422_DETAIL: ${JSON.stringify(errorData.detail)}`);
-    }
-    throw new Error(errorData.detail || `Error HTTP: ${response.status}`);
+type RequestOptions = {
+  authRequired?: boolean;
+};
+
+async function requestJson<T>(
+  baseUrl: string,
+  path: string,
+  init?: RequestInit,
+  options: RequestOptions = {},
+): Promise<T> {
+  const headers = new Headers(init?.headers || {});
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
   }
-  return response.json();
+
+  if (options.authRequired) {
+    const token = getAuthToken();
+    if (!token) {
+      redirectToLogin();
+      throw new Error("No authenticated session token was found.");
+    }
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    cache: "no-store",
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => null);
+    if (response.status === 401 && options.authRequired) {
+      redirectToLogin();
+      throw new Error("Sesion expirada o invalida. Inicia sesion nuevamente.");
+    }
+    throw new Error(extractErrorMessage(response.status, errorPayload));
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
 }
 
 export const talentApi = {
+  login: async (payload: LoginPayload): Promise<TokenResponse> => {
+    return requestJson<TokenResponse>(AUTH_BASE_URL, "/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  register: async (payload: RegisterPayload): Promise<void> => {
+    await requestJson(AUTH_BASE_URL, "/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getMe: async (): Promise<AuthMeResponse> => {
+    return requestJson<AuthMeResponse>(AUTH_BASE_URL, "/auth/me", undefined, { authRequired: true });
+  },
+
+  updateMyProfile: async (payload: ProfileUpdatePayload): Promise<AuthMeResponse["profile"]> => {
+    return requestJson<AuthMeResponse["profile"]>(AUTH_BASE_URL, "/profiles/me", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }, { authRequired: true });
+  },
+
   getRecords: async (): Promise<Candidate[]> => {
-    const response = await fetch(`${BASE_URL}/records`, { cache: 'no-store' });
-    return handleResponse<Candidate[]>(response);
+    return requestJson<Candidate[]>(TRACKER_BASE_URL, "/records", undefined, { authRequired: true });
   },
 
   getRecordById: async (id: string): Promise<Candidate> => {
-    const response = await fetch(`${BASE_URL}/records/${id}`, { cache: 'no-store' });
-    return handleResponse<Candidate>(response);
+    return requestJson<Candidate>(TRACKER_BASE_URL, `/records/${id}`, undefined, { authRequired: true });
   },
 
   createRecord: async (data: CandidateFormData): Promise<Candidate> => {
-    const response = await fetch(`${BASE_URL}/records`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    return requestJson<Candidate>(TRACKER_BASE_URL, "/records", {
+      method: "POST",
       body: JSON.stringify(data),
-    });
-    return handleResponse<Candidate>(response);
+    }, { authRequired: true });
   },
 
   updateRecord: async (id: string, data: CandidateFormData): Promise<Candidate> => {
-    const response = await fetch(`${BASE_URL}/records/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+    return requestJson<Candidate>(TRACKER_BASE_URL, `/records/${id}`, {
+      method: "PUT",
       body: JSON.stringify(data),
-    });
-    return handleResponse<Candidate>(response);
+    }, { authRequired: true });
   },
 
-  patchRecordStatus: async (id: string, cleanPayload: Partial<Pick<Candidate, 'status' | 'stage'>>): Promise<Candidate> => {
-    const response = await fetch(`${BASE_URL}/records/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+  patchRecordStatus: async (id: string, cleanPayload: Partial<Pick<Candidate, "status" | "stage">>): Promise<Candidate> => {
+    return requestJson<Candidate>(TRACKER_BASE_URL, `/records/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(cleanPayload),
-    });
-    return handleResponse<Candidate>(response);
+    }, { authRequired: true });
   },
 
   getNotes: async (candidateId: string): Promise<CandidateNote[]> => {
-    const response = await fetch(`${BASE_URL}/records/${candidateId}/notes`, { cache: 'no-store' });
-    if (response.status === 404) return [];
-    const payload = await handleResponse<any>(response);
+    const response = await fetch(`${TRACKER_BASE_URL}/records/${candidateId}/notes`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${getAuthToken() || ""}`,
+      },
+    });
+
+    if (response.status === 401) {
+      redirectToLogin();
+      throw new Error("Sesion expirada o invalida. Inicia sesion nuevamente.");
+    }
+
+    if (response.status === 404) {
+      return [];
+    }
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new Error(extractErrorMessage(response.status, errorPayload));
+    }
+
+    const payload = (await response.json()) as unknown;
     return parseNotesPayload(payload);
   },
 
   addNote: async (candidateId: string, content: string): Promise<CandidateNote> => {
-    const response = await fetch(`${BASE_URL}/records/${candidateId}/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const payload = await requestJson<unknown>(TRACKER_BASE_URL, `/records/${candidateId}/notes`, {
+      method: "POST",
       body: JSON.stringify({ content }),
-    });
-    const payload = await handleResponse<any>(response);
-    const notePayload = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
-    return normalizeNote(notePayload);
+    }, { authRequired: true });
+
+    if (isObjectRecord(payload) && isObjectRecord(payload.data)) {
+      return normalizeNote(payload.data);
+    }
+    return normalizeNote(payload);
   },
 
   deleteNote: async (candidateId: string, noteId: string | number): Promise<void> => {
-    const response = await fetch(`${BASE_URL}/records/${candidateId}/notes/${noteId}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) throw new Error(`Error al eliminar la nota: ${response.status}`);
+    await requestJson<void>(TRACKER_BASE_URL, `/records/${candidateId}/notes/${noteId}`, {
+      method: "DELETE",
+    }, { authRequired: true });
   },
 };

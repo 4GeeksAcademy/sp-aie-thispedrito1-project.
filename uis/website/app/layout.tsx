@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
 import "./globals.css";
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-});
 
 export const metadata: Metadata = {
   title: "HealthCore Digital | Atencion ambulatoria moderna y segura",
@@ -15,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={manrope.variable}>
+    <html lang="es">
       <body>{children}</body>
     </html>
   );
