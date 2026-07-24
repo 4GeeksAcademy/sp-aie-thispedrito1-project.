@@ -6,7 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import { clearAuthToken, getAuthToken, hasValidSession } from "@/services/session";
 
-const PUBLIC_ROUTES = new Set(["/login", "/register"]);
+// Routes that never require an authenticated session.
+const PUBLIC_ROUTES = new Set(["/login", "/register", "/forgot-password", "/reset-password"]);
+// Public routes that should bounce an ALREADY-authenticated user to the app home.
+// Password recovery pages are intentionally excluded so a logged-in user can still
+// open a reset link received by email.
+const AUTH_ENTRY_ROUTES = new Set(["/login", "/register"]);
 
 function isSafeRedirectPath(candidate: string | null): candidate is string {
   return Boolean(candidate && candidate.startsWith("/") && !candidate.startsWith("//"));
@@ -21,7 +26,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isPublicRoute) {
-      if (hasValidSession()) {
+      if (AUTH_ENTRY_ROUTES.has(pathname) && hasValidSession()) {
         router.replace("/");
         return;
       }

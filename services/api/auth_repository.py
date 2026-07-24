@@ -13,11 +13,13 @@ from models import UserRole
 class AuthRepository:
     USERS_TABLE = "users"
     PROFILES_TABLE = "profiles"
+    RESETS_TABLE = "password_resets"
 
     def __init__(self) -> None:
         self._db = get_db()
         self._users = self._db.table(self.USERS_TABLE)
         self._profiles = self._db.table(self.PROFILES_TABLE)
+        self._resets = self._db.table(self.RESETS_TABLE)
 
     @staticmethod
     def _normalize_email(email: str) -> str:
@@ -115,6 +117,21 @@ class AuthRepository:
         self._profiles.remove(profile.user_id == user_id)
         self._users.remove(user.id == user_id)
         return True
+
+    def set_password(self, user_id: str, hashed_password: str) -> dict[str, Any] | None:
+        user = Query()
+        if not self._users.contains(user.id == user_id):
+            return None
+        self._users.update({"hashed_password": hashed_password}, user.id == user_id)
+        updated = self._users.get(user.id == user_id)
+        return dict(updated) if updated else None
+
+    def is_reset_token_used(self, jti: str) -> bool:
+        reset = Query()
+        return self._resets.contains(reset.jti == jti)
+
+    def consume_reset_token(self, jti: str) -> None:
+        self._resets.insert({"jti": jti, "used_at": datetime.now(timezone.utc).isoformat()})
 
     def get_profile_by_user_id(self, user_id: str) -> dict[str, Any] | None:
         profile = Query()

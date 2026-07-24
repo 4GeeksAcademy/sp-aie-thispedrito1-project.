@@ -16,7 +16,7 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
         <AuthGuard>
           <header style={{ borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
             <div className="shell" style={{ padding: "18px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>HealthCore Backoffice</strong>
+              <strong>HealthCore Providers Dashboard</strong>
               <nav style={{ display: "flex", gap: 14, alignItems: "center" }}>
                 <Link href="/" className="nav-link">
                   Inicio

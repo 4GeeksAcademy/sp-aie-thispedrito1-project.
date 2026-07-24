@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -47,6 +48,14 @@ def _get_expiry_minutes() -> int:
         raise RuntimeError("ACCESS_TOKEN_EXPIRE_MINUTES must be an integer") from exc
 
 
+def _get_reset_expiry_minutes() -> int:
+    raw = os.getenv("RESET_TOKEN_EXPIRE_MINUTES", "30")
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise RuntimeError("RESET_TOKEN_EXPIRE_MINUTES must be an integer") from exc
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -59,6 +68,26 @@ def create_access_token(subject: str, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=_get_expiry_minutes())
     payload = {"sub": subject, "role": role, "exp": expire}
     return jwt.encode(payload, _get_secret_key(), algorithm=_get_algorithm())
+
+
+def create_reset_token(subject: str) -> str:
+    """Create a short-lived signed reset token with a unique jti for single-use tracking."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=_get_reset_expiry_minutes())
+    payload = {"sub": subject, "type": "reset", "jti": str(uuid4()), "exp": expire}
+    return jwt.encode(payload, _get_secret_key(), algorithm=_get_algorithm())
+
+
+def decode_reset_token(token: str) -> dict[str, Any]:
+    """Validate signature, expiry and shape of a reset token. Raise ValueError if invalid."""
+    try:
+        payload = jwt.decode(token, _get_secret_key(), algorithms=[_get_algorithm()])
+    except JWTError as exc:
+        raise ValueError("Invalid or expired reset token") from exc
+
+    if payload.get("type") != "reset" or not payload.get("sub") or not payload.get("jti"):
+        raise ValueError("Invalid reset token")
+
+    return payload
 
 
 def authenticate_user(email: str, password: str) -> dict[str, Any] | None:

@@ -8,6 +8,7 @@
 - Repositorio con estructura multi-area: app web en apps/talent-pipeline-tracker y utilidades/tipos en raiz.
 - Backend API en FastAPI con TinyDB para persistencia operativa local de proveedores, usuarios y perfiles.
 - Seguridad backend con JWT stateless (python-jose), hash de contrasenas con passlib+bcrypt y dependencia OAuth2PasswordBearer.
+- Envio de correo transaccional con Resend (SDK python) para el flujo de restablecimiento de contrasena (AUTH-03); API key y remitente por variables de entorno.
 
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:
@@ -38,3 +39,4 @@
 - Evaluar BFF o backend propio para control de seguridad, trazabilidad y cumplimiento.
 - Mantener arquitectura por capas para escalar a nuevos modulos del dominio HealthCore.
 - Mantener User/Profile exclusivamente en TinyDB y reutilizar user_id como user_uuid de referencia en otros modulos para evitar migraciones inconsistentes de auth.
+- Single-use de tokens de restablecimiento via tabla TinyDB password_resets (registro de jti consumidos); tokens de reset son JWT firmados con claim type=reset, jti y expiracion corta (RESET_TOKEN_EXPIRE_MINUTES).

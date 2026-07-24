@@ -3,9 +3,13 @@ import { clearAuthToken, getAuthToken } from "./session";
 import { Candidate, CandidateFormData, CandidateNote } from "../types/tracker";
 import {
   AuthMeResponse,
+  ChangePasswordPayload,
+  ForgotPasswordPayload,
   LoginPayload,
+  MessageResponse,
   ProfileUpdatePayload,
   RegisterPayload,
+  ResetPasswordPayload,
   TokenResponse,
 } from "../types/auth";
 
@@ -145,6 +149,27 @@ export const talentApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<MessageResponse> => {
+    return requestJson<MessageResponse>(AUTH_BASE_URL, "/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<MessageResponse> => {
+    return requestJson<MessageResponse>(AUTH_BASE_URL, "/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  changePassword: async (payload: ChangePasswordPayload): Promise<MessageResponse> => {
+    return requestJson<MessageResponse>(AUTH_BASE_URL, "/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, { authRequired: true });
   },
 
   getMe: async (): Promise<AuthMeResponse> => {

@@ -19,6 +19,8 @@
 - Backoffice inicial en uis/backoffice con layout propio y vista / conectada a la logica de negocio del Hito 2 sin copiar codigo.
 - AUTH-01 implementado en services/api con JWT stateless, usuarios/perfiles en TinyDB, dependencia get_current_user y proteccion de rutas sensibles existentes.
 - Nuevos modulos backend activos bajo /auth, /users y /profiles con validacion de credenciales hasheadas y expiracion de token por entorno.
+- AUTH-03 implementado: flujo completo de restablecimiento y cambio de contrasena. Backend con /auth/forgot-password (siempre 200, anti-enumeracion), /auth/reset-password (token single-use via tabla password_resets, 400 en invalido/expirado/usado) y /auth/change-password (autenticado, verifica contrasena actual). Integracion de email transaccional con Resend. Frontend con /forgot-password, /reset-password (lee token del query string), /account/change-password y enlace de recuperacion en /login. Backend validado end-to-end via HTTP.
+- Endurecimiento de seguridad: services/api/.env retirado del control de versiones y .gitignore actualizado (.env, .venv, __pycache__); secretos solo por variables de entorno.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).

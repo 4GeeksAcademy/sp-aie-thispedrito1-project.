@@ -49,7 +49,6 @@ export default function LoginPage() {
     <main className="shell" style={{ padding: "24px 0 42px" }}>
       <section className="panel" style={{ maxWidth: 520, margin: "0 auto" }}>
         <h1 style={{ marginTop: 0 }}>Iniciar sesion</h1>
-        <p style={{ color: "var(--muted)" }}>Accede al backoffice interno de HealthCore.</p>
 
         {error && <p className="error-text">{error}</p>}
 
@@ -59,12 +58,18 @@ export default function LoginPage() {
             <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
-            Contrasena
+            Contraseña
             <input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
           </label>
           <button type="submit" disabled={submitting}>
             {submitting ? "Validando..." : "Entrar"}
           </button>
+
+          <p style={{ marginTop: -4 }}>
+            <Link href="/forgot-password" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.9rem" }}>
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
         </form>
 
         <p style={{ marginBottom: 0 }}>
