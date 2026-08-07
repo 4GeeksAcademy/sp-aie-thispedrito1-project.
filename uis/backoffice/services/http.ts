@@ -12,6 +12,30 @@ const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === "object" && value !== null
 );
 
+export type FieldError = { field: string; message: string };
+
+export class ApiFieldError extends Error {
+  readonly fieldErrors: FieldError[];
+
+  constructor(fieldErrors: FieldError[]) {
+    super("Validation error");
+    this.name = "ApiFieldError";
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+function extractFieldErrors(payload: unknown): FieldError[] | null {
+  if (!isObjectRecord(payload) || !isObjectRecord(payload.detail)) return null;
+  const { errors } = payload.detail;
+  if (!Array.isArray(errors)) return null;
+
+  const fieldErrors = errors.filter(
+    (item): item is FieldError =>
+      isObjectRecord(item) && typeof item.field === "string" && typeof item.message === "string",
+  );
+  return fieldErrors.length > 0 ? fieldErrors : null;
+}
+
 function redirectToLogin() {
   if (typeof window === "undefined") return;
   clearAuthToken();
@@ -58,6 +82,10 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
     if (response.status === 401 && options.authRequired) {
       redirectToLogin();
       throw new Error("Sesion expirada o invalida. Inicia sesion nuevamente.");
+    }
+    const fieldErrors = extractFieldErrors(errorPayload);
+    if (fieldErrors) {
+      throw new ApiFieldError(fieldErrors);
     }
     throw new Error(extractErrorMessage(response.status, errorPayload));
   }

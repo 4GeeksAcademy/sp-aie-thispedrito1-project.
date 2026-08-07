@@ -40,3 +40,7 @@
 - Mantener arquitectura por capas para escalar a nuevos modulos del dominio HealthCore.
 - Mantener User/Profile exclusivamente en TinyDB y reutilizar user_id como user_uuid de referencia en otros modulos para evitar migraciones inconsistentes de auth.
 - Single-use de tokens de restablecimiento via tabla TinyDB password_resets (registro de jti consumidos); tokens de reset son JWT firmados con claim type=reset, jti y expiracion corta (RESET_TOKEN_EXPIRE_MINUTES).
+- Validacion compartida Python centralizada en packages/shared/incidents_validation (movida desde shared/incidents_analysis): csv_analysis.py para el CSV legacy y incident_rules.py para el modelo Incident; la consumen API, analizador y seed sin duplicacion.
+- Gestor de incidencias: tabla TinyDB incidents con ciclo de vida open -> in_progress -> resolved/discarded; errores de validacion de la API como 400 con detail.errors[{field,message}] (sin Pydantic en entrada) y handler global de excepciones que devuelve 500 generico sin stack trace.
+- Seed idempotente de incidencias historicas via campo interno source_id (incident_id del CSV), oculto en las respuestas de la API.
+- Compatibilidad local: requirements.txt incluye eval-type-backport solo para Python < 3.10 (la maquina local usa 3.9; el proyecto se desarrollo con 3.12).

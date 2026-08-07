@@ -6,20 +6,21 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from shared.incidents_analysis import (  # noqa: E402
+from packages.shared.incidents_validation import (  # noqa: E402
     analyze_rows,
     csv_results_content,
     load_csv_rows_from_bytes,
 )
 from routes.auth import router as auth_router  # noqa: E402
+from routes.incidents import router as incidents_router  # noqa: E402
 from routes.profiles import router as profiles_router  # noqa: E402
 from routes.suppliers import router as suppliers_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
@@ -39,6 +40,13 @@ app.include_router(suppliers_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(profiles_router)
+app.include_router(incidents_router)
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    # Never leak stack traces or internal details to API clients.
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 _last_analysis_lock = Lock()
 _last_analysis: Dict[str, Any] | None = None
