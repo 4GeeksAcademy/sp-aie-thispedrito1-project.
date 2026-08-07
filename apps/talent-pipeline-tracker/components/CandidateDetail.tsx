@@ -89,14 +89,8 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
       });
       setActionMessage(type === 'status' ? 'Estado actualizado correctamente.' : 'Etapa actualizada correctamente.');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al actualizar el expediente.';
-      if (message.startsWith('API_422_DETAIL:')) {
-        // Extraemos y formateamos el JSON interno para que sea legible en el navegador
-        const rawDetail = message.replace('API_422_DETAIL: ', '');
-        setActionError(`La API rechazó el cambio (422): ${rawDetail}`);
-      } else {
-        setActionError(`Error al actualizar el expediente: ${message}`);
-      }
+      const message = err instanceof Error ? err.message : 'Inténtalo de nuevo en unos minutos.';
+      setActionError(`No se pudo actualizar el expediente. ${message}`);
     } finally {
       setActionLoading(false);
     }

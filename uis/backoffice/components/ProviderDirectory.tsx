@@ -168,7 +168,14 @@ export function ProviderDirectory() {
         <h2 style={{ marginTop: 0 }}>Listado</h2>
 
         {loadingList && <p>Cargando proveedores...</p>}
-        {!loadingList && listError && <p className="error-text">{listError}</p>}
+        {!loadingList && listError && (
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <p className="error-text" style={{ margin: 0 }}>{listError}</p>
+            <button type="button" onClick={() => void fetchList()}>
+              Reintentar
+            </button>
+          </div>
+        )}
         {!loadingList && !listError && suppliers.length === 0 && <p>No hay proveedores para los filtros seleccionados.</p>}
 
         {!loadingList && !listError && suppliers.length > 0 && (

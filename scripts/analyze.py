@@ -106,18 +106,22 @@ def print_report(results: Dict[str, object], source_file: str) -> None:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Usage: python scripts/analyze.py <csv_file>")
+        print("Usage: python scripts/analyze.py <csv_file>", file=sys.stderr)
         return 1
 
     csv_file = Path(sys.argv[1]).resolve()
     if not csv_file.exists() or not csv_file.is_file():
-        print(f"Error: file not found: {csv_file}")
+        print(f"Error: file not found: {csv_file}", file=sys.stderr)
         return 1
 
     try:
         rows = load_csv_rows_from_path(csv_file)
     except ValueError as exc:
-        print(f"Error: {exc}")
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if not rows:
+        print(f"Error: {csv_file.name} has a valid header but no data rows to analyze.", file=sys.stderr)
         return 1
 
     results = analyze_rows(rows)
@@ -130,7 +134,11 @@ def main() -> int:
 
     if export_choice in {"y", "s"}:
         output_path = Path("results.csv")
-        export_results_csv(results, output_path)
+        try:
+            export_results_csv(results, output_path)
+        except OSError as exc:
+            print(f"Error: could not write {output_path}: {exc.strerror or exc}", file=sys.stderr)
+            return 1
         print(f"Results exported to {output_path}")
 
     return 0

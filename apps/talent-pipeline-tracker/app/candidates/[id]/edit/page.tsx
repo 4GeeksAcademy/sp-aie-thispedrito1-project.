@@ -14,6 +14,7 @@ export default function EditCandidatePage() {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const loadCandidate = async () => {
@@ -37,7 +38,7 @@ export default function EditCandidatePage() {
     };
 
     void loadCandidate();
-  }, [candidateId]);
+  }, [candidateId, reloadKey]);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-12 font-sans">
@@ -58,8 +59,17 @@ export default function EditCandidatePage() {
         )}
 
         {error && !loading && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm">
-            <strong>No se pudo cargar:</strong> {error}
+          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex flex-wrap items-center justify-between gap-3">
+            <span>
+              <strong>No se pudo cargar:</strong> {error}
+            </span>
+            <button
+              type="button"
+              onClick={() => setReloadKey((key) => key + 1)}
+              className="px-3 py-1.5 bg-red-100 hover:bg-red-200 border border-red-300 rounded-lg font-semibold text-red-900 transition-colors"
+            >
+              Reintentar
+            </button>
           </div>
         )}
 
