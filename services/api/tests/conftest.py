@@ -29,8 +29,12 @@ for path in (str(ROOT_DIR), str(API_DIR)):
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
+from sqlmodel.pool import StaticPool  # noqa: E402
 
 import database  # noqa: E402
+import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
+from database import get_inventory_db  # noqa: E402
 from main import app  # noqa: E402
 
 TEST_PASSWORD = "SuperSecure123"
@@ -44,8 +48,30 @@ def clean_db():
 
 
 @pytest.fixture()
-def client() -> TestClient:
-    return TestClient(app)
+def inventory_engine():
+    """A throwaway in-memory SQLite database standing in for Supabase.
+
+    StaticPool keeps the single in-memory connection alive across the
+    multiple sessions FastAPI opens per request — without it, each new
+    connection would see a blank, disconnected in-memory database.
+    """
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    SQLModel.metadata.drop_all(engine)
+
+
+@pytest.fixture()
+def client(inventory_engine) -> TestClient:
+    def override_get_inventory_db():
+        with Session(inventory_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_inventory_db] = override_get_inventory_db
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture()

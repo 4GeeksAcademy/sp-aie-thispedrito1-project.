@@ -9,6 +9,7 @@ from typing import Any, Dict
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
+from sqlmodel import SQLModel
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
@@ -19,8 +20,11 @@ from packages.shared.incidents_validation import (  # noqa: E402
     csv_results_content,
     load_csv_rows_from_bytes,
 )
+from database import get_inventory_engine  # noqa: E402
+import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 from routes.auth import router as auth_router  # noqa: E402
 from routes.incidents import router as incidents_router  # noqa: E402
+from routes.inventory import router as inventory_router  # noqa: E402
 from routes.profiles import router as profiles_router  # noqa: E402
 from routes.suppliers import router as suppliers_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
@@ -41,6 +45,20 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(profiles_router)
 app.include_router(incidents_router)
+app.include_router(inventory_router)
+
+
+@app.on_event("startup")
+def init_inventory_schema() -> None:
+    """Create the inventory tables in Supabase if DATABASE_URL is configured.
+
+    Left non-fatal on purpose: the rest of the API (auth, suppliers, incidents)
+    must keep working locally even before Supabase is wired up.
+    """
+    try:
+        SQLModel.metadata.create_all(get_inventory_engine())
+    except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
+        print(f"[inventory] skipping schema init: {exc}", file=sys.stderr)
 
 
 @app.exception_handler(Exception)
