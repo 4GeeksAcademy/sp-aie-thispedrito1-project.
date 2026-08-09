@@ -94,7 +94,7 @@ export default function AccountProfilePage() {
           <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
             <label>
               Email
-              <input type="email" value={email} readOnly style={{ background: "#f8fafc" }} />
+              <input type="email" value={email} readOnly style={{ background: "var(--line)" }} />
             </label>
             <label>
               Nombre

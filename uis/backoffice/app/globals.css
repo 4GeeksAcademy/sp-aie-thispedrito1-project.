@@ -1,10 +1,56 @@
+/* HealthCore Backoffice — "Supply Manifest" console theme.
+   Dense, LED-style status indicators: built for a 7am shift-start scan,
+   not a marketing dashboard. Dark is the default identity; light is a
+   same-instrument-different-lighting companion (toggled via ThemeToggle,
+   [data-theme] on <html>, persisted in localStorage) — not a full pivot
+   to a different design. See memory-bank/techContext.md for the rationale. */
+
 :root {
-  --bg: #f8fafc;
+  --bg: #0b0f0e;
+  --panel: #121816;
+  --text: #e7ece7;
+  --muted: #8a9691;
+  --brand: #ff8a3d;
+  --brand-hover: #ffa15e;
+  --line: #23302b;
+
+  --critical: #ff5d5d;
+  --warning: #ffc24b;
+  --ok: #4ade80;
+
+  --success-bg: rgba(74, 222, 128, 0.12);
+  --success-border: rgba(74, 222, 128, 0.35);
+  --success-text: #7ee7a6;
+
+  --error-bg: rgba(255, 93, 93, 0.12);
+  --error-border: rgba(255, 93, 93, 0.35);
+  --error-text: #ff8a8a;
+
+  --led-glow: 6px;
+}
+
+:root[data-theme="light"] {
+  --bg: #f1f3f0;
   --panel: #ffffff;
-  --text: #0f172a;
-  --muted: #475569;
-  --brand: #2563eb;
-  --line: #cbd5e1;
+  --text: #14201b;
+  --muted: #5b6b62;
+  --brand: #c2570a;
+  --brand-hover: #a8480a;
+  --line: #d8ded7;
+
+  --critical: #c23b3b;
+  --warning: #966300;
+  --ok: #1e7a45;
+
+  --success-bg: rgba(30, 122, 69, 0.1);
+  --success-border: rgba(30, 122, 69, 0.3);
+  --success-text: #1e7a45;
+
+  --error-bg: rgba(194, 59, 59, 0.1);
+  --error-border: rgba(194, 59, 59, 0.3);
+  --error-text: #c23b3b;
+
+  --led-glow: 0px;
 }
 
 * {
@@ -17,7 +63,7 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 a {
@@ -31,14 +77,28 @@ a {
 }
 
 .nav-link {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav-link:hover {
   color: var(--text);
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
 }
 
 .panel {
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 4px;
   background: var(--panel);
   padding: 18px;
 }
@@ -53,7 +113,8 @@ label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 input,
@@ -61,19 +122,47 @@ select,
 textarea,
 button {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 8px 10px;
   font: inherit;
+  background: var(--bg);
+  color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
 }
 
 button {
-  background: #eff6ff;
+  background: rgba(255, 138, 61, 0.12);
+  color: var(--brand);
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  border-color: rgba(255, 138, 61, 0.35);
+}
+
+button:hover {
+  background: rgba(255, 138, 61, 0.2);
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--brand);
+  color: #17110a;
+  border-color: var(--brand);
+}
+
+button.primary:hover {
+  background: var(--brand-hover);
 }
 
 .table {
@@ -85,37 +174,94 @@ button:disabled {
 .table td {
   text-align: left;
   border-bottom: 1px solid var(--line);
-  padding: 9px 8px;
+  padding: 9px 10px;
   vertical-align: top;
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.table th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .status-badge {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 10.5px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 .status-active {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(74, 222, 128, 0.14);
+  color: var(--ok);
 }
 
 .status-suspended {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(255, 93, 93, 0.14);
+  color: var(--critical);
+}
+
+.led {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.led-critical {
+  background: var(--critical);
+  box-shadow: 0 0 var(--led-glow) 0 var(--critical);
+}
+
+.led-warning {
+  background: var(--warning);
+  box-shadow: 0 0 var(--led-glow) 0 var(--warning);
+}
+
+.led-ok {
+  background: var(--ok);
+  box-shadow: 0 0 var(--led-glow) 0 var(--ok);
+}
+
+.theme-toggle {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
+.theme-toggle:hover {
+  background: var(--panel);
+  color: var(--text);
 }
 
 .error-text {
-  color: #b91c1c;
+  color: var(--error-text);
   font-size: 13px;
 }
 
 .success-text {
-  color: #166534;
+  color: var(--success-text);
   font-size: 13px;
 }

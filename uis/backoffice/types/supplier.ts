@@ -38,3 +38,21 @@ export type SupplierFilters = {
   country?: string;
   category?: string;
 };
+
+export const SUPPLIER_CATEGORY_LABELS: Record<string, string> = {
+  medical_supplies: "Material médico",
+  laboratory_services: "Servicios de laboratorio",
+  pharmaceutical: "Farmacéutico",
+  clinical_software: "Software clínico",
+  it_infrastructure: "Infraestructura TI",
+  hr_and_payroll_software: "RRHH y nómina",
+  cleaning_and_facilities: "Limpieza e instalaciones",
+  patient_communication: "Comunicación con pacientes",
+  billing_and_coding_software: "Facturación y codificación",
+  training_platforms: "Plataformas de formación",
+};
+
+export const SUPPLIER_STATUS_LABELS: Record<SupplierStatus, string> = {
+  active: "Activo",
+  suspended: "Suspendido",
+};

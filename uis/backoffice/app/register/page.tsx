@@ -159,7 +159,7 @@ function Field({
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        style={error ? { borderColor: "#dc2626" } : undefined}
+        style={error ? { borderColor: "var(--critical)" } : undefined}
       />
       {error && <span className="error-text">{error}</span>}
     </label>
