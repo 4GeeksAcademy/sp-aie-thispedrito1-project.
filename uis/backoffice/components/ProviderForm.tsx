@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { Supplier, SupplierCreateInput } from "../types/supplier";
+import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type Supplier, type SupplierCreateInput } from "../types/supplier";
 
 type ProviderFormProps = {
   onSubmit: (payload: SupplierCreateInput) => Promise<Supplier>;
@@ -85,7 +85,7 @@ export function ProviderForm({ onSubmit }: ProviderFormProps) {
           <input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
         </label>
         <label>
-          Pais
+          País
           <select
             value={form.country}
             onChange={(event) => {
@@ -93,19 +93,19 @@ export function ProviderForm({ onSubmit }: ProviderFormProps) {
               setForm((prev) => ({ ...prev, country, currency: country === "USA" ? "USD" : "GBP" }));
             }}
           >
-            <option value="USA">USA</option>
-            <option value="UK">UK</option>
+            <option value="USA">EE. UU.</option>
+            <option value="UK">Reino Unido</option>
           </select>
         </label>
         <label>
-          Categoria
+          Categoría
           <select
             value={form.categories[0]}
             onChange={(event) => setForm((prev) => ({ ...prev, categories: [event.target.value] }))}
           >
             {categories.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {SUPPLIER_CATEGORY_LABELS[value] ?? value}
               </option>
             ))}
           </select>
@@ -131,12 +131,12 @@ export function ProviderForm({ onSubmit }: ProviderFormProps) {
         <label>
           Estado
           <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as "active" | "suspended" }))}>
-            <option value="active">active</option>
-            <option value="suspended">suspended</option>
+            <option value="active">{SUPPLIER_STATUS_LABELS.active}</option>
+            <option value="suspended">{SUPPLIER_STATUS_LABELS.suspended}</option>
           </select>
         </label>
         <label>
-          Compliance
+          Cumplimiento normativo
           <select
             value={form.compliance_agreement ?? "none"}
             onChange={(event) =>
@@ -150,11 +150,11 @@ export function ProviderForm({ onSubmit }: ProviderFormProps) {
             <option value="none">No aplica</option>
             <option value="BAA">BAA</option>
             <option value="DPA">DPA</option>
-            <option value="both">both</option>
+            <option value="both">Ambos</option>
           </select>
         </label>
         <label>
-          Contact email
+          Correo de contacto
           <input
             type="email"
             value={form.contact_email ?? ""}
