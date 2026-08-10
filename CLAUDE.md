@@ -29,13 +29,15 @@ No hay workspace runner en la raíz: cada app tiene su propio `package.json` y s
 cd services/api
 python3 -m venv .venv && source .venv/bin/activate
 uv pip install -r requirements.txt
-cp .env.example .env      # obligatorio: JWT_SECRET_KEY real
-python seed.py            # datos iniciales
+cp .env.example .env      # obligatorio: JWT_SECRET_KEY real + DATABASE_URL de Supabase
+python seed.py             # datos iniciales (suppliers, TinyDB)
+python seed_inventory.py   # datos iniciales de inventario (Supabase)
 uvicorn main:app --reload --port 8000
 ```
 
 - Swagger en `http://localhost:8000/docs`; flujo manual de verificación de auth documentado en `services/api/README.md`.
 - Carga `services/api/.env` automáticamente al arrancar; secretos solo por variables de entorno.
+- `DATABASE_URL` (Supabase, Transaction pooler / URI) es obligatoria para el módulo de inventario; sin ella, el resto de la API sigue funcionando y el arranque solo avisa por stderr (ver `main.py`).
 
 ### Apps Next.js (`apps/talent-pipeline-tracker`, `uis/backoffice`, `uis/website`)
 
@@ -68,7 +70,7 @@ Carga el histórico del CSV como incidencias `origin=customer` aplicando las tra
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
-# Backend (49 tests): desde services/api, con el venv activado
+# Backend (56 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~81%
 
@@ -76,7 +78,7 @@ python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~
 npm test                    # o: npx jest --coverage
 ```
 
-Los tests de pytest usan una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un secreto JWT de test definidos en `tests/conftest.py` **antes** de importar la app — nunca tocan `data/suppliers.db.json` ni requieren `.env`. El email de reset se sustituye con `monkeypatch`. Los tests de Jest priorizan `.ts` sobre los artefactos `.js` compilados (`moduleFileExtensions` en `jest.config.js`). Toda feature nueva debe añadir sus casos (feliz/límite/fallo) a la batería y mantener los umbrales de cobertura.
+Los tests de pytest usan una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un secreto JWT de test definidos en `tests/conftest.py` **antes** de importar la app — nunca tocan `data/suppliers.db.json` ni requieren `.env`. El email de reset se sustituye con `monkeypatch`. Los tests de inventario (`tests/test_inventory.py`) siguen el mismo principio pero con Supabase: la fixture `client` de `conftest.py` sobreescribe `get_inventory_db` con una SQLite en memoria (`StaticPool`) creada y destruida por test — nunca tocan la base de Supabase real ni requieren `DATABASE_URL`. Los tests de Jest priorizan `.ts` sobre los artefactos `.js` compilados (`moduleFileExtensions` en `jest.config.js`). Toda feature nueva debe añadir sus casos (feliz/límite/fallo) a la batería y mantener los umbrales de cobertura.
 
 ## Arquitectura
 
@@ -91,6 +93,7 @@ FastAPI + TinyDB (archivo único `services/api/data/suppliers.db.json` con tabla
 - `auth_repository.py` / `repository.py`: acceso a datos (patrón repositorio sobre TinyDB).
 - `email_service.py`: correo transaccional con Resend para el flujo de reset (AUTH-03). `/auth/forgot-password` responde siempre 200 (anti-enumeración).
 - Decisión registrada en techContext: `User`/`Profile` viven solo en TinyDB; reutilizar `user_id` como `user_uuid` de referencia en otros módulos.
+- Gestor de inventario (Hito 5, `routes/inventory.py` + `inventory_repository.py` + `inventory_models.py`): segunda conexión de base de datos, a Supabase (PostgreSQL) vía SQLModel — conviven con TinyDB en `database.py` (`get_inventory_engine`/`get_inventory_db`, sesión por petición vía `Depends`). CRUD bajo `/inventory` para `MedicalSupply`, `SupplyDelivery` y `SupplyConsumption` (nombres del CONTEXT del hito, no los genéricos `Product`/`InboundOrder`/`OutboundOrder` del README). `current_stock` es siempre calculado (`SUM(deliveries) - SUM(consumptions)`, en `inventory_repository.get_current_stock`), nunca una columna editable; un consumo que dejaría stock negativo se rechaza con `400` antes de escribir. `country` en este módulo usa `"US"/"UK"` (enum `SupplyCountry` en `models.py`) — distinto del `Country` de proveedores (`"USA"/"UK"`), mismo nombre de campo pero dominios de valores distintos. `SQLModel.metadata.create_all()` se ejecuta en el `startup` de `main.py` de forma no fatal: si `DATABASE_URL` falta o Supabase no responde, solo lo avisa por stderr y el resto de la API sigue viva.
 
 ### Frontends
 

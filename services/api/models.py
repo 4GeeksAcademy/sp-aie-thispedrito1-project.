@@ -206,3 +206,105 @@ class IncidentSummary(BaseModel):
     by_category: dict[str, int]
     by_origin: dict[str, int]
     by_branch: dict[str, int]
+
+
+# --- Inventory module (Hito 5) ---
+# Pydantic request/response schemas. Kept separate from the SQLModel ORM
+# classes in inventory_models.py on purpose: an ORM class describes a table,
+# these describe an API contract, and the two must be free to diverge.
+
+VALID_SUPPLY_CATEGORIES = ["ppe", "wound_care", "diagnostics", "medications", "consumables"]
+
+
+class SupplyCountry(str, Enum):
+    """Inventory uses 'US'/'UK' — distinct from the supplier module's Country
+    enum ('USA'/'UK'), per CONTEXT-healthcore.es.md."""
+
+    US = "US"
+    UK = "UK"
+
+
+class ConsumptionType(str, Enum):
+    clinical_use = "clinical_use"
+    expiry_waste = "expiry_waste"
+
+
+class MedicalSupplyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    sku: str = Field(min_length=1, max_length=60)
+    category: str
+    unit: str = Field(min_length=1, max_length=20)
+    country: SupplyCountry
+
+    @model_validator(mode="after")
+    def validate_category(self) -> "MedicalSupplyCreate":
+        if self.category not in VALID_SUPPLY_CATEGORIES:
+            raise ValueError(f"Invalid category. Must be one of: {', '.join(VALID_SUPPLY_CATEGORIES)}")
+        return self
+
+
+class MedicalSupplyRead(BaseModel):
+    id: int
+    name: str
+    sku: str
+    category: str
+    unit: str
+    country: str
+    current_stock: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplyDeliveryCreate(BaseModel):
+    supply_id: int
+    quantity: int = Field(gt=0)
+    vendor_name: str = Field(min_length=1, max_length=160)
+    clinic_id: int = Field(ge=1, le=12)
+
+
+class SupplyDeliveryRead(BaseModel):
+    id: int
+    supply_id: int
+    quantity: int
+    vendor_name: str
+    clinic_id: int
+    created_at: datetime
+    user_uuid: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplyConsumptionCreate(BaseModel):
+    supply_id: int
+    quantity: int = Field(gt=0)
+    consumption_type: ConsumptionType
+    clinic_id: int = Field(ge=1, le=12)
+
+
+class SupplyConsumptionRead(BaseModel):
+    id: int
+    supply_id: int
+    quantity: int
+    consumption_type: str
+    clinic_id: int
+    created_at: datetime
+    user_uuid: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryOrderRead(BaseModel):
+    """Unified view of an inbound or outbound order, with supply data joined in
+    (avoids the N+1 problem of fetching the supply separately per order)."""
+
+    order_type: str
+    id: int
+    supply_id: int
+    supply_name: str
+    supply_sku: str
+    quantity: int
+    clinic_id: int
+    created_at: datetime
+    user_uuid: str
+    vendor_name: Optional[str] = None
+    consumption_type: Optional[str] = None

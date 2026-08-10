@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Iterator
 
+from dotenv import load_dotenv
+from sqlmodel import Session, create_engine
+from sqlmodel.pool import StaticPool
 from tinydb import TinyDB
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent / "data" / "suppliers.db.json"
 
@@ -16,3 +22,35 @@ def get_db() -> TinyDB:
 
 def get_suppliers_table():
     return get_db().table("suppliers")
+
+
+# --- Inventory module (Hito 5): Supabase (PostgreSQL) via SQLModel ---
+# Business data (products, orders) lives here. Users stay in TinyDB above;
+# only their user_uuid crosses over as a plain string reference.
+
+_inventory_engine = None
+
+
+def get_inventory_engine():
+    """Lazily build and cache the SQLModel engine (a connection pool, not a session)."""
+    global _inventory_engine
+    if _inventory_engine is None:
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise RuntimeError(
+                "DATABASE_URL environment variable is required for the inventory module. "
+                "Set it in services/api/.env with your Supabase connection string."
+            )
+        connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+        _inventory_engine = create_engine(
+            database_url,
+            connect_args=connect_args,
+            poolclass=StaticPool if database_url.startswith("sqlite") else None,
+        )
+    return _inventory_engine
+
+
+def get_inventory_db() -> Iterator[Session]:
+    """FastAPI dependency: yields one SQLModel session per request."""
+    with Session(get_inventory_engine()) as session:
+        yield session
