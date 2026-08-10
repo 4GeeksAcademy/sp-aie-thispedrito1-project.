@@ -65,7 +65,18 @@ services/api/.venv/bin/python scripts/seed_incidents.py
 
 Carga el histórico del CSV como incidencias `origin=customer` aplicando las transformaciones del CONTEXT del hito (mapeo de estados, categorías y sedes). Es idempotente (usa el `incident_id` del CSV como `source_id` interno). Tras ejecutarlo, `/api/incidents/summary` debe dar: 94 total; open 28 / resolved 52 / discarded 14; patient_experience 61 / billing_error 20 / other 13.
 
-No existen suites de tests automatizados en el repo; la validación previa a commit es funcional/manual + lint/typecheck/build del área tocada (según AGENTS.md).
+### Tests (ver TESTING.md en la raíz para el plan completo)
+
+```bash
+# Backend (49 tests): desde services/api, con el venv activado
+python -m pytest            # o: uv run pytest (en Codespaces)
+python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~81%
+
+# Frontend (13 tests): desde uis/backoffice
+npm test                    # o: npx jest --coverage
+```
+
+Los tests de pytest usan una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un secreto JWT de test definidos en `tests/conftest.py` **antes** de importar la app — nunca tocan `data/suppliers.db.json` ni requieren `.env`. El email de reset se sustituye con `monkeypatch`. Los tests de Jest priorizan `.ts` sobre los artefactos `.js` compilados (`moduleFileExtensions` en `jest.config.js`). Toda feature nueva debe añadir sus casos (feliz/límite/fallo) a la batería y mantener los umbrales de cobertura.
 
 ## Arquitectura
 
