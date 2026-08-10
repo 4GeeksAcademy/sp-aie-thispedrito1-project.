@@ -104,6 +104,63 @@ def load_csv_rows_from_bytes(file_bytes: bytes) -> List[Dict[str, str]]:
     return [row for row in reader]
 
 
+def clean_row(row: Dict[str, str]) -> Dict[str, object]:
+    """Normalize a raw CSV row into trimmed/uppercased values ready for validation."""
+    score_raw = row.get("satisfaction_score", "")
+    return {
+        "incident_id": _clean(row.get("incident_id")),
+        "date": _clean(row.get("date")),
+        "clinic_id": _clean(row.get("clinic_id")),
+        "country": _clean(row.get("country")).upper(),
+        "category": _clean(row.get("category")).upper(),
+        "description": _clean(row.get("description")),
+        "status": _clean(row.get("status")).upper(),
+        "patient_id": _clean(row.get("patient_id")),
+        "score": _to_int(score_raw),
+        "score_present": _clean(score_raw) != "",
+    }
+
+
+def validate_row(cleaned: Dict[str, object]) -> set[str]:
+    """Return the set of invalid-reason keys for a cleaned CSV row (empty set if valid)."""
+    clinic_id = str(cleaned["clinic_id"])
+    country = str(cleaned["country"])
+    category = str(cleaned["category"])
+    description = str(cleaned["description"])
+    status = str(cleaned["status"])
+    patient_id = str(cleaned["patient_id"])
+    score = cleaned["score"]
+    score_present = bool(cleaned["score_present"])
+
+    reasons: set[str] = set()
+
+    if clinic_id not in VALID_CLINICS:
+        reasons.add("invalid_clinic")
+
+    if clinic_id in VALID_CLINICS and country != VALID_CLINICS[clinic_id]:
+        reasons.add("country_clinic_mismatch")
+
+    if category not in VALID_CATEGORIES:
+        reasons.add("invalid_category")
+
+    if len(description) < 5:
+        reasons.add("empty_description")
+
+    if not PATIENT_ID_PATTERN.match(patient_id):
+        reasons.add("missing_patient_id")
+
+    if status == "CLOSED" and not score_present:
+        reasons.add("closed_without_score")
+
+    if score_present and (not isinstance(score, int) or not (1 <= score <= 5)):
+        reasons.add("score_out_of_range")
+
+    if status not in VALID_STATUSES:
+        reasons.add("invalid_status")
+
+    return reasons
+
+
 def analyze_rows(rows: List[Dict[str, str]]) -> Dict[str, object]:
     invalid_reasons = Counter(
         {
@@ -120,42 +177,13 @@ def analyze_rows(rows: List[Dict[str, str]]) -> Dict[str, object]:
     scored_closed_cases = 0
 
     for row in rows:
-        clinic_id = _clean(row.get("clinic_id"))
-        country = _clean(row.get("country")).upper()
-        category = _clean(row.get("category")).upper()
-        description = _clean(row.get("description"))
-        status = _clean(row.get("status")).upper()
-        patient_id = _clean(row.get("patient_id"))
+        cleaned = clean_row(row)
+        category = str(cleaned["category"])
+        country = str(cleaned["country"])
+        status = str(cleaned["status"])
+        score = cleaned["score"]
 
-        score_raw = row.get("satisfaction_score", "")
-        score = _to_int(score_raw)
-        score_present = _clean(score_raw) != ""
-
-        row_invalid_reasons: set[str] = set()
-
-        if clinic_id not in VALID_CLINICS:
-            row_invalid_reasons.add("invalid_clinic")
-
-        if clinic_id in VALID_CLINICS and country != VALID_CLINICS[clinic_id]:
-            row_invalid_reasons.add("country_clinic_mismatch")
-
-        if category not in VALID_CATEGORIES:
-            row_invalid_reasons.add("invalid_category")
-
-        if len(description) < 5:
-            row_invalid_reasons.add("empty_description")
-
-        if not PATIENT_ID_PATTERN.match(patient_id):
-            row_invalid_reasons.add("missing_patient_id")
-
-        if status == "CLOSED" and not score_present:
-            row_invalid_reasons.add("closed_without_score")
-
-        if score_present and (score is None or not (1 <= score <= 5)):
-            row_invalid_reasons.add("score_out_of_range")
-
-        if status not in VALID_STATUSES:
-            row_invalid_reasons.add("invalid_status")
+        row_invalid_reasons = validate_row(cleaned)
 
         if row_invalid_reasons:
             for reason in row_invalid_reasons:

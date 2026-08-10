@@ -15,7 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from shared.incidents_analysis import (  # noqa: E402
+from packages.shared.incidents_validation import (  # noqa: E402
     INVALID_RULE_ORDER,
     OPTIONAL_INVALID_RULES,
     VALID_CATEGORIES,

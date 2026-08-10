@@ -184,3 +184,25 @@ class ChangePasswordRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class IncidentRead(BaseModel):
+    id: int
+    title: str
+    description: str
+    category: str
+    status: str
+    origin: str
+    branch: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IncidentSummary(BaseModel):
+    total: int
+    by_status: dict[str, int]
+    by_category: dict[str, int]
+    by_origin: dict[str, int]
+    by_branch: dict[str, int]

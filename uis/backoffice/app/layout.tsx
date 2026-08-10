@@ -24,6 +24,15 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                 <Link href="/suppliers" className="nav-link">
                   Proveedores
                 </Link>
+                <Link href="/incidents" className="nav-link">
+                  Incidents
+                </Link>
+                <Link href="/incidents/new" className="nav-link">
+                  Report incident
+                </Link>
+                <Link href="/incidents/summary" className="nav-link">
+                  Summary
+                </Link>
                 <SessionMenu />
               </nav>
             </div>
