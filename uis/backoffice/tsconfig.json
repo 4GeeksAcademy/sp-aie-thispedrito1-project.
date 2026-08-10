@@ -18,7 +18,7 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@core/*": ["../../src/*"]
+      "@core/*": ["../../packages/shared/business-logic/*"]
     },
     "plugins": [
       {

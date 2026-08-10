@@ -50,7 +50,7 @@ En cada carpeta: `npm run dev` / `npm run build` / `npm run lint`.
 
 ```bash
 npm run typecheck   # tsc --noEmit — actualmente falla porque barre también uis/**
-npm run dev         # tsx src/demo.ts
+npm run dev         # tsx packages/shared/business-logic/demo.ts
 ```
 
 ### Analizador de incidentes
@@ -80,6 +80,26 @@ npm test                    # o: npx jest --coverage
 
 Los tests de pytest usan una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un secreto JWT de test definidos en `tests/conftest.py` **antes** de importar la app — nunca tocan `data/suppliers.db.json` ni requieren `.env`. El email de reset se sustituye con `monkeypatch`. Los tests de inventario (`tests/test_inventory.py`) siguen el mismo principio pero con Supabase: la fixture `client` de `conftest.py` sobreescribe `get_inventory_db` con una SQLite en memoria (`StaticPool`) creada y destruida por test — nunca tocan la base de Supabase real ni requieren `DATABASE_URL`. Los tests de Jest priorizan `.ts` sobre los artefactos `.js` compilados (`moduleFileExtensions` en `jest.config.js`). Toda feature nueva debe añadir sus casos (feliz/límite/fallo) a la batería y mantener los umbrales de cobertura.
 
+### Docker (desarrollo contenedorizado)
+
+```bash
+cp .env.example .env   # o copia tus valores reales de services/api/.env + añade BACKEND_API_URL
+docker compose up --build
+```
+
+Levanta dos servicios en la red `healthcore-net`: `api` (FastAPI, puerto 8000) y `uis` (un solo contenedor Node que arranca `website` en 3000 y `backoffice` en 3001 vía `uis/start.sh`). `uis/backoffice` habla con `api` por nombre de servicio Docker (`BACKEND_API_URL=http://api:8000`, consumido por el rewrite proxy de `next.config.ts`), nunca por `localhost`. Los `Dockerfile` viven en `uis/` y `services/api/` (no en `services/` — ahí solo hay un CSV); `docker-compose.yml` va en la raíz.
+
+Montajes en tiempo de ejecución más allá de la carpeta propia de cada servicio, porque el código ya alcanzaba fuera de su carpeta desde antes de dockerizar: `packages/` (contiene tanto `packages/shared/incidents_validation` que `services/api/main.py` importa vía un `sys.path` insert a la raíz del repo, como `packages/shared/business-logic` que `uis/backoffice` importa por ruta relativa) y `uis/web/` (página estática legacy que `main.py` sirve en `GET /`). Sin estos montajes esas rutas concretas fallan aunque el resto de la plataforma funcione.
+
+Gotchas reales encontrados construyendo esto (todos ya resueltos en los archivos, documentados aquí para no repetir la depuración):
+- **Volúmenes anónimos para `node_modules`**: sin `- /app/uis/website/node_modules` y `- /app/uis/backoffice/node_modules` en el compose, el bind mount de `./uis` tapa los `node_modules` de Linux instalados en la imagen con los del host (Mac) o con nada.
+- **`libpq5`** instalado en el Dockerfile del backend: `psycopg2-binary` a veces necesita la lib de sistema aunque el wheel sea "binary".
+- **`libc6-compat`** en el Dockerfile de `uis` (Alpine): el binario nativo de SWC/Next.js necesita glibc, que musl no provee sin este shim.
+- **`start.sh` se invoca como `sh start.sh`, no `./start.sh`**: al montarse en vivo, el bit de ejecución del archivo del host puede no sobrevivir al bind mount.
+- **Turbopack entra en pánico sobre virtiofs**: Docker Desktop en Mac no siempre reenvía bien los eventos de sistema de archivos al contenedor por virtiofs, y el grafo de tareas incremental de Turbopack colapsa (`inner_of_upper_lost_followers`). Por eso `start.sh` fuerza `--webpack` en vez del Turbopack por defecto — solo dentro de Docker, el dev nativo sigue usando Turbopack.
+- **Polling de archivos**: por la misma razón de virtiofs, webpack tampoco detecta cambios de forma fiable sin ayuda. `next.config.ts` de ambas apps activa `watchOptions.pollIntervalMs` cuando `DOCKER_DEV=true` (variable puesta en el compose, nunca en dev nativo).
+- **Caché `.next` incompatible entre Turbopack y webpack**: si una app corrió antes con Turbopack (deja `.next/dev/...`) y luego se cambia a webpack, esa caché vieja puede impedir que el watcher detecte cambios sin dar ningún error visible. Si el hot reload deja de funcionar tras cambiar de bundler, borrar el `.next` de esa app específica y reiniciar.
+
 ## Arquitectura
 
 ### Backend — `services/api`
@@ -108,8 +128,9 @@ FastAPI + TinyDB (archivo único `services/api/data/suppliers.db.json` con tabla
 ### Compartido y legado
 
 - `packages/shared/incidents_validation/`: paquete Python compartido (antes en `shared/incidents_analysis/`). `csv_analysis.py` valida/analiza el CSV legacy (`clean_row`, `validate_row`, `analyze_rows`); `incident_rules.py` define los valores permitidos y transiciones del modelo Incident. Lo consumen la API, `scripts/analyze.py` y `scripts/seed_incidents.py` — cualquier regla nueva de incidencias va aquí, no duplicada.
-- `packages/shared/`: también contiene el paquete TS `@repo/shared-types`.
-- `src/`: utilidades TypeScript del hito 2 (validaciones, transformaciones, búsqueda) — ojo: hay artefactos compilados (`.js`, `.d.ts`, `.map`) versionados junto al fuente aquí y en otras carpetas; editar siempre el `.ts`.
+- `packages/shared/`: también contiene el paquete TS `@repo/shared-types` (scaffold sin usar, ver nota abajo).
+- `packages/shared/business-logic/`: utilidades TypeScript del hito 2 (validaciones, transformaciones, búsqueda) — antes vivían en `src/` en la raíz, movidas aquí el 2026-08-10 al dockerizar (una carpeta suelta en la raíz, alcanzada por rutas relativas `../../../src` desde `uis/backoffice`, no encajaba en la estructura). Sigue siendo un import por ruta relativa (`../../../packages/shared/business-logic/...` desde `uis/backoffice/lib/businessMetrics.ts` y sus tests), no un paquete npm instalado — ver mejora futura abajo. Ojo: hay artefactos compilados (`.js`, `.d.ts`, `.map`) versionados junto al fuente; editar siempre el `.ts`.
+- **Mejora futura documentada, no implementada**: convertir `packages/shared/business-logic` (y el scaffold `@repo/shared-types`) en paquetes npm reales vía **npm workspaces** de raíz, con `uis/backoffice` dependiendo de `@repo/business-logic` y consumiéndolo vía `transpilePackages` en `next.config.ts` en vez de una ruta relativa. Eliminaría también el hack `experimental.externalDir`/`turbopack.root` de `uis/backoffice/next.config.ts`. Se descartó para esta clase porque implica consolidar los `package-lock.json` (hoy cada app tiene el suyo independiente) — cambio de mayor alcance y riesgo que lo que pedía el ticket del día.
 - `index.html`, `application.html`, `validation.js`, `server.py` en la raíz: versión estática original del hito 1 (previa a la migración a `uis/website`); no es el frontend activo.
 - `skills/` y `workflows/`: plantillas y documentación del template del curso.
 

@@ -1,11 +1,11 @@
 /**
- * FE-019 — Lógica de negocio compartida (src/utils) consumida por el
- * backoffice a través de lib/businessMetrics.ts.
+ * FE-019 — Lógica de negocio compartida (packages/shared/business-logic)
+ * consumida por el backoffice a través de lib/businessMetrics.ts.
  */
 
-import type { Claim } from "../../../src/types/models";
-import { calculateDenialRate } from "../../../src/utils/transformations";
-import { validateClaim } from "../../../src/utils/validations";
+import type { Claim } from "../../../packages/shared/business-logic/types/models";
+import { calculateDenialRate } from "../../../packages/shared/business-logic/utils/transformations";
+import { validateClaim } from "../../../packages/shared/business-logic/utils/validations";
 
 const baseClaim: Claim = {
   claimId: "HC-100001",

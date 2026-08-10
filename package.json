@@ -5,7 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "dev": "tsx src/demo.ts"
+    "dev": "tsx packages/shared/business-logic/demo.ts"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
