@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 import inventory_repository as repo
+from cache import cache
 from database import get_inventory_db
 from inventory_models import MedicalSupply
 from models import (
@@ -35,10 +36,20 @@ def _to_supply_read(session: Session, supply: MedicalSupply) -> MedicalSupplyRea
     )
 
 
+PRODUCTS_CACHE_KEY = "inventory_products"
+PRODUCTS_CACHE_TTL_SECONDS = 30
+
+
 @router.get("/products", response_model=list[MedicalSupplyRead])
 def list_products(session: Session = Depends(get_inventory_db)) -> list[MedicalSupplyRead]:
+    cached = cache.get(PRODUCTS_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     supplies = repo.list_supplies(session)
-    return [_to_supply_read(session, supply) for supply in supplies]
+    result = [_to_supply_read(session, supply) for supply in supplies]
+    cache.set(PRODUCTS_CACHE_KEY, result, PRODUCTS_CACHE_TTL_SECONDS)
+    return result
 
 
 @router.post("/products", response_model=MedicalSupplyRead, status_code=status.HTTP_201_CREATED)
@@ -71,6 +82,7 @@ def create_inbound_order(
     data = payload.model_dump()
     data["user_uuid"] = current_user["id"]
     delivery = repo.create_delivery(session, data)
+    cache.invalidate(PRODUCTS_CACHE_KEY)
     return SupplyDeliveryRead.model_validate(delivery)
 
 
@@ -90,6 +102,7 @@ def create_outbound_order(
         consumption = repo.create_consumption(session, data)
     except repo.InsufficientStockError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    cache.invalidate(PRODUCTS_CACHE_KEY)
     return SupplyConsumptionRead.model_validate(consumption)
 
 

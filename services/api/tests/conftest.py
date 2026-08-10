@@ -34,6 +34,7 @@ from sqlmodel.pool import StaticPool  # noqa: E402
 
 import database  # noqa: E402
 import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
+from cache import cache  # noqa: E402
 from database import get_inventory_db  # noqa: E402
 from main import app  # noqa: E402
 
@@ -42,8 +43,14 @@ TEST_PASSWORD = "SuperSecure123"
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """Every test starts from an empty database."""
+    """Every test starts from an empty database.
+
+    Also clears the process-wide TTL cache: it's a singleton that would
+    otherwise leak stale results across tests, since this reset bypasses the
+    write endpoints that normally call cache.invalidate().
+    """
     database.get_db().drop_tables()
+    cache.clear()
     yield
 
 

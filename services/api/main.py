@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -32,6 +34,10 @@ from security import get_current_user  # noqa: E402
 
 app = FastAPI(title="HealthCore Incidents API", version="1.0.0")
 
+# Python's root logger defaults to WARNING with no handler attached, which
+# would silently swallow the INFO-level timing logs below.
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,6 +52,21 @@ app.include_router(users_router)
 app.include_router(profiles_router)
 app.include_router(incidents_router)
 app.include_router(inventory_router)
+
+timing_logger = logging.getLogger("api.timing")
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    """Logs latency per request so we have evidence (not guesses) of which
+    endpoints are worth caching. See CACHING_REPORT.md for the readings."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    timing_logger.info(
+        f"{request.method} {request.url.path} → {response.status_code} | {duration_ms:.1f}ms"
+    )
+    return response
 
 
 @app.on_event("startup")
