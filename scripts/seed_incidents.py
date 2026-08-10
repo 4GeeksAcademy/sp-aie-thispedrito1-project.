@@ -32,9 +32,9 @@ from packages.shared.incidents_validation import (  # noqa: E402
 try:
     from incident_repository import IncidentRepository  # noqa: E402
 except ModuleNotFoundError as exc:
-    print(f"Error: missing dependency '{exc.name}'.")
-    print("Run this script with the API virtualenv, e.g.:")
-    print("  services/api/.venv/bin/python scripts/seed_incidents.py")
+    print(f"Error: missing dependency '{exc.name}'.", file=sys.stderr)
+    print("Run this script with the API virtualenv, e.g.:", file=sys.stderr)
+    print("  services/api/.venv/bin/python scripts/seed_incidents.py", file=sys.stderr)
     raise SystemExit(1) from exc
 
 DEFAULT_CSV_PATH = ROOT_DIR / "services" / "incidents-healthcore.csv"
@@ -110,17 +110,21 @@ def row_source_id(cleaned: dict[str, object], payload: dict[str, str] | None) ->
 def main() -> int:
     csv_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CSV_PATH
     if not csv_path.is_file():
-        print(f"Error: CSV file not found: {csv_path}")
+        print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
         return 1
 
     try:
         rows = load_csv_rows_from_path(csv_path)
     except ValueError as exc:
-        print(f"Error: {exc}")
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    repo = IncidentRepository()
-    already_seeded = repo.existing_seed_source_ids()
+    try:
+        repo = IncidentRepository()
+        already_seeded = repo.existing_seed_source_ids()
+    except OSError as exc:
+        print(f"Error: cannot open the incidents database: {exc.strerror or exc}", file=sys.stderr)
+        return 1
     seen_in_run: set[str] = set()
 
     inserted = 0
@@ -155,7 +159,14 @@ def main() -> int:
 
         record = dict(payload)
         record["source_id"] = source_id
-        repo.insert_seed(record)
+        try:
+            repo.insert_seed(record)
+        except OSError as exc:
+            print(
+                f"Error: database write failed after {inserted} inserts: {exc.strerror or exc}",
+                file=sys.stderr,
+            )
+            return 1
         inserted += 1
 
     print("=" * 60)

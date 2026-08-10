@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live source for --reload; packages/ carries the shared Python
+      # package (packages/shared/incidents_validation) main.py imports via
+      # a repo-root sys.path insert — same relative depth as on the host.
+      - ./services/api:/app/services/api
+      - ./packages:/app/packages
+      # main.py also serves the legacy static page from uis/web/index.html
+      # at GET / (ROOT_DIR / "uis" / "web" / "index.html") — without this,
+      # that one route 404s inside the container even though nothing else
+      # required for the hito breaks.
+      - ./uis/web:/app/uis/web
+    networks:
+      - healthcore-net
+
+  uis:
+    build:
+      context: ./uis
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # Tells next.config.ts to switch on filesystem polling — see the
+      # comment there for why (virtiofs bind mounts + webpack watcher).
+      - DOCKER_DEV=true
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - ./uis:/app/uis
+      # Same packages/ mount as api, at the same relative depth backoffice
+      # expects (packages/shared/business-logic, ex-root "src/").
+      - ./packages:/app/packages
+      # Anonymous volumes: without these, the ./uis bind mount above would
+      # hide the node_modules that were npm-installed *inside* the image
+      # (Linux binaries) and replace them with whatever (or nothing) exists
+      # on the host. This keeps each app's node_modules container-native
+      # while everything else stays live-mounted from the host.
+      - /app/uis/website/node_modules
+      - /app/uis/backoffice/node_modules
+    depends_on:
+      - api
+    networks:
+      - healthcore-net
+
+networks:
+  healthcore-net:
+    name: healthcore-net

@@ -18,22 +18,37 @@ export class ApiFieldError extends Error {
   readonly fieldErrors: FieldError[];
 
   constructor(fieldErrors: FieldError[]) {
-    super("Validation error");
+    super(`Algunos datos no son válidos — ${fieldErrors.map((e) => `${e.field}: ${e.message}`).join("; ")}`);
     this.name = "ApiFieldError";
     this.fieldErrors = fieldErrors;
   }
 }
 
 function extractFieldErrors(payload: unknown): FieldError[] | null {
-  if (!isObjectRecord(payload) || !isObjectRecord(payload.detail)) return null;
-  const { errors } = payload.detail;
-  if (!Array.isArray(errors)) return null;
+  if (!isObjectRecord(payload)) return null;
 
-  const fieldErrors = errors.filter(
-    (item): item is FieldError =>
-      isObjectRecord(item) && typeof item.field === "string" && typeof item.message === "string",
-  );
-  return fieldErrors.length > 0 ? fieldErrors : null;
+  // Own incidents API format: { detail: { errors: [{ field, message }] } }
+  if (isObjectRecord(payload.detail) && Array.isArray(payload.detail.errors)) {
+    const fieldErrors = payload.detail.errors.filter(
+      (item): item is FieldError =>
+        isObjectRecord(item) && typeof item.field === "string" && typeof item.message === "string",
+    );
+    return fieldErrors.length > 0 ? fieldErrors : null;
+  }
+
+  // FastAPI/Pydantic 422 format: { detail: [{ loc: [...], msg }] }
+  if (Array.isArray(payload.detail)) {
+    const fieldErrors = payload.detail
+      .map((item): FieldError | null => {
+        if (!isObjectRecord(item) || typeof item.msg !== "string" || !Array.isArray(item.loc)) return null;
+        const field = String(item.loc[item.loc.length - 1] ?? "");
+        return field ? { field, message: item.msg } : null;
+      })
+      .filter((item): item is FieldError => item !== null);
+    return fieldErrors.length > 0 ? fieldErrors : null;
+  }
+
+  return null;
 }
 
 function redirectToLogin() {
@@ -45,15 +60,16 @@ function redirectToLogin() {
 }
 
 function extractErrorMessage(status: number, payload: unknown): string {
-  if (isObjectRecord(payload) && payload.detail !== undefined) {
-    if (typeof payload.detail === "string") {
-      return payload.detail;
-    }
-    if (status === 422) {
-      return `API_422_DETAIL: ${JSON.stringify(payload.detail)}`;
-    }
+  if (status >= 500) {
+    return "El servidor tuvo un problema inesperado. Inténtalo de nuevo en unos minutos.";
   }
-  return `Error HTTP: ${status}`;
+  if (isObjectRecord(payload) && typeof payload.detail === "string") {
+    return payload.detail;
+  }
+  if (status === 422) {
+    return "Algunos datos enviados no son válidos. Revisa el formulario e inténtalo de nuevo.";
+  }
+  return "No se pudo completar la operación. Inténtalo de nuevo.";
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
@@ -71,11 +87,16 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      cache: "no-store",
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new Error("No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.");
+  }
 
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => null);
@@ -94,5 +115,9 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error("La respuesta del servidor no se pudo interpretar. Inténtalo de nuevo.");
+  }
 }

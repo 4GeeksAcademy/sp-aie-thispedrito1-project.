@@ -20,7 +20,7 @@ export function SessionMenu() {
     return (
       <>
         <Link href="/login" className="nav-link">
-          Login
+          Iniciar sesión
         </Link>
         <Link href="/register" className="nav-link">
           Registro

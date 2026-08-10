@@ -5,43 +5,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { authApi } from "../../services/authApi";
+import { ApiFieldError } from "../../services/http";
 import { setAuthToken } from "../../services/session";
 
 type RegisterField = "email" | "password" | "confirmPassword" | "name" | "phone" | "address";
 type FieldErrors = Partial<Record<RegisterField, string>>;
 
-const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === "object" && value !== null
-);
+const REGISTER_FIELDS: RegisterField[] = ["email", "password", "name", "phone", "address"];
 
-function parse422FieldErrors(rawMessage: string): FieldErrors {
-  if (!rawMessage.startsWith("API_422_DETAIL:")) {
-    return {};
-  }
-
-  const detailRaw = rawMessage.replace("API_422_DETAIL:", "").trim();
-
-  try {
-    const parsed = JSON.parse(detailRaw) as unknown;
-    if (!Array.isArray(parsed)) return {};
-
-    const nextErrors: FieldErrors = {};
-    for (const item of parsed) {
-      if (!isObjectRecord(item)) continue;
-      const loc = item.loc;
-      const msg = item.msg;
-      if (!Array.isArray(loc) || typeof msg !== "string") continue;
-
-      const field = String(loc[loc.length - 1] || "");
-      if (field === "email" || field === "password" || field === "name" || field === "phone" || field === "address") {
-        nextErrors[field] = msg;
-      }
+function mapApiFieldErrors(error: ApiFieldError): FieldErrors {
+  const nextErrors: FieldErrors = {};
+  for (const { field, message } of error.fieldErrors) {
+    if ((REGISTER_FIELDS as string[]).includes(field)) {
+      nextErrors[field as RegisterField] = message;
     }
-
-    return nextErrors;
-  } catch {
-    return {};
   }
+  return nextErrors;
 }
 
 export default function RegisterPage() {
@@ -98,14 +77,17 @@ export default function RegisterPage() {
       setAuthToken(token.access_token);
       router.replace("/");
     } catch (requestError: unknown) {
-      const message = requestError instanceof Error ? requestError.message : "No se pudo completar el registro.";
-
-      if (message === "Email already registered") {
-        setFieldErrors({ email: "Este correo ya esta registrado." });
+      if (requestError instanceof ApiFieldError) {
+        const mappedErrors = mapApiFieldErrors(requestError);
+        if (Object.keys(mappedErrors).length > 0) {
+          setFieldErrors(mappedErrors);
+        } else {
+          setFormError("Algunos datos no son válidos. Revisa el formulario e inténtalo de nuevo.");
+        }
       } else {
-        const mapped422 = parse422FieldErrors(message);
-        if (Object.keys(mapped422).length > 0) {
-          setFieldErrors(mapped422);
+        const message = requestError instanceof Error ? requestError.message : "No se pudo completar el registro.";
+        if (message === "Email already registered") {
+          setFieldErrors({ email: "Este correo ya esta registrado." });
         } else {
           setFormError(message);
         }
@@ -177,7 +159,7 @@ function Field({
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        style={error ? { borderColor: "#dc2626" } : undefined}
+        style={error ? { borderColor: "var(--critical)" } : undefined}
       />
       {error && <span className="error-text">{error}</span>}
     </label>

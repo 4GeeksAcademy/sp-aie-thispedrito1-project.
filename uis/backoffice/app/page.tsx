@@ -21,7 +21,7 @@ export default function BackofficeHome() {
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12, marginBottom: 18 }}>
         <MetricCard title="Tasa global de denegacion" value={`${summary.denialRate}%`} />
         <MetricCard title="No-show semanal" value={`$${summary.lostRevenueWeek}`} />
-        <MetricCard title="Validacion de claim" value={summary.claimValidation.valid ? "OK" : "Error"} />
+        <MetricCard title="Validacion de claim" value={summary.claimValidation.valid ? "Correcto" : "Error"} />
       </section>
 
       <section
@@ -80,10 +80,10 @@ export default function BackofficeHome() {
       {!summary.claimValidation.valid && (
         <section
           style={{
-            border: "1px solid #fecaca",
+            border: "1px solid var(--error-border)",
             borderRadius: 16,
-            background: "#fff1f2",
-            color: "#881337",
+            background: "var(--error-bg)",
+            color: "var(--error-text)",
             padding: 16,
           }}
         >

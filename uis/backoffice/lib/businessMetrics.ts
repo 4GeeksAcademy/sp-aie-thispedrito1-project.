@@ -1,6 +1,6 @@
-import { sampleAppointments, sampleClaims, sampleClinicians, sampleLocations } from "../../../src/data/sampleData";
-import { calculateDenialRate, calculateNoShowCost, denialRateByPayer, generateCMEReport } from "../../../src/utils/transformations";
-import { validateClaim } from "../../../src/utils/validations";
+import { sampleAppointments, sampleClaims, sampleClinicians, sampleLocations } from "../../../packages/shared/business-logic/data/sampleData";
+import { calculateDenialRate, calculateNoShowCost, denialRateByPayer, generateCMEReport } from "../../../packages/shared/business-logic/utils/transformations";
+import { validateClaim } from "../../../packages/shared/business-logic/utils/validations";
 
 export interface BackofficeSummary {
   denialRate: number;

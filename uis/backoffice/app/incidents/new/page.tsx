@@ -22,24 +22,24 @@ const EMPTY_FORM: IncidentCreateInput = {
 };
 
 const FIELD_LABELS: Record<string, string> = {
-  title: "Title",
-  description: "Description",
-  category: "Category",
-  status: "Status",
-  origin: "Origin",
-  branch: "Branch",
+  title: "Título",
+  description: "Descripción",
+  category: "Categoría",
+  status: "Estado",
+  origin: "Origen",
+  branch: "Sede",
 };
 
 type FieldErrors = Partial<Record<string, string>>;
 
 function validateForm(form: IncidentCreateInput): FieldErrors {
   const errors: FieldErrors = {};
-  if (!form.title.trim()) errors.title = "Title is required.";
-  if (form.title.trim().length > 120) errors.title = "Title must be 120 characters or fewer.";
-  if (!form.description.trim()) errors.description = "Description is required.";
-  if (!form.category) errors.category = "Select a category.";
-  if (!form.origin) errors.origin = "Select an origin.";
-  if (!form.branch) errors.branch = "Select a branch.";
+  if (!form.title.trim()) errors.title = "El título es obligatorio.";
+  if (form.title.trim().length > 120) errors.title = "El título debe tener 120 caracteres o menos.";
+  if (!form.description.trim()) errors.description = "La descripción es obligatoria.";
+  if (!form.category) errors.category = "Selecciona una categoría.";
+  if (!form.origin) errors.origin = "Selecciona un origen.";
+  if (!form.branch) errors.branch = "Selecciona una sede.";
   return errors;
 }
 
@@ -65,7 +65,7 @@ export default function ReportIncidentPage() {
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setFormError("Please review the highlighted fields before submitting.");
+      setFormError("Revisa los campos marcados antes de enviar.");
       return;
     }
 
@@ -78,7 +78,7 @@ export default function ReportIncidentPage() {
       });
       setForm(EMPTY_FORM);
       setFieldErrors({});
-      setSuccess("Incident reported successfully. The support team can now track it from the incidents panel.");
+      setSuccess("Incidencia reportada correctamente. El equipo de soporte ya puede hacerle seguimiento desde el panel de incidencias.");
     } catch (submitError) {
       if (submitError instanceof ApiFieldError) {
         const apiErrors: FieldErrors = {};
@@ -89,9 +89,9 @@ export default function ReportIncidentPage() {
         const fields = submitError.fieldErrors
           .map(({ field }) => FIELD_LABELS[field] ?? field)
           .join(", ");
-        setFormError(`Some fields could not be accepted: ${fields}. Please review them and try again.`);
+        setFormError(`Algunos campos no fueron aceptados: ${fields}. Revísalos e inténtalo de nuevo.`);
       } else {
-        setFormError("The incident could not be saved right now. Please try again in a moment.");
+        setFormError("No se pudo guardar la incidencia en este momento. Inténtalo de nuevo en unos segundos.");
       }
     } finally {
       setIsSubmitting(false);
@@ -100,29 +100,30 @@ export default function ReportIncidentPage() {
 
   return (
     <main className="shell" style={{ padding: "24px 0 48px" }}>
-      <h1>Report an incident</h1>
+      <h1>Reportar una incidencia</h1>
       <p style={{ color: "var(--muted)", maxWidth: 720 }}>
-        Register any operational, clinical-equipment, IT, billing, or compliance incident. The support
-        team tracks every report from the incidents panel.
+        Registra cualquier incidencia operativa, de equipo clínico, informática, de facturación o de
+        cumplimiento normativo. El equipo de soporte hace seguimiento de cada reporte desde el panel de
+        incidencias.
       </p>
 
       <form onSubmit={submit} className="panel" style={{ maxWidth: 860 }}>
         <div className="form-grid">
           <label style={{ gridColumn: "1 / -1" }}>
-            Title *
+            Título *
             <input
               value={form.title}
               maxLength={120}
               onChange={(event) => setField("title", event.target.value)}
-              placeholder="Short summary of the incident (max 120 characters)"
+              placeholder="Resumen breve de la incidencia (máx. 120 caracteres)"
             />
             {fieldErrors.title && <span className="error-text">{fieldErrors.title}</span>}
           </label>
 
           <label>
-            Category *
+            Categoría *
             <select value={form.category} onChange={(event) => setField("category", event.target.value as IncidentCreateInput["category"])}>
-              <option value="">Select a category…</option>
+              <option value="">Selecciona una categoría…</option>
               {CATEGORY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -133,9 +134,9 @@ export default function ReportIncidentPage() {
           </label>
 
           <label>
-            Origin *
+            Origen *
             <select value={form.origin} onChange={(event) => setField("origin", event.target.value as IncidentCreateInput["origin"])}>
-              <option value="">Select an origin…</option>
+              <option value="">Selecciona un origen…</option>
               {ORIGIN_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -148,13 +149,13 @@ export default function ReportIncidentPage() {
           <label
             style={
               branchHighlighted
-                ? { background: "#eff6ff", border: "1px solid var(--brand)", borderRadius: 10, padding: 8 }
+                ? { background: "rgba(255, 138, 61, 0.08)", border: "1px solid var(--brand)", borderRadius: 10, padding: 8 }
                 : undefined
             }
           >
-            Branch *
+            Sede *
             <select value={form.branch} onChange={(event) => setField("branch", event.target.value as IncidentCreateInput["branch"])}>
-              <option value="">Select a branch…</option>
+              <option value="">Selecciona una sede…</option>
               {BRANCH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -163,14 +164,14 @@ export default function ReportIncidentPage() {
             </select>
             {branchHighlighted && (
               <span style={{ color: "var(--brand)", fontSize: 12, fontWeight: 600 }}>
-                You are reporting from a specific clinic — double-check the branch.
+                Estás reportando desde una clínica concreta — verifica la sede.
               </span>
             )}
             {fieldErrors.branch && <span className="error-text">{fieldErrors.branch}</span>}
           </label>
 
           <label>
-            Status
+            Estado
             <select value={form.status} onChange={(event) => setField("status", event.target.value as IncidentCreateInput["status"])}>
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -186,34 +187,34 @@ export default function ReportIncidentPage() {
           role="alert"
           style={{
             marginTop: 14,
-            border: "2px solid #b45309",
-            background: "#fef3c7",
-            color: "#78350f",
+            border: "2px solid var(--warning)",
+            background: "rgba(255, 194, 75, 0.1)",
+            color: "var(--warning)",
             borderRadius: 10,
             padding: "10px 12px",
             fontSize: 14,
             fontWeight: 600,
           }}
         >
-          ⚠️ Do not include patient-identifying data (names, dates of birth, medical record numbers,
-          contact details). If a patient is involved, reference them only by their internal opaque
-          identifier. This is a HIPAA / UK GDPR compliance requirement.
+          ⚠️ No incluyas datos que identifiquen a pacientes (nombres, fechas de nacimiento, números de
+          historia clínica, datos de contacto). Si hay un paciente involucrado, referéncialo solo con su
+          identificador interno opaco. Es un requisito de cumplimiento HIPAA / UK GDPR.
         </div>
 
         <label style={{ display: "flex", marginTop: 10 }}>
-          Description *
+          Descripción *
           <textarea
             value={form.description}
             rows={5}
             onChange={(event) => setField("description", event.target.value)}
-            placeholder="What happened, where, and what was affected — without any patient-identifying data."
+            placeholder="Qué pasó, dónde, y qué se vio afectado — sin datos que identifiquen a pacientes."
           />
           {fieldErrors.description && <span className="error-text">{fieldErrors.description}</span>}
         </label>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting…" : "Report incident"}
+            {isSubmitting ? "Enviando…" : "Reportar incidencia"}
           </button>
           {formError && <span className="error-text">{formError}</span>}
           {success && <span className="success-text">{success}</span>}

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+
+from pydantic import ValidationError
+
 from models import SupplierSeed
 from repository import SupplierRepository
 
@@ -188,10 +192,19 @@ def run_seed() -> tuple[int, int]:
     return inserted, skipped
 
 
-def main() -> None:
-    inserted, skipped = run_seed()
+def main() -> int:
+    try:
+        inserted, skipped = run_seed()
+    except ValidationError as exc:
+        print(f"Seed failed: invalid supplier seed data: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Seed failed: cannot access the database file: {exc.strerror or exc}", file=sys.stderr)
+        return 1
+
     print(f"Seed completed. Inserted: {inserted}. Skipped: {skipped}.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

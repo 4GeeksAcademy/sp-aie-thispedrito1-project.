@@ -72,8 +72,9 @@ export default function CandidateForm({ initialData, isEditing = false }: Candid
         router.refresh(); // Forzamos a Next.js a revalidar los datos del servidor
       }, 1500);
 
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error al procesar el expediente.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Ocurrió un error al procesar el expediente. Inténtalo de nuevo.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export default function CandidateForm({ initialData, isEditing = false }: Candid
     <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
       {error && (
         <div className="mb-6 bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
-          <strong>Error de validación:</strong> {error}
+          <strong>No se pudo guardar:</strong> {error}
         </div>
       )}
       

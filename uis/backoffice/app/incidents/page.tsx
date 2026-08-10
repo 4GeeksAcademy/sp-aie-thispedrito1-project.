@@ -20,10 +20,10 @@ import {
 } from "../../types/incident";
 
 const STATUS_BADGE_STYLES: Record<IncidentStatus, React.CSSProperties> = {
-  open: { background: "#fee2e2", color: "#991b1b" },
-  in_progress: { background: "#fef3c7", color: "#92400e" },
-  resolved: { background: "#dcfce7", color: "#166534" },
-  discarded: { background: "#e2e8f0", color: "#334155" },
+  open: { background: "rgba(255, 93, 93, 0.14)", color: "var(--critical)" },
+  in_progress: { background: "rgba(255, 194, 75, 0.14)", color: "var(--warning)" },
+  resolved: { background: "rgba(74, 222, 128, 0.14)", color: "var(--ok)" },
+  discarded: { background: "rgba(138, 150, 145, 0.14)", color: "var(--muted)" },
 };
 
 export default function IncidentsPage() {
@@ -41,7 +41,7 @@ export default function IncidentsPage() {
       const results = await getIncidents(activeFilters);
       setIncidents(results);
     } catch {
-      setLoadError("The incidents list could not be loaded. Check that the API is running and try again.");
+      setLoadError("No se pudo cargar la lista de incidencias. Verifica que la API esté activa e inténtalo de nuevo.");
     } finally {
       setIsLoading(false);
     }
@@ -72,10 +72,10 @@ export default function IncidentsPage() {
       );
       if (error instanceof ApiFieldError) {
         setUpdateNotice(
-          `The status of "${incident.title}" was not changed: ${error.fieldErrors[0]?.message ?? "invalid transition."}`,
+          `No se cambió el estado de "${incident.title}": ${error.fieldErrors[0]?.message ?? "transición no válida."}`,
         );
       } else {
-        setUpdateNotice(`The status of "${incident.title}" could not be updated. Please try again.`);
+        setUpdateNotice(`No se pudo actualizar el estado de "${incident.title}". Inténtalo de nuevo.`);
       }
     } finally {
       setUpdatingId(null);
@@ -87,18 +87,18 @@ export default function IncidentsPage() {
   return (
     <main className="shell" style={{ padding: "24px 0 48px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <h1 style={{ marginBottom: 0 }}>Incidents</h1>
+        <h1 style={{ marginBottom: 0 }}>Incidencias</h1>
         <Link href="/incidents/new" className="nav-link" style={{ color: "var(--brand)" }}>
-          + Report incident
+          + Reportar incidencia
         </Link>
       </div>
 
       <div className="panel" style={{ margin: "16px 0" }}>
         <div className="form-grid">
           <label>
-            Status
+            Estado
             <select value={filters.status ?? ""} onChange={(event) => setFilter("status", event.target.value)}>
-              <option value="">All statuses</option>
+              <option value="">Todos los estados</option>
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -107,9 +107,9 @@ export default function IncidentsPage() {
             </select>
           </label>
           <label>
-            Origin
+            Origen
             <select value={filters.origin ?? ""} onChange={(event) => setFilter("origin", event.target.value)}>
-              <option value="">All origins</option>
+              <option value="">Todos los orígenes</option>
               {ORIGIN_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -118,9 +118,9 @@ export default function IncidentsPage() {
             </select>
           </label>
           <label>
-            Branch
+            Sede
             <select value={filters.branch ?? ""} onChange={(event) => setFilter("branch", event.target.value)}>
-              <option value="">All branches</option>
+              <option value="">Todas las sedes</option>
               {BRANCH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -137,13 +137,13 @@ export default function IncidentsPage() {
         </p>
       )}
 
-      {isLoading && <p style={{ color: "var(--muted)" }}>Loading incidents…</p>}
+      {isLoading && <p style={{ color: "var(--muted)" }}>Cargando incidencias…</p>}
 
       {!isLoading && loadError && (
         <div className="panel" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span className="error-text">{loadError}</span>
           <button type="button" onClick={() => void loadIncidents(filters)}>
-            Retry
+            Reintentar
           </button>
         </div>
       )}
@@ -152,8 +152,8 @@ export default function IncidentsPage() {
         <div className="panel">
           <p style={{ margin: 0, color: "var(--muted)" }}>
             {hasActiveFilters
-              ? "No incidents match the selected filters. Try clearing them to see the full list."
-              : "No incidents have been reported yet. Use “Report incident” to register the first one."}
+              ? "Ninguna incidencia coincide con los filtros seleccionados. Prueba a quitarlos para ver la lista completa."
+              : "Todavía no se ha reportado ninguna incidencia. Usa “Reportar incidencia” para registrar la primera."}
           </p>
         </div>
       )}
@@ -163,13 +163,13 @@ export default function IncidentsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Origin</th>
-                <th>Branch</th>
-                <th>Created</th>
-                <th>Status</th>
-                <th>Change status</th>
+                <th>Título</th>
+                <th>Categoría</th>
+                <th>Origen</th>
+                <th>Sede</th>
+                <th>Creada</th>
+                <th>Estado</th>
+                <th>Cambiar estado</th>
               </tr>
             </thead>
             <tbody>
@@ -184,7 +184,7 @@ export default function IncidentsPage() {
                     <td>{CATEGORY_LABELS[incident.category] ?? incident.category}</td>
                     <td>{ORIGIN_LABELS[incident.origin] ?? incident.origin}</td>
                     <td>{BRANCH_LABELS[incident.branch] ?? incident.branch}</td>
-                    <td>{new Date(incident.created_at).toLocaleDateString("en-GB")}</td>
+                    <td>{new Date(incident.created_at).toLocaleDateString("es-ES")}</td>
                     <td>
                       <span className="status-badge" style={STATUS_BADGE_STYLES[incident.status]}>
                         {STATUS_LABELS[incident.status] ?? incident.status}
@@ -192,7 +192,7 @@ export default function IncidentsPage() {
                     </td>
                     <td>
                       {transitions.length === 0 ? (
-                        <span style={{ color: "var(--muted)", fontSize: 13 }}>Final</span>
+                        <span style={{ color: "var(--muted)", fontSize: 13 }}>Definitivo</span>
                       ) : (
                         <select
                           value=""
@@ -202,7 +202,7 @@ export default function IncidentsPage() {
                             if (nextStatus) void changeStatus(incident, nextStatus);
                           }}
                         >
-                          <option value="">{updatingId === incident.id ? "Updating…" : "Move to…"}</option>
+                          <option value="">{updatingId === incident.id ? "Actualizando…" : "Mover a…"}</option>
                           {transitions.map((value) => (
                             <option key={value} value={value}>
                               {STATUS_LABELS[value]}

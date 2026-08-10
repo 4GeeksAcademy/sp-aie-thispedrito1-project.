@@ -106,7 +106,6 @@ export default function CandidateDashboard() {
       setError(null);
       
       const responseData = await talentApi.getRecords();
-      console.log("Datos frescos recuperados del servidor:", responseData);
 
       let serverRecords: unknown[] = [];
       if (Array.isArray(responseData)) {
@@ -149,10 +148,9 @@ export default function CandidateDashboard() {
         ...normalizedBackup,
       ]));
 
-    } catch (err: unknown) {
-      console.error("Error al conectar con la API en Dashboard:", err);
+    } catch {
       setCandidates(BACKUP_CANDIDATES);
-      setError("Modo Demo Activo: Cargando datos de contingencia local.");
+      setError("No se pudo conectar con el servidor. Se muestran datos de demostración locales mientras tanto.");
     } finally {
       setLoading(false);
     }
@@ -281,8 +279,15 @@ export default function CandidateDashboard() {
       )}
 
       {error && !loading && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm">
-          ⚠️ {error}
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm flex flex-wrap items-center justify-between gap-3">
+          <span>⚠️ {error}</span>
+          <button
+            type="button"
+            onClick={() => void loadCandidates()}
+            className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg font-semibold text-amber-900 transition-colors"
+          >
+            Reintentar conexión
+          </button>
         </div>
       )}
 

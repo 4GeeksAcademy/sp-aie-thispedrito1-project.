@@ -91,6 +91,8 @@ def load_csv_rows_from_path(csv_path: Path) -> List[Dict[str, str]]:
             return [row for row in reader]
     except UnicodeDecodeError as exc:
         raise ValueError("CSV must be UTF-8 encoded") from exc
+    except OSError as exc:
+        raise ValueError(f"Cannot read CSV file '{csv_path.name}': {exc.strerror or exc}") from exc
 
 
 def load_csv_rows_from_bytes(file_bytes: bytes) -> List[Dict[str, str]]:

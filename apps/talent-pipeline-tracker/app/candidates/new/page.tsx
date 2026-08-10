@@ -46,7 +46,6 @@ export default function NewCandidatePage() {
         cv_url: cvUrl.trim() && cvUrl.startsWith('http') ? cvUrl.trim() : 'https://storage.healthcore.com/cv/placeholder.pdf',
       };
 
-      console.log('Enviando payload del nuevo candidato a la API:', payload);
       const createdCandidate = await talentApi.createRecord(payload);
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem('latestCandidate', JSON.stringify(createdCandidate));
@@ -58,8 +57,7 @@ export default function NewCandidatePage() {
         router.refresh();
       }, 900);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error inesperado al procesar el registro en el servidor.';
-      console.error('Error al guardar el candidato:', err);
+      const message = err instanceof Error ? err.message : 'Error inesperado al procesar el registro. Inténtalo de nuevo.';
       setError(message);
     } finally {
       setLoading(false);

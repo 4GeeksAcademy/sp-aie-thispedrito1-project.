@@ -25,6 +25,32 @@ const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === "object" && value !== null
 );
 
+export type FieldError = { field: string; message: string };
+
+export class ApiFieldError extends Error {
+  readonly fieldErrors: FieldError[];
+
+  constructor(fieldErrors: FieldError[]) {
+    super(`El servidor rechazó los datos — ${fieldErrors.map((e) => `${e.field}: ${e.message}`).join("; ")}`);
+    this.name = "ApiFieldError";
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+const extractFieldErrors = (payload: unknown): FieldError[] | null => {
+  if (!isObjectRecord(payload) || !Array.isArray(payload.detail)) return null;
+
+  const fieldErrors = payload.detail
+    .map((item): FieldError | null => {
+      if (!isObjectRecord(item) || typeof item.msg !== "string" || !Array.isArray(item.loc)) return null;
+      const field = String(item.loc[item.loc.length - 1] ?? "");
+      return field ? { field, message: item.msg } : null;
+    })
+    .filter((item): item is FieldError => item !== null);
+
+  return fieldErrors.length > 0 ? fieldErrors : null;
+};
+
 const redirectToLogin = () => {
   if (typeof window === "undefined") return;
   clearAuthToken();
@@ -34,15 +60,33 @@ const redirectToLogin = () => {
 };
 
 const extractErrorMessage = (status: number, payload: unknown): string => {
-  if (isObjectRecord(payload) && payload.detail !== undefined) {
-    if (typeof payload.detail === "string") {
-      return payload.detail;
+  if (status >= 500) {
+    return "El servidor tuvo un problema inesperado. Inténtalo de nuevo en unos minutos.";
+  }
+
+  if (isObjectRecord(payload)) {
+    const { detail } = payload;
+    if (typeof detail === "string") {
+      return detail;
     }
-    if (status === 422) {
-      return `API_422_DETAIL: ${JSON.stringify(payload.detail)}`;
+    if (Array.isArray(detail)) {
+      const issues = detail
+        .map((item) => {
+          if (!isObjectRecord(item) || typeof item.msg !== "string") return null;
+          const field = Array.isArray(item.loc) ? String(item.loc[item.loc.length - 1] ?? "") : "";
+          return field ? `${field}: ${item.msg}` : item.msg;
+        })
+        .filter((issue): issue is string => Boolean(issue));
+      if (issues.length > 0) {
+        return `El servidor rechazó los datos — ${issues.join("; ")}`;
+      }
     }
   }
-  return `Error HTTP: ${status}`;
+
+  if (status === 422) {
+    return "El servidor rechazó los datos enviados. Revisa el formulario e inténtalo de nuevo.";
+  }
+  return "No se pudo completar la operación. Inténtalo de nuevo.";
 };
 
 const normalizeNote = (raw: unknown): CandidateNote => {
@@ -114,17 +158,26 @@ async function requestJson<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      cache: "no-store",
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new Error("No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.");
+  }
 
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => null);
     if (response.status === 401 && options.authRequired) {
       redirectToLogin();
       throw new Error("Sesion expirada o invalida. Inicia sesion nuevamente.");
+    }
+    const fieldErrors = extractFieldErrors(errorPayload);
+    if (fieldErrors) {
+      throw new ApiFieldError(fieldErrors);
     }
     throw new Error(extractErrorMessage(response.status, errorPayload));
   }
@@ -133,7 +186,11 @@ async function requestJson<T>(
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error("La respuesta del servidor no se pudo interpretar. Inténtalo de nuevo.");
+  }
 }
 
 export const talentApi = {
@@ -213,12 +270,17 @@ export const talentApi = {
   },
 
   getNotes: async (candidateId: string): Promise<CandidateNote[]> => {
-    const response = await fetch(`${TRACKER_BASE_URL}/records/${candidateId}/notes`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${getAuthToken() || ""}`,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${TRACKER_BASE_URL}/records/${candidateId}/notes`, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${getAuthToken() || ""}`,
+        },
+      });
+    } catch {
+      throw new Error("No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.");
+    }
 
     if (response.status === 401) {
       redirectToLogin();
@@ -234,7 +296,7 @@ export const talentApi = {
       throw new Error(extractErrorMessage(response.status, errorPayload));
     }
 
-    const payload = (await response.json()) as unknown;
+    const payload = (await response.json().catch(() => null)) as unknown;
     return parseNotesPayload(payload);
   },
 

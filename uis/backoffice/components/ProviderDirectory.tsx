@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { createSupplier, deleteSupplier, getSuppliers, updateSupplierRate, updateSupplierStatus } from "../services/suppliersApi";
-import type { Supplier, SupplierCreateInput, SupplierStatus } from "../types/supplier";
+import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type Supplier, type SupplierCreateInput, type SupplierStatus } from "../types/supplier";
 import { ProviderForm } from "./ProviderForm";
 import { ProviderStatusBadge } from "./ProviderStatusBadge";
 
@@ -126,7 +126,7 @@ export function ProviderDirectory() {
         <h2 style={{ marginTop: 0 }}>Filtros</h2>
         <div className="form-grid">
           <label>
-            Pais
+            País
             <select
               value={filters.country ?? ""}
               onChange={(event) =>
@@ -138,13 +138,13 @@ export function ProviderDirectory() {
             >
               {countries.map((value) => (
                 <option key={value || "all"} value={value}>
-                  {value || "Todos"}
+                  {value ? (value === "USA" ? "EE. UU." : "Reino Unido") : "Todos"}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Categoria
+            Categoría
             <select
               value={filters.category ?? ""}
               onChange={(event) =>
@@ -156,7 +156,7 @@ export function ProviderDirectory() {
             >
               {categories.map((value) => (
                 <option key={value || "all"} value={value}>
-                  {value || "Todas"}
+                  {value ? SUPPLIER_CATEGORY_LABELS[value] ?? value : "Todas"}
                 </option>
               ))}
             </select>
@@ -168,7 +168,14 @@ export function ProviderDirectory() {
         <h2 style={{ marginTop: 0 }}>Listado</h2>
 
         {loadingList && <p>Cargando proveedores...</p>}
-        {!loadingList && listError && <p className="error-text">{listError}</p>}
+        {!loadingList && listError && (
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <p className="error-text" style={{ margin: 0 }}>{listError}</p>
+            <button type="button" onClick={() => void fetchList()}>
+              Reintentar
+            </button>
+          </div>
+        )}
         {!loadingList && !listError && suppliers.length === 0 && <p>No hay proveedores para los filtros seleccionados.</p>}
 
         {!loadingList && !listError && suppliers.length > 0 && (
@@ -177,12 +184,12 @@ export function ProviderDirectory() {
               <thead>
                 <tr>
                   <th>Nombre</th>
-                  <th>Pais</th>
-                  <th>Categorias</th>
+                  <th>País</th>
+                  <th>Categorías</th>
                   <th>Tarifa mensual</th>
                   <th>Moneda</th>
-                  <th>Status</th>
-                  <th>Updated at</th>
+                  <th>Estado</th>
+                  <th>Actualizado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -192,8 +199,8 @@ export function ProviderDirectory() {
                   return (
                     <tr key={supplier.id}>
                       <td>{supplier.name}</td>
-                      <td>{supplier.country}</td>
-                      <td>{supplier.categories.join(", ")}</td>
+                      <td>{supplier.country === "USA" ? "EE. UU." : "Reino Unido"}</td>
+                      <td>{supplier.categories.map((c) => SUPPLIER_CATEGORY_LABELS[c] ?? c).join(", ")}</td>
                       <td>
                         <div style={{ display: "flex", gap: 8 }}>
                           <input
@@ -224,12 +231,12 @@ export function ProviderDirectory() {
                             onChange={(event) => void saveStatus(supplier, event.target.value as SupplierStatus)}
                             disabled={rowSaving}
                           >
-                            <option value="active">active</option>
-                            <option value="suspended">suspended</option>
+                            <option value="active">{SUPPLIER_STATUS_LABELS.active}</option>
+                            <option value="suspended">{SUPPLIER_STATUS_LABELS.suspended}</option>
                           </select>
                         </div>
                       </td>
-                      <td>{new Date(supplier.updated_at).toLocaleString()}</td>
+                      <td>{new Date(supplier.updated_at).toLocaleString("es-ES")}</td>
                       <td>
                         <button type="button" onClick={() => void removeSupplier(supplier)} disabled={rowSaving}>
                           Eliminar
