@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+import telemetry_service
 from models import (
     AuthMeResponse,
     ChangePasswordRequest,
@@ -32,9 +33,33 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 auth_repo = AuthRepository()
 
 
+def _emit_login_outcome(*, email: str, user: dict[str, Any] | None, login_method: str) -> None:
+    if user:
+        telemetry_service.emit_backend_event(
+            event_type="login_succeeded",
+            user_id=user["id"],
+            properties={"login_method": login_method},
+        )
+    else:
+        # authenticate_user deliberately collapses "no such user" and "wrong
+        # password" into the same None, same anti-enumeration principle as
+        # /auth/forgot-password — telemetry keeps that boundary too rather
+        # than adding a second lookup that would reintroduce it via timing.
+        telemetry_service.emit_backend_event(
+            event_type="login_failed",
+            user_id=None,
+            properties={
+                "attempted_identifier_hash": telemetry_service.hash_identifier(email),
+                "failure_reason": "invalid_credentials",
+                "login_method": login_method,
+            },
+        )
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest) -> TokenResponse:
     user = authenticate_user(email=str(payload.email), password=payload.password)
+    _emit_login_outcome(email=str(payload.email), user=user, login_method="password")
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
@@ -45,6 +70,7 @@ def login(payload: LoginRequest) -> TokenResponse:
 @router.post("/token", response_model=TokenResponse)
 def oauth_token(form_data: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
     user = authenticate_user(email=form_data.username, password=form_data.password)
+    _emit_login_outcome(email=form_data.username, user=user, login_method="oauth2_token")
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import date, timedelta
 
 from sqlmodel import Session, SQLModel, select
 
@@ -8,13 +9,27 @@ import inventory_repository as repo
 from database import get_inventory_engine
 from inventory_models import MedicalSupply
 
+# Computed relative to today so supply_expiry_flagged (30-day window) fires
+# whenever this seed is run, instead of going stale against a hardcoded date.
+NEAR_EXPIRY_DATE = date.today() + timedelta(days=15)
+
 SUPPLIES_SEED = [
     {"name": "Guantes de nitrilo (caja de 100)", "sku": "HCR-PPE-001", "category": "ppe", "unit": "box", "country": "US"},
     {"name": "Mascarilla quirúrgica (pack de 50)", "sku": "HCR-PPE-002", "category": "ppe", "unit": "pack", "country": "UK"},
     {"name": "Apósito adhesivo para heridas", "sku": "HCR-WND-001", "category": "wound_care", "unit": "box", "country": "US"},
     {"name": "Test rápido de estreptococo", "sku": "HCR-DIAG-001", "category": "diagnostics", "unit": "unit", "country": "US"},
     {"name": "Tiras reactivas glucemia (50)", "sku": "HCR-DIAG-002", "category": "diagnostics", "unit": "box", "country": "UK"},
-    {"name": "Solución salina 0,9% 500ml", "sku": "HCR-MED-001", "category": "medications", "unit": "vial", "country": "US"},
+    {"name": "Solución salina 0,9% 500ml", "sku": "HCR-MED-001", "category": "medications", "unit": "vial", "country": "US", "expiry_date": NEAR_EXPIRY_DATE},
+]
+
+# supply_id gets resolved to the real row id at insert time, keyed by sku.
+# Thresholds picked so two combos land below minimum with the seeded
+# deliveries/consumptions above (stock_threshold_triggered demo) and one
+# stays comfortably above it (a realistic non-triggering baseline).
+THRESHOLDS_SEED = [
+    {"sku": "HCR-PPE-001", "clinic_id": 1, "minimum_quantity": 200},  # stock ends at 160 -> triggers
+    {"sku": "HCR-DIAG-001", "clinic_id": 2, "minimum_quantity": 75},  # stock ends at 70 -> triggers
+    {"sku": "HCR-PPE-002", "clinic_id": 10, "minimum_quantity": 50},  # stock ends at 285 -> does not trigger
 ]
 
 # user_uuid values are placeholders — replace with real TinyDB user ids if you
@@ -81,6 +96,20 @@ def run_seed() -> tuple[int, int]:
                     "user_uuid": SEED_USER_UUID,
                 },
             )
+            inserted += 1
+
+        for item in THRESHOLDS_SEED:
+            supply = supplies_by_sku[item["sku"]]
+            existing = session.exec(
+                select(repo.SupplyThreshold).where(
+                    repo.SupplyThreshold.supply_id == supply.id,
+                    repo.SupplyThreshold.clinic_id == item["clinic_id"],
+                )
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+            repo.set_threshold(session, supply.id, item["clinic_id"], item["minimum_quantity"])
             inserted += 1
 
     return inserted, skipped

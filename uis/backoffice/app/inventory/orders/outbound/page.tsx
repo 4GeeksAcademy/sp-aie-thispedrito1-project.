@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ApiFieldError } from "../../../../services/http";
 import { createOutboundOrder, getProducts } from "../../../../services/inventoryApi";
+import { track } from "../../../../services/telemetry";
 import {
   CLINIC_ID_MAX,
   CLINIC_ID_MIN,
@@ -92,7 +93,19 @@ export default function OutboundOrderPage() {
 
     setIsSubmitting(true);
     try {
-      await createOutboundOrder(form);
+      const consumption = await createOutboundOrder(form);
+      if (selectedProduct) {
+        track("outbound_order_created", {
+          clinic_id: form.clinic_id,
+          country: selectedProduct.country,
+          product_id: selectedProduct.id,
+          product_category: selectedProduct.category,
+          quantity: form.quantity,
+          department: null,
+          consumption_type: form.consumption_type,
+          consumption_id: consumption.id,
+        });
+      }
       setSuccess("Consumo registrado correctamente. El stock del producto se ha actualizado.");
       setForm((prev) => ({ ...EMPTY_FORM, supply_id: prev.supply_id }));
       const refreshed = await getProducts();
