@@ -324,12 +324,10 @@ class TelemetryEvent(BaseModel):
     properties: dict = Field(default_factory=dict)
 
 
-class TelemetryBatch(BaseModel):
-    events: list[TelemetryEvent]
-
-
 class TelemetryIngestResponse(BaseModel):
     received: int
+    stored: int
+    rejected: int
 
 
 class InventoryOrderRead(BaseModel):

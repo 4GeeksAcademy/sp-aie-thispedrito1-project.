@@ -25,6 +25,7 @@ from packages.shared.incidents_validation import (  # noqa: E402
 from database import get_inventory_engine  # noqa: E402
 import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 import inventory_repository  # noqa: E402
+import telemetry_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 import telemetry_service  # noqa: E402
 from routes.auth import router as auth_router  # noqa: E402
 from routes.incidents import router as incidents_router  # noqa: E402
@@ -87,7 +88,10 @@ async def timing_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 def init_inventory_schema() -> None:
-    """Create the inventory tables in Supabase if DATABASE_URL is configured.
+    """Create every table registered on SQLModel.metadata in Supabase if
+    DATABASE_URL is configured — inventory's tables and, since the
+    telemetry storage feature, telemetry_events too (same shared metadata,
+    same engine).
 
     Left non-fatal on purpose: the rest of the API (auth, suppliers, incidents)
     must keep working locally even before Supabase is wired up.
