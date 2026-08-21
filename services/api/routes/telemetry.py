@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
@@ -8,10 +9,20 @@ from sqlmodel import Session
 
 import telemetry_repository
 import telemetry_service
+from cache import cache
 from database import get_inventory_db
 from models import TelemetryEvent, TelemetryIngestResponse
+from services.telemetry.analysis import (
+    auth_failure_rate,
+    error_rate_by_day,
+    events_per_day,
+    web_vital_latency_by_day,
+)
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
+
+REPORT_CACHE_TTL_SECONDS = 60
+REPORT_DEFAULT_WINDOW_DAYS = 7
 
 
 @router.post("/events", response_model=TelemetryIngestResponse)
@@ -63,3 +74,60 @@ def ingest_events(
     telemetry_repository.bulk_insert(session, records)
 
     return TelemetryIngestResponse(received=received, stored=len(records), rejected=rejected)
+
+
+def _parse_query_datetime(value: str) -> datetime:
+    """Same 'Z' normalization as telemetry_service._parse_timestamp — a
+    query param like '2026-08-20T00:00:00Z' fails datetime.fromisoformat on
+    Python < 3.11, which this project's local venv still is (see
+    techContext.md)."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _resolve_period(start_date: Optional[str], end_date: Optional[str]) -> tuple[datetime, datetime]:
+    """Resolves the report window exactly once, here — every metric
+    function receives the same start/end and applies it only in its own SQL
+    load, never a second 'last 7 days' filter of its own (per the class
+    README's 'Propiedad de la ventana de fechas')."""
+    end = _parse_query_datetime(end_date) if end_date else datetime.now(timezone.utc)
+    start = (
+        _parse_query_datetime(start_date)
+        if start_date
+        else end - timedelta(days=REPORT_DEFAULT_WINDOW_DAYS)
+    )
+    return start, end
+
+
+@router.get("/report")
+def get_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    session: Session = Depends(get_inventory_db),
+) -> Dict[str, Any]:
+    """Reporte técnico/operacional: no calcula nada por request — cachea el
+    resultado 60s por combinación de start_date/end_date, y solo recalcula
+    cuando esa entrada expira o cambia. Ver services/telemetry/analysis.py
+    para las funciones de métrica que hace cada key de "metrics"."""
+    period_start, period_end = _resolve_period(start_date, end_date)
+    cache_key = f"telemetry_report:{period_start.isoformat()}:{period_end.isoformat()}"
+
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    report = {
+        "period": {"from": period_start.isoformat(), "to": period_end.isoformat()},
+        "metrics": {
+            "events_per_day": events_per_day(session, start_date=period_start, end_date=period_end),
+            "error_rate_by_day": error_rate_by_day(session, start_date=period_start, end_date=period_end),
+            "web_vital_latency_by_day": web_vital_latency_by_day(
+                session, start_date=period_start, end_date=period_end
+            ),
+            "auth_failure_rate": auth_failure_rate(session, start_date=period_start, end_date=period_end),
+        },
+    }
+    cache.set(cache_key, report, ttl_seconds=REPORT_CACHE_TTL_SECONDS)
+    return report

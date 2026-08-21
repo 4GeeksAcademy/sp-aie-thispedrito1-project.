@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
+from telemetry_models import TelemetryEventRecord
 
 
 def test_login_happy_path_returns_bearer_token(client: TestClient, registered_user: dict[str, str]) -> None:
@@ -85,3 +88,33 @@ def test_login_failure_emits_login_failed(
             json={"email": registered_user["email"], "password": "ContrasenaIncorrecta1"},
         )
     assert "event_type=login_failed" in caplog.text
+
+
+def test_login_success_persists_login_succeeded_row(
+    client: TestClient, registered_user: dict[str, str], inventory_engine
+) -> None:
+    client.post(
+        "/auth/login",
+        json={"email": registered_user["email"], "password": registered_user["password"]},
+    )
+    with Session(inventory_engine) as session:
+        rows = session.exec(select(TelemetryEventRecord)).all()
+    assert len(rows) == 1
+    assert rows[0].event_type == "login_succeeded"
+    assert rows[0].service == "api"
+    assert rows[0].level == "info"
+
+
+def test_login_failure_persists_login_failed_row_without_raw_email(
+    client: TestClient, registered_user: dict[str, str], inventory_engine
+) -> None:
+    client.post(
+        "/auth/login",
+        json={"email": registered_user["email"], "password": "ContrasenaIncorrecta1"},
+    )
+    with Session(inventory_engine) as session:
+        rows = session.exec(select(TelemetryEventRecord)).all()
+    assert len(rows) == 1
+    assert rows[0].event_type == "login_failed"
+    assert rows[0].level == "warn"
+    assert registered_user["email"] not in str(rows[0].tags)
