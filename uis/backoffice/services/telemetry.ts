@@ -7,9 +7,12 @@ const MAX_QUEUE_SIZE = 20;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500;
 
-const ENDPOINT =
-  (globalThis as { process?: { env?: { NEXT_PUBLIC_TELEMETRY_ENDPOINT?: string } } }).process?.env
-    ?.NEXT_PUBLIC_TELEMETRY_ENDPOINT || "";
+// Must be the literal `process.env.NEXT_PUBLIC_X` expression: Next.js's build-time
+// inlining for NEXT_PUBLIC_ vars only matches that exact pattern, not an indirect
+// lookup through `globalThis.process` — that form is never substituted, so `process`
+// stays undefined in the browser and this always evaluated to "" (tracking silently
+// disabled, since sendBatch treats an empty ENDPOINT as a no-op success).
+const ENDPOINT = process.env.NEXT_PUBLIC_TELEMETRY_ENDPOINT || "";
 
 const SESSION_STORAGE_KEY = "healthcore.telemetry.sessionId";
 
