@@ -1,0 +1,1006 @@
+{
+  "schemaVersion": "1.0.0",
+  "description": "Esquema de eventos de telemetria de HealthCore. Estructura personalizada (no JSON Schema draft-07): cada evento declara su propio allowlist de properties, documentado en detalle en telemetry-plan.md. Todo evento se emite envuelto en el 'envelope' definido abajo.",
+  "envelope": {
+    "description": "Estructura estandar obligatoria para todo evento, sin excepcion. 'properties' es el unico campo que varia por event_type.",
+    "fields": [
+      {
+        "name": "eventId",
+        "type": "string (uuid v4)",
+        "required": true,
+        "description": "Identificador unico del evento, generado en el punto de emision. Permite deduplicar si el transporte reintenta."
+      },
+      {
+        "name": "timestamp",
+        "type": "string (ISO 8601, UTC)",
+        "required": true,
+        "description": "Momento en que ocurrio el evento (no el momento de entrega al pipeline)."
+      },
+      {
+        "name": "sessionId",
+        "type": "string (uuid v4)",
+        "required": true,
+        "description": "Identificador de la sesion de navegador/cliente. Se genera al cargar la app y se mantiene mientras dure la sesion."
+      },
+      {
+        "name": "userId",
+        "type": "string (user_uuid) | null",
+        "required": true,
+        "description": "user_uuid del staff autenticado (TinyDB). null solo en eventos pre-autenticacion (ej. login_failed antes de validar credenciales)."
+      },
+      {
+        "name": "event_type",
+        "type": "string",
+        "required": true,
+        "description": "Taxonomia entidad_accion, ej. inbound_order_created. Debe existir en la lista 'events' de este archivo."
+      },
+      {
+        "name": "schemaVersion",
+        "type": "string (semver)",
+        "required": true,
+        "description": "Version del esquema de ESTE event_type especifico (independiente de la version del archivo). Permite evolucionar un evento sin romper consumidores de otros."
+      },
+      {
+        "name": "requestId",
+        "type": "string (uuid v4) | null",
+        "required": true,
+        "description": "Identificador de correlacion HTTP, propagado por header (ej. X-Request-Id) entre frontend, backend y logs. null en eventos que no se originan en una peticion HTTP (ej. page_viewed puro de navegacion, session_expired detectado client-side)."
+      },
+      {
+        "name": "properties",
+        "type": "object",
+        "required": true,
+        "description": "Payload especifico del event_type. Solo puede contener claves del allowlist declarado para ese evento; cualquier clave fuera del allowlist debe descartarse antes de emitir, no solo ignorarse en el consumidor."
+      }
+    ]
+  },
+  "events": [
+    {
+      "event_type": "inbound_order_created",
+      "classification": "mandatory",
+      "domain": "inventory",
+      "description": "Una clinica registra la recepcion de insumos de un proveedor (POST /inventory/orders/inbound exitoso).",
+      "hypothesis": "Necesitamos saber cuanto y que insumo se compra, por clinica y proveedor.",
+      "decision": "Consolidar compras entre clinicas y negociar mejores condiciones con proveedores.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "La decision que habilita (negociacion con proveedores) se toma en revisiones periodicas de compras, no reacciona a una sola orden individual. Ninguna alarma operativa depende de conocer esta orden en segundos."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica que recibe el insumo."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica, valores del CONTEXT (SupplyCountry). Distinto del enum Country de proveedores (USA|UK)."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply recibido."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT. NOTA: el codigo actual de models.py usa una lista distinta (ppe|wound_care|diagnostics|medications|consumables) - ver riesgos en telemetry-plan.md."
+        },
+        {
+          "name": "quantity",
+          "type": "integer (>0)",
+          "required": true,
+          "description": "Unidades recibidas en esta entrega."
+        },
+        {
+          "name": "vendor_name",
+          "type": "string",
+          "required": true,
+          "description": "Proveedor que entrego el insumo (campo ya existente en SupplyDeliveryCreate)."
+        },
+        {
+          "name": "delivery_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de la orden de entrada creada, para correlacionar con el historial."
+        }
+      ]
+    },
+    {
+      "event_type": "outbound_order_created",
+      "classification": "mandatory",
+      "domain": "inventory",
+      "description": "Una clinica registra el consumo de un insumo en la atencion de un departamento (POST /inventory/orders/outbound exitoso).",
+      "hypothesis": "Necesitamos saber que insumos se consumen mas, y a que ritmo, por clinica y departamento.",
+      "decision": "Ajustar la reposicion automatica de insumos criticos por clinica.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "El ajuste de reposicion automatica se recalcula sobre una ventana agregada (ej. consumo semanal), no sobre un consumo individual. La deteccion de una emergencia real de stock ya la cubre stock_threshold_triggered (stream), que es el evento que si necesita reaccion inmediata."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": "department describe el area clinica (ej. general_consultation, chronic_care), nunca un identificador de paciente - ver restriccion HIPAA/UK GDPR del CONTEXT.",
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica donde se consume el insumo."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply consumido."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "quantity",
+          "type": "integer (>0)",
+          "required": true,
+          "description": "Unidades consumidas."
+        },
+        {
+          "name": "department",
+          "type": "string | null",
+          "required": false,
+          "description": "Area clinica que consume el insumo, cuando se conoce. Nunca un identificador de paciente."
+        },
+        {
+          "name": "consumption_type",
+          "type": "string (clinical_use|expiry_waste)",
+          "required": true,
+          "description": "Motivo del consumo (ConsumptionType existente en models.py)."
+        },
+        {
+          "name": "consumption_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de la orden de salida creada."
+        }
+      ]
+    },
+    {
+      "event_type": "stock_threshold_triggered",
+      "classification": "mandatory",
+      "domain": "inventory",
+      "description": "El stock de un insumo cae por debajo del minimo configurado para esa clinica.",
+      "hypothesis": "Necesitamos saber con que frecuencia una clinica se queda corta de un insumo critico (ej. EPP, medicamento).",
+      "decision": "Priorizar el reabastecimiento urgente y escalar a Marcus (Operaciones Clinicas).",
+      "delivery": {
+        "mode": "stream",
+        "justification": "La decision que habilita es explicitamente urgente ('reabastecimiento urgente y escalar') - un insumo critico bajo minimo en una clinica puede afectar atencion en horas, no en el proximo ciclo de reporte."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica afectada."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply que cruzo el umbral."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "current_stock",
+          "type": "integer",
+          "required": true,
+          "description": "Stock calculado en el momento del disparo (SUM(deliveries) - SUM(consumptions))."
+        },
+        {
+          "name": "threshold_value",
+          "type": "integer",
+          "required": true,
+          "description": "Minimo configurado para ese producto+clinica. NOTA: hoy no existe una tabla de configuracion de umbrales por clinica/producto - ver riesgos."
+        }
+      ]
+    },
+    {
+      "event_type": "direct_stock_edit_rejected",
+      "classification": "mandatory",
+      "domain": "inventory",
+      "description": "Un usuario intenta modificar el stock directamente (fuera de una orden de entrada/salida) y el sistema lo rechaza.",
+      "hypothesis": "Necesitamos saber si el personal intenta saltarse el control de trazabilidad de insumos.",
+      "decision": "Reforzar capacitacion o permisos en la clinica donde esto ocurre con mas frecuencia.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "La decision (capacitacion/permisos) se toma en revision periodica por clinica, no requiere reaccion en el momento del intento individual. Si en el futuro se detectan patrones de abuso (muchos intentos en poco tiempo desde el mismo usuario), esa deteccion de umbral es una capa de alertado aparte sobre datos batch, no una razon para volver este evento stream."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica donde se intento el edit directo."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply que se intento editar."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "attempted_field",
+          "type": "string",
+          "required": true,
+          "description": "Que campo se intento escribir directamente (ej. current_stock)."
+        }
+      ]
+    },
+    {
+      "event_type": "supply_expiry_flagged",
+      "classification": "mandatory",
+      "domain": "inventory",
+      "description": "Un lote de insumo se acerca a su fecha de vencimiento (ej. 30 dias antes).",
+      "hypothesis": "Necesitamos saber que insumos estan por vencer antes de que se conviertan en perdida o riesgo de cumplimiento.",
+      "decision": "Priorizar el uso o la baja controlada de ese lote antes del vencimiento.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Un aviso de vencimiento con semanas de anticipacion no necesita segundos de latencia - un job diario que recalcule 'dias hasta vencer' contra el stock actual es suficiente para dar tiempo de reaccion."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica donde esta el stock por vencer."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "expiry_date",
+          "type": "string (ISO 8601 date)",
+          "required": true,
+          "description": "Fecha de vencimiento del producto. NOTA: MedicalSupply no tiene hoy este campo - ver riesgos."
+        },
+        {
+          "name": "days_until_expiry",
+          "type": "integer",
+          "required": true,
+          "description": "Dias restantes al momento del disparo (ej. 30)."
+        },
+        {
+          "name": "quantity_at_risk",
+          "type": "integer",
+          "required": true,
+          "description": "Stock actual de ese producto en esa clinica al momento del aviso."
+        }
+      ]
+    },
+    {
+      "event_type": "outbound_order_rejected",
+      "classification": "opportunity",
+      "domain": "inventory",
+      "description": "Un intento de orden de salida se rechaza por stock insuficiente (400 'Insufficient stock for supply...' de create_consumption).",
+      "hypothesis": "Necesitamos saber si el personal esta intentando consumir mas insumo del disponible, por error de conteo o por una escasez real que aun no disparo stock_threshold_triggered.",
+      "decision": "Detectar SKUs/clinicas que necesitan un colchon de seguridad mayor o capacitacion en verificacion previa de stock.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es una senal de calidad operativa que se revisa en tendencia por clinica/producto, no una emergencia individual - la emergencia real de stock bajo ya la cubre el evento stream stock_threshold_triggered."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "clinic_id",
+          "type": "integer (1-12)",
+          "required": true,
+          "description": "Clinica que intento la salida."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais de la clinica."
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de MedicalSupply."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "quantity_requested",
+          "type": "integer",
+          "required": true,
+          "description": "Cantidad que se intento consumir."
+        },
+        {
+          "name": "current_stock",
+          "type": "integer",
+          "required": true,
+          "description": "Stock disponible en el momento del rechazo."
+        },
+        {
+          "name": "department",
+          "type": "string | null",
+          "required": false,
+          "description": "Area clinica que intento el consumo, nunca un identificador de paciente."
+        }
+      ]
+    },
+    {
+      "event_type": "product_created",
+      "classification": "opportunity",
+      "domain": "inventory",
+      "description": "Se registra un nuevo insumo (SKU) en el catalogo (POST /inventory/products exitoso).",
+      "hypothesis": "Necesitamos saber cuando y con que frecuencia crece el catalogo de insumos, y en que categorias.",
+      "decision": "Revisar cobertura de categorias y renegociar condiciones cuando aparecen SKUs nuevos de un proveedor recurrente.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Un alta de catalogo se revisa en la auditoria periodica de catalogo, no exige reaccion inmediata."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "product_id",
+          "type": "integer",
+          "required": true,
+          "description": "id del nuevo MedicalSupply."
+        },
+        {
+          "name": "product_category",
+          "type": "string (medication|ppe|consumable|equipment)",
+          "required": true,
+          "description": "Categoria del CONTEXT."
+        },
+        {
+          "name": "country",
+          "type": "string (US|UK)",
+          "required": true,
+          "description": "Pais al que aplica el producto (MedicalSupply.country, campo global del producto, no de una clinica especifica)."
+        },
+        {
+          "name": "unit",
+          "type": "string",
+          "required": true,
+          "description": "Unidad de medida del producto (campo unit existente en MedicalSupply)."
+        }
+      ]
+    },
+    {
+      "event_type": "incident_created",
+      "classification": "opportunity",
+      "domain": "incidents",
+      "description": "Se crea una incidencia en el gestor centralizado (POST /api/incidents exitoso).",
+      "hypothesis": "Necesitamos saber volumen y tipo de incidencias por sede y categoria para dimensionar respuesta operativa y de cumplimiento.",
+      "decision": "Priorizar dotacion de personal/respuesta de cumplimiento por sede, y escalar de inmediato incidencias de categoria compliance_breach.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Una incidencia de categoria compliance_breach puede requerir notificacion regulatoria en ventanas cortas (HIPAA/UK GDPR); esperar un lote periodico para verla arriesga el plazo de escalamiento. Se aplica stream a todo el event_type para mantener un unico contrato, aunque el resto de categorias no sean igual de urgentes."
+      },
+      "contains_pii_or_phi": true,
+      "pii_notes": "El allowlist EXCLUYE deliberadamente title y description (texto libre): aunque la UI del backoffice ya advierte 'no introducir datos de pacientes', un usuario puede pegar informacion sensible por error - excluir el texto libre del evento es la mitigacion real (defensa en profundidad), no solo confiar en el aviso de UI.",
+      "properties": [
+        {
+          "name": "incident_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de la incidencia creada."
+        },
+        {
+          "name": "branch",
+          "type": "string (enum INCIDENT_BRANCHES)",
+          "required": true,
+          "description": "Sede de la incidencia."
+        },
+        {
+          "name": "category",
+          "type": "string (enum INCIDENT_CATEGORIES)",
+          "required": true,
+          "description": "Categoria de la incidencia."
+        },
+        {
+          "name": "origin",
+          "type": "string (customer|branch|internal)",
+          "required": true,
+          "description": "Origen de la incidencia."
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": true,
+          "description": "Siempre 'open' en creacion, incluido por consistencia con incident_status_changed."
+        }
+      ]
+    },
+    {
+      "event_type": "incident_status_changed",
+      "classification": "opportunity",
+      "domain": "incidents",
+      "description": "Una incidencia cambia de estado (PATCH /api/incidents/{id}/status exitoso).",
+      "hypothesis": "Necesitamos saber cuanto tarda una incidencia en moverse por su ciclo de vida (open -> in_progress -> resolved/discarded).",
+      "decision": "Identificar cuellos de botella de proceso y mejorar tiempos de resolucion.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "El analisis de tiempos de ciclo es una metrica de tendencia revisada periodicamente, no una decision que dependa de un cambio de estado individual en segundos."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "incident_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de la incidencia."
+        },
+        {
+          "name": "branch",
+          "type": "string (enum INCIDENT_BRANCHES)",
+          "required": true,
+          "description": "Sede de la incidencia."
+        },
+        {
+          "name": "category",
+          "type": "string (enum INCIDENT_CATEGORIES)",
+          "required": true,
+          "description": "Categoria de la incidencia."
+        },
+        {
+          "name": "previous_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado anterior."
+        },
+        {
+          "name": "new_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado nuevo."
+        }
+      ]
+    },
+    {
+      "event_type": "incident_status_transition_rejected",
+      "classification": "opportunity",
+      "domain": "incidents",
+      "description": "Se intenta una transicion de estado invalida (ej. resolved -> in_progress) y validate_status_transition la rechaza con 400.",
+      "hypothesis": "Necesitamos saber si el personal esta confundido con el ciclo de vida de incidencias o si hay un bug de integracion enviando transiciones invalidas.",
+      "decision": "Decidir si se necesita mas guia en la UI o capacitacion sobre el flujo de incidencias.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es una senal de calidad de proceso revisada en tendencia, no requiere reaccion inmediata por intento individual."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "incident_id",
+          "type": "integer",
+          "required": true,
+          "description": "id de la incidencia."
+        },
+        {
+          "name": "current_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado actual antes del intento."
+        },
+        {
+          "name": "attempted_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado que se intento asignar."
+        }
+      ]
+    },
+    {
+      "event_type": "supplier_created",
+      "classification": "opportunity",
+      "domain": "suppliers",
+      "description": "Se registra un nuevo proveedor (POST /suppliers exitoso).",
+      "hypothesis": "Necesitamos saber cuantos proveedores nuevos se incorporan y en que pais, para medir diversificacion de la cadena de suministro.",
+      "decision": "Priorizar auditoria de cumplimiento/calidad sobre proveedores nuevos.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "El alta de un proveedor se revisa en la auditoria periodica de cadena de suministro."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "supplier_id",
+          "type": "integer",
+          "required": true,
+          "description": "id del proveedor creado."
+        },
+        {
+          "name": "country",
+          "type": "string (USA|UK)",
+          "required": true,
+          "description": "Enum Country del modulo de proveedores - distinto del SupplyCountry (US|UK) del modulo de inventario."
+        }
+      ]
+    },
+    {
+      "event_type": "supplier_rate_updated",
+      "classification": "opportunity",
+      "domain": "suppliers",
+      "description": "Se actualiza la tarifa de un proveedor (PATCH /suppliers/{id}/rate exitoso).",
+      "hypothesis": "Necesitamos ver la tendencia de tarifas por proveedor para detectar incrementos sostenidos.",
+      "decision": "Marcar proveedores con incrementos frecuentes o grandes para renegociacion.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "El analisis de tendencia de tarifas se hace sobre una serie historica, no sobre un cambio individual en el momento."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "supplier_id",
+          "type": "integer",
+          "required": true,
+          "description": "id del proveedor."
+        },
+        {
+          "name": "country",
+          "type": "string (USA|UK)",
+          "required": true,
+          "description": "Pais del proveedor."
+        },
+        {
+          "name": "previous_rate",
+          "type": "number",
+          "required": true,
+          "description": "Tarifa anterior."
+        },
+        {
+          "name": "new_rate",
+          "type": "number",
+          "required": true,
+          "description": "Tarifa nueva."
+        }
+      ]
+    },
+    {
+      "event_type": "supplier_status_changed",
+      "classification": "opportunity",
+      "domain": "suppliers",
+      "description": "Un proveedor cambia de estado activo/suspendido (PATCH /suppliers/{id}/status exitoso).",
+      "hypothesis": "Necesitamos saber de inmediato cuando un proveedor activo se suspende, porque puede cortar el suministro de insumos criticos que dependen de el.",
+      "decision": "Alertar a compras para buscar proveedor alterno de los SKUs asociados al proveedor suspendido.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Una suspension afecta directamente la continuidad de suministro de insumos clinicos; el riesgo operativo (posible desabasto) es urgente, no de revision periodica."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "supplier_id",
+          "type": "integer",
+          "required": true,
+          "description": "id del proveedor."
+        },
+        {
+          "name": "country",
+          "type": "string (USA|UK)",
+          "required": true,
+          "description": "Pais del proveedor."
+        },
+        {
+          "name": "previous_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado anterior (ej. active)."
+        },
+        {
+          "name": "new_status",
+          "type": "string",
+          "required": true,
+          "description": "Estado nuevo (ej. suspended)."
+        }
+      ]
+    },
+    {
+      "event_type": "login_succeeded",
+      "classification": "opportunity",
+      "domain": "auth",
+      "description": "Un usuario se autentica correctamente (POST /auth/login o /auth/token exitoso).",
+      "hypothesis": "Necesitamos entender patrones de uso base: horas pico, frecuencia por clinica/usuario, para dimensionar capacidad y como linea base contra la que comparar picos de login_failed.",
+      "decision": "Planificacion de capacidad y deteccion de anomalias relativas (comparar login_failed contra el volumen normal de login_succeeded).",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es una metrica de linea base de uso, se consume en reportes agregados, no en reaccion a un login individual."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": "No incluye email ni credenciales; userId del envelope ya identifica al usuario autenticado via user_uuid, sin duplicar el identificador de login en properties.",
+      "properties": [
+        {
+          "name": "login_method",
+          "type": "string (password|oauth2_token)",
+          "required": true,
+          "description": "Via que se autentico (/auth/login vs /auth/token)."
+        }
+      ]
+    },
+    {
+      "event_type": "login_failed",
+      "classification": "opportunity",
+      "domain": "auth",
+      "description": "Un intento de login falla por credenciales invalidas o usuario inexistente.",
+      "hypothesis": "Necesitamos saber volumen y patron de logins fallidos por identidad para detectar fuerza bruta o problemas de credenciales.",
+      "decision": "Disparar revision de seguridad o politica de bloqueo temporal para identidades con fallos repetidos.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Es una senal de seguridad; detectar un patron de fuerza bruta minutos despues de que empiece, en vez de al dia siguiente en un lote, es la diferencia entre prevenir y solo documentar un incidente."
+      },
+      "contains_pii_or_phi": true,
+      "pii_notes": "El identificador intentado (tipicamente un email) es PII. Se emite como attempted_identifier_hash (HMAC-SHA256 con clave de aplicacion, nunca el email en texto plano) para poder correlacionar intentos repetidos sin almacenar el dato crudo.",
+      "properties": [
+        {
+          "name": "attempted_identifier_hash",
+          "type": "string",
+          "required": true,
+          "description": "Hash HMAC-SHA256 del identificador intentado (nunca el valor original)."
+        },
+        {
+          "name": "failure_reason",
+          "type": "string (invalid_credentials|account_not_found)",
+          "required": true,
+          "description": "Motivo del fallo, sin exponer cual de los dos casos aplico al usuario final (evita enumeracion de cuentas, mismo principio que ya aplica /auth/forgot-password)."
+        },
+        {
+          "name": "login_method",
+          "type": "string (password|oauth2_token)",
+          "required": true,
+          "description": "Via del intento."
+        }
+      ]
+    },
+    {
+      "event_type": "password_reset_requested",
+      "classification": "opportunity",
+      "domain": "auth",
+      "description": "Se solicita un restablecimiento de contrasena (POST /auth/forgot-password).",
+      "hypothesis": "Necesitamos ver picos anormales de solicitudes como posible senal de credential stuffing, ademas de medir cuanto se usa el flujo de recuperacion legitimo.",
+      "decision": "Si hay un pico anormal, escalar a revision de seguridad; si no, alimenta la tasa de conversion junto con password_reset_completed.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Comparte la misma logica de deteccion temprana de abuso que login_failed - un pico de solicitudes de reset es una senal de seguridad que pierde valor si se descubre un dia despues."
+      },
+      "contains_pii_or_phi": true,
+      "pii_notes": "Mismo tratamiento que login_failed: identificador solicitado emitido como hash, nunca en texto plano. La respuesta HTTP ya es siempre 200 (anti-enumeracion); el evento de telemetria no debe reintroducir esa fuga por otra via.",
+      "properties": [
+        {
+          "name": "requested_identifier_hash",
+          "type": "string",
+          "required": true,
+          "description": "Hash HMAC-SHA256 del identificador solicitado."
+        }
+      ]
+    },
+    {
+      "event_type": "password_reset_completed",
+      "classification": "opportunity",
+      "domain": "auth",
+      "description": "Se completa un restablecimiento de contrasena con un token valido y no usado (POST /auth/reset-password exitoso).",
+      "hypothesis": "Necesitamos la tasa de conversion solicitado -> completado para detectar fallas en la entrega del correo (Resend) o un flujo confuso.",
+      "decision": "Alertar a ingenieria si la tasa de conversion cae de forma sostenida (posible problema de entrega de email).",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es una metrica de tasa de conversion sobre una ventana de tiempo, no una decision de una sola completacion."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": "En este punto el usuario ya esta identificado por userId (user_uuid) en el envelope; no hace falta repetir el email en properties.",
+      "properties": []
+    },
+    {
+      "event_type": "session_expired",
+      "classification": "opportunity",
+      "domain": "auth",
+      "description": "Una peticion a una ruta protegida del backoffice recibe 401 por token expirado, forzando redireccion a /login.",
+      "hypothesis": "Necesitamos saber si el tiempo de expiracion actual del token interrumpe tareas largas (ej. llenar un formulario de orden).",
+      "decision": "Ajustar ACCESS_TOKEN_EXPIRE_MINUTES si la interrupcion correlaciona con abandono de flujos (flow_abandoned).",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Se analiza en conjunto con flow_abandoned sobre una ventana de tiempo para decidir un cambio de configuracion, no reacciona a una expiracion individual."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Plantilla de ruta que devolvio 401 (ej. /inventory/orders/outbound), nunca la URL completa con ids de negocio."
+        }
+      ]
+    },
+    {
+      "event_type": "api_latency_recorded",
+      "classification": "opportunity",
+      "domain": "performance",
+      "description": "Tiempo de respuesta de una peticion HTTP al backend, misma fuente que ya usa el timing_middleware existente en main.py.",
+      "hypothesis": "Necesitamos identificar endpoints lentos en produccion de forma proactiva, antes de que un usuario se queje.",
+      "decision": "Priorizar el siguiente candidato de cache/optimizacion (la misma metodologia que ya genero /inventory/products y /api/incidents/summary en CACHING_REPORT.md).",
+      "delivery": {
+        "mode": "batch",
+        "justification": "La decision de que optimizar se toma sobre percentiles agregados por endpoint (ej. p95 de la ultima hora), no sobre una peticion individual - ver throttle_and_debounce en telemetry-plan.md para como se agrega antes de emitir."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Plantilla de ruta (ej. /inventory/products), nunca la URL con ids."
+        },
+        {
+          "name": "method",
+          "type": "string (GET|POST|PATCH|DELETE)",
+          "required": true,
+          "description": "Metodo HTTP."
+        },
+        {
+          "name": "status_code",
+          "type": "integer",
+          "required": true,
+          "description": "Codigo de respuesta."
+        },
+        {
+          "name": "duration_ms",
+          "type": "number",
+          "required": true,
+          "description": "Duracion de la peticion en milisegundos."
+        }
+      ]
+    },
+    {
+      "event_type": "api_error_response",
+      "classification": "opportunity",
+      "domain": "performance",
+      "description": "El backend responde con un error 5xx (capturado por el handler global de excepciones de main.py).",
+      "hypothesis": "Necesitamos saber que endpoints estan fallando en produccion y con que frecuencia, mas alla del 500 generico que ve el cliente.",
+      "decision": "Triage y priorizacion de bugs en el backlog de ingenieria.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Un error 5xx en produccion es una senal operativa que amerita visibilidad casi inmediata (equivalente a lo que veria un on-call), no un reporte del dia siguiente."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": "No incluye stack trace ni el mensaje de excepcion crudo - mismo principio que el handler global de main.py, que nunca devuelve detalle interno al cliente. Solo un error_id de correlacion que se puede cruzar con los logs del servidor.",
+      "properties": [
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Plantilla de ruta que fallo."
+        },
+        {
+          "name": "method",
+          "type": "string (GET|POST|PATCH|DELETE)",
+          "required": true,
+          "description": "Metodo HTTP."
+        },
+        {
+          "name": "status_code",
+          "type": "integer",
+          "required": true,
+          "description": "Codigo de respuesta (5xx)."
+        },
+        {
+          "name": "error_id",
+          "type": "string (uuid v4)",
+          "required": true,
+          "description": "Identificador de correlacion con el log detallado del servidor (que si contiene el stack trace, pero solo ahi)."
+        }
+      ]
+    },
+    {
+      "event_type": "frontend_error_captured",
+      "classification": "opportunity",
+      "domain": "frontend_errors",
+      "description": "Un error de JavaScript no controlado o capturado por un error boundary de React en uis/backoffice.",
+      "hypothesis": "Necesitamos visibilidad de errores de frontend que hoy son invisibles para el equipo (el usuario solo ve una pantalla rota).",
+      "decision": "Priorizar el backlog de bugs de frontend segun frecuencia e impacto por pantalla.",
+      "delivery": {
+        "mode": "stream",
+        "justification": "Una pantalla rota en produccion (ej. el formulario de ordenes) bloquea el trabajo del operador ahora mismo - vale la misma urgencia que api_error_response."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": "error_message se trunca y sanitiza antes de emitir: nunca incluye el stack trace completo ni valores crudos de formularios (podrian contener texto que un operador escribio, con riesgo de PII/PHI incidental). Solo nombre del error y mensaje corto.",
+      "properties": [
+        {
+          "name": "component_name",
+          "type": "string",
+          "required": true,
+          "description": "Componente o pantalla donde ocurrio (ej. OrderDetailPanel)."
+        },
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Ruta donde ocurrio el error."
+        },
+        {
+          "name": "error_name",
+          "type": "string",
+          "required": true,
+          "description": "Nombre/tipo del error (ej. TypeError)."
+        },
+        {
+          "name": "error_message",
+          "type": "string (truncado a 200 caracteres)",
+          "required": true,
+          "description": "Mensaje de error sanitizado, sin stack trace ni valores de formulario."
+        }
+      ]
+    },
+    {
+      "event_type": "page_viewed",
+      "classification": "opportunity",
+      "domain": "navigation",
+      "description": "Un operador visualiza una pantalla del backoffice.",
+      "hypothesis": "Necesitamos saber que secciones visitan mas los operadores (pregunta explicita del tech lead).",
+      "decision": "Priorizar rediseno/mejoras de UX en las secciones de mas trafico; evaluar simplificar o retirar las de menos uso.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es analitica de uso agregada por periodo de reporte, ninguna decision de negocio reacciona a una vista de pagina individual en tiempo real."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Plantilla de ruta visitada (ej. /inventory/products), nunca la URL con ids de negocio."
+        },
+        {
+          "name": "referrer_route_template",
+          "type": "string | null",
+          "required": false,
+          "description": "Plantilla de ruta anterior dentro del backoffice, si existe."
+        }
+      ]
+    },
+    {
+      "event_type": "flow_abandoned",
+      "classification": "opportunity",
+      "domain": "navigation",
+      "description": "Un usuario abandona un formulario multi-paso (ej. orden de entrada/salida) con campos ya completados, sin enviarlo.",
+      "hypothesis": "Necesitamos saber si hay flujos que se abandonan a la mitad, y en que punto (pregunta explicita del tech lead).",
+      "decision": "Rediseñar el punto de friccion identificado en el formulario correspondiente.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Se analiza en agregado por flujo/paso para decidir un rediseno, no exige reaccion a un abandono individual."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "flow_name",
+          "type": "string (inbound_order|outbound_order|new_incident|new_supplier)",
+          "required": true,
+          "description": "Flujo abandonado."
+        },
+        {
+          "name": "fields_completed_count",
+          "type": "integer",
+          "required": true,
+          "description": "Cuantos campos requeridos ya estaban completos al momento del abandono."
+        },
+        {
+          "name": "time_on_step_seconds",
+          "type": "number",
+          "required": true,
+          "description": "Tiempo en el paso antes de navegar fuera."
+        }
+      ]
+    },
+    {
+      "event_type": "web_vital_recorded",
+      "classification": "opportunity",
+      "domain": "performance",
+      "description": "Next.js reporta una metrica de Web Vitals (LCP, CLS, INP, FCP, TTFB) para la carga o interaccion actual, via useReportWebVitals.",
+      "hypothesis": "Necesitamos saber si la experiencia real de carga/interaccion del backoffice es aceptable, mas alla de lo que ya mide api_latency_recorded del lado del servidor.",
+      "decision": "Priorizar optimizaciones de frontend (bundle, lazy loading, imagenes) en las rutas con peores metricas.",
+      "delivery": {
+        "mode": "batch",
+        "justification": "Es una metrica de experiencia de usuario que se analiza en agregado por ruta y periodo, ninguna decision reacciona a una sola medicion individual."
+      },
+      "contains_pii_or_phi": false,
+      "pii_notes": null,
+      "properties": [
+        {
+          "name": "route_template",
+          "type": "string",
+          "required": true,
+          "description": "Ruta donde se midio la metrica, nunca la URL con ids de negocio."
+        },
+        {
+          "name": "metric_name",
+          "type": "string (LCP|CLS|INP|FCP|TTFB)",
+          "required": true,
+          "description": "Nombre de la metrica de Web Vitals."
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "required": true,
+          "description": "Valor medido, unidades segun la metrica (ms o score sin unidad para CLS)."
+        },
+        {
+          "name": "rating",
+          "type": "string (good|needs-improvement|poor)",
+          "required": true,
+          "description": "Clasificacion cualitativa que ya calcula next/web-vitals."
+        }
+      ]
+    }
+  ]
+}

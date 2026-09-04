@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { createInboundOrder, getProducts } from "../../../../services/inventoryApi";
+import { track } from "../../../../services/telemetry";
 import { CLINIC_ID_MAX, CLINIC_ID_MIN, type InboundOrderInput, type MedicalSupply } from "../../../../types/inventory";
 
 const EMPTY_FORM: InboundOrderInput = {
@@ -66,7 +67,20 @@ export default function InboundOrderPage() {
 
     setIsSubmitting(true);
     try {
-      await createInboundOrder({ ...form, vendor_name: form.vendor_name.trim() });
+      const trimmedForm = { ...form, vendor_name: form.vendor_name.trim() };
+      const delivery = await createInboundOrder(trimmedForm);
+      const product = products.find((item) => item.id === form.supply_id);
+      if (product) {
+        track("inbound_order_created", {
+          clinic_id: trimmedForm.clinic_id,
+          country: product.country,
+          product_id: product.id,
+          product_category: product.category,
+          quantity: trimmedForm.quantity,
+          vendor_name: trimmedForm.vendor_name,
+          delivery_id: delivery.id,
+        });
+      }
       setSuccess("Entrega registrada correctamente. El stock del producto se ha actualizado.");
       setForm((prev) => ({ ...EMPTY_FORM, supply_id: prev.supply_id }));
     } catch (submitError) {

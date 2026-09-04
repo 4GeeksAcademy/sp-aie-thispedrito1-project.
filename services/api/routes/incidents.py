@@ -14,12 +14,16 @@ from packages.shared.incidents_validation import (
     validate_status_transition,
 )
 
+from cache import cache
 from incident_repository import IncidentRepository
 from models import IncidentRead, IncidentSummary
 from security import get_current_user
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"], dependencies=[Depends(get_current_user)])
 repo = IncidentRepository()
+
+SUMMARY_CACHE_KEY = "incidents_summary"
+SUMMARY_CACHE_TTL_SECONDS = 60
 
 
 def _field_errors(errors: list[dict[str, str]]) -> HTTPException:
@@ -34,6 +38,7 @@ def create_incident(payload: dict[str, Any] = Body(...)) -> IncidentRead:
 
     record = {field: str(payload[field]).strip() for field in REQUIRED_INCIDENT_FIELDS}
     created = repo.create(record)
+    cache.invalidate(SUMMARY_CACHE_KEY)
     return IncidentRead.model_validate(created)
 
 
@@ -67,6 +72,10 @@ def list_incidents(
 
 @router.get("/summary", response_model=IncidentSummary)
 def incident_summary() -> IncidentSummary:
+    cached = cache.get(SUMMARY_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     counts = repo.summary()
 
     def merged(allowed: tuple[str, ...], actual: dict[str, int]) -> dict[str, int]:
@@ -74,13 +83,15 @@ def incident_summary() -> IncidentSummary:
         base.update(actual)
         return base
 
-    return IncidentSummary(
+    result = IncidentSummary(
         total=counts["total"],
         by_status=merged(INCIDENT_STATUSES, counts["by_status"]),
         by_category=merged(INCIDENT_CATEGORIES, counts["by_category"]),
         by_origin=merged(INCIDENT_ORIGINS, counts["by_origin"]),
         by_branch=merged(INCIDENT_BRANCHES, counts["by_branch"]),
     )
+    cache.set(SUMMARY_CACHE_KEY, result, SUMMARY_CACHE_TTL_SECONDS)
+    return result
 
 
 @router.get("/{incident_id}", response_model=IncidentRead)
@@ -106,4 +117,5 @@ def patch_incident_status(incident_id: int, payload: dict[str, Any] = Body(...))
         raise _field_errors([{"field": "status", "message": transition_error}])
 
     updated = repo.update_status(incident_id, new_status.strip())
+    cache.invalidate(SUMMARY_CACHE_KEY)
     return IncidentRead.model_validate(updated)

@@ -235,6 +235,7 @@ class MedicalSupplyCreate(BaseModel):
     category: str
     unit: str = Field(min_length=1, max_length=20)
     country: SupplyCountry
+    expiry_date: Optional[date] = None
 
     @model_validator(mode="after")
     def validate_category(self) -> "MedicalSupplyCreate":
@@ -251,8 +252,21 @@ class MedicalSupplyRead(BaseModel):
     unit: str
     country: str
     current_stock: int
+    expiry_date: Optional[date] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DirectStockEditAttempt(BaseModel):
+    """Body of a rejected direct-stock-edit request. Always answered with 400
+    — stock only ever moves through /orders/inbound or /orders/outbound, per
+    CONTEXT-healthcore.es.md section 6. clinic_id is required so the
+    direct_stock_edit_rejected event (which requires it) has somewhere to
+    point — this endpoint has no other way to know which clinic's stock was
+    targeted."""
+
+    clinic_id: int = Field(ge=1, le=12)
+    attempted_value: int
 
 
 class SupplyDeliveryCreate(BaseModel):
@@ -291,6 +305,29 @@ class SupplyConsumptionRead(BaseModel):
     user_uuid: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TelemetryEvent(BaseModel):
+    """The common Event Envelope from docs/telemetry/event-schemas.json.
+    'properties' is intentionally a free dict here: its allowlist is per
+    event_type and enforced by the emitting code (frontend track() callers,
+    backend telemetry_service callers), not by this stub — this endpoint's
+    only job is to accept, log and count, per the Phase 1 spec."""
+
+    eventId: str
+    timestamp: str
+    sessionId: str
+    userId: Optional[str] = None
+    event_type: str
+    schemaVersion: str
+    requestId: str
+    properties: dict = Field(default_factory=dict)
+
+
+class TelemetryIngestResponse(BaseModel):
+    received: int
+    stored: int
+    rejected: int
 
 
 class InventoryOrderRead(BaseModel):

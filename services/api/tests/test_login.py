@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi.testclient import TestClient
 
 
@@ -61,3 +63,25 @@ def test_login_error_does_not_reveal_which_field_failed(
     )
 
     assert wrong_password.json()["detail"] == unknown_email.json()["detail"]
+
+
+def test_login_success_emits_login_succeeded(
+    client: TestClient, registered_user: dict[str, str], caplog
+) -> None:
+    with caplog.at_level(logging.INFO, logger="api.telemetry"):
+        client.post(
+            "/auth/login",
+            json={"email": registered_user["email"], "password": registered_user["password"]},
+        )
+    assert "event_type=login_succeeded" in caplog.text
+
+
+def test_login_failure_emits_login_failed(
+    client: TestClient, registered_user: dict[str, str], caplog
+) -> None:
+    with caplog.at_level(logging.INFO, logger="api.telemetry"):
+        client.post(
+            "/auth/login",
+            json={"email": registered_user["email"], "password": "ContrasenaIncorrecta1"},
+        )
+    assert "event_type=login_failed" in caplog.text

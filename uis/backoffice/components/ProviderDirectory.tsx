@@ -1,11 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
 import { createSupplier, deleteSupplier, getSuppliers, updateSupplierRate, updateSupplierStatus } from "../services/suppliersApi";
 import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type Supplier, type SupplierCreateInput, type SupplierStatus } from "../types/supplier";
-import { ProviderForm } from "./ProviderForm";
 import { ProviderStatusBadge } from "./ProviderStatusBadge";
+
+// Most visits to this page are to browse/filter the existing directory, not
+// to register a new supplier — creation is a secondary flow. Deferring the
+// form's chunk until the user actually opens it keeps it out of the JS this
+// page ships on every load.
+const ProviderForm = dynamic(() => import("./ProviderForm").then((mod) => mod.ProviderForm), {
+  loading: () => <p style={{ color: "var(--muted)" }}>Cargando formulario…</p>,
+});
 
 const categories = [
   "",
@@ -29,6 +37,7 @@ export function ProviderDirectory() {
   const [savingById, setSavingById] = useState<Record<number, boolean>>({});
   const [errorById, setErrorById] = useState<Record<number, string | null>>({});
   const [editingRateById, setEditingRateById] = useState<Record<number, string>>({});
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const fetchList = async () => {
     setLoadingList(true);
@@ -49,6 +58,18 @@ export function ProviderDirectory() {
   }, [filters.country, filters.category]);
 
   const countries = useMemo(() => ["", "USA", "UK"], []);
+
+  // Grouping + summing runs on every render of this component — which
+  // happens on every keystroke while editing a rate (setEditingRateById
+  // lives in this same component) — so without memoizing on [suppliers] it
+  // would redo this work while the user is just typing, not touching spend.
+  const spendByCurrency = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const supplier of suppliers) {
+      totals[supplier.currency] = (totals[supplier.currency] ?? 0) + supplier.monthly_rate;
+    }
+    return Object.entries(totals).sort(([, a], [, b]) => b - a);
+  }, [suppliers]);
 
   const onCreateSupplier = async (payload: SupplierCreateInput) => {
     const created = await createSupplier(payload);
@@ -120,7 +141,26 @@ export function ProviderDirectory() {
         <p style={{ margin: 0, color: "var(--muted)" }}>Gestiona proveedores de HealthCore por pais, categoria, tarifa y estado.</p>
       </section>
 
-      <ProviderForm onSubmit={onCreateSupplier} />
+      {!showCreateForm && (
+        <button type="button" onClick={() => setShowCreateForm(true)} style={{ marginBottom: 16 }}>
+          + Añadir proveedor
+        </button>
+      )}
+      {showCreateForm && <ProviderForm onSubmit={onCreateSupplier} />}
+
+      {spendByCurrency.length > 0 && (
+        <section className="panel" style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0 }}>Gasto mensual por moneda</h2>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+            {spendByCurrency.map(([currency, total]) => (
+              <div key={currency}>
+                <span style={{ display: "block", fontSize: 13, color: "var(--muted)" }}>{currency}</span>
+                <strong style={{ fontSize: 22 }}>{total.toFixed(2)}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="panel" style={{ marginBottom: 16 }}>
         <h2 style={{ marginTop: 0 }}>Filtros</h2>

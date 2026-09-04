@@ -11,6 +11,8 @@ build/
 
 .env
 **/.env
+.env.local
+**/.env.local
 .venv/
 **/.venv/
 __pycache__/
@@ -21,3 +23,7 @@ __pycache__/
 **/.coverage
 coverage/
 **/coverage/
+
+# Local Claude Code config (settings.local.json, commands/) — machine/session
+# specific, not shared project tooling.
+.claude/

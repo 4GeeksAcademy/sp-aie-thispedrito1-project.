@@ -14,6 +14,7 @@ export type MedicalSupply = {
   unit: string;
   country: SupplyCountry;
   current_stock: number;
+  expiry_date: string | null;
 };
 
 export type InboundOrderInput = {
