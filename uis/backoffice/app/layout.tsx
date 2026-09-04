@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthGuard } from "../components/AuthGuard";
+import { ErrorTracking } from "../components/ErrorTracking";
+import { PageViewTracker } from "../components/PageViewTracker";
 import { SessionMenu } from "../components/SessionMenu";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { WebVitals } from "../components/WebVitals";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,6 +34,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
+        <ErrorTracking />
+        <WebVitals />
+        <PageViewTracker />
         <AuthGuard>
           <header style={{ borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
             <div className="shell" style={{ padding: "18px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

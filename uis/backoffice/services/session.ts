@@ -49,3 +49,12 @@ export function isTokenValid(token: string | null): boolean {
 export function hasValidSession(): boolean {
   return isTokenValid(getAuthToken());
 }
+
+export function getCurrentUserId(): string | null {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  const payload = decodeJwtPayload(token);
+  const sub = payload?.sub;
+  return typeof sub === "string" ? sub : null;
+}

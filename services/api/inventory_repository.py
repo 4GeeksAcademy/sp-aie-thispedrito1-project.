@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlmodel import Session, select
 
-from inventory_models import MedicalSupply, SupplyConsumption, SupplyDelivery
+from inventory_models import MedicalSupply, SupplyConsumption, SupplyDelivery, SupplyThreshold
 
 
 class InsufficientStockError(Exception):
@@ -70,6 +71,64 @@ def create_consumption(session: Session, data: dict[str, Any]) -> SupplyConsumpt
     session.commit()
     session.refresh(consumption)
     return consumption
+
+
+def get_current_stock_for_clinic(session: Session, supply_id: int, clinic_id: int) -> int:
+    """Stock scoped to one clinic — deliberately separate from
+    get_current_stock (used by the products list), which is global across
+    clinics by existing design. stock_threshold_triggered needs the
+    per-clinic reading the CONTEXT describes ('el stock ... para esa
+    clinica'); changing the global reading's meaning would ripple into the
+    products endpoint and UI, which is out of scope here."""
+    deliveries = session.exec(
+        select(SupplyDelivery).where(
+            SupplyDelivery.supply_id == supply_id, SupplyDelivery.clinic_id == clinic_id
+        )
+    ).all()
+    consumptions = session.exec(
+        select(SupplyConsumption).where(
+            SupplyConsumption.supply_id == supply_id, SupplyConsumption.clinic_id == clinic_id
+        )
+    ).all()
+    return sum(d.quantity for d in deliveries) - sum(c.quantity for c in consumptions)
+
+
+def set_threshold(session: Session, supply_id: int, clinic_id: int, minimum_quantity: int) -> SupplyThreshold:
+    threshold = SupplyThreshold(supply_id=supply_id, clinic_id=clinic_id, minimum_quantity=minimum_quantity)
+    session.add(threshold)
+    session.commit()
+    session.refresh(threshold)
+    return threshold
+
+
+def get_threshold(session: Session, supply_id: int, clinic_id: int) -> int | None:
+    """None means no minimum is configured for this supply+clinic yet — the
+    caller should treat that as 'nothing to compare against', not as zero."""
+    row = session.exec(
+        select(SupplyThreshold).where(
+            SupplyThreshold.supply_id == supply_id, SupplyThreshold.clinic_id == clinic_id
+        )
+    ).first()
+    return row.minimum_quantity if row else None
+
+
+def list_supplies_expiring_within(session: Session, days: int) -> list[tuple[MedicalSupply, int, int]]:
+    """Supplies whose expiry_date falls within the next `days` days, paired
+    with their current stock and days remaining. Skips supplies already at
+    zero stock — nothing at risk to flag."""
+    today = date.today()
+    supplies = session.exec(
+        select(MedicalSupply).where(MedicalSupply.expiry_date.is_not(None))
+    ).all()
+
+    results: list[tuple[MedicalSupply, int, int]] = []
+    for supply in supplies:
+        days_until_expiry = (supply.expiry_date - today).days
+        if 0 <= days_until_expiry <= days:
+            stock = get_current_stock(session, supply.id)
+            if stock > 0:
+                results.append((supply, stock, days_until_expiry))
+    return results
 
 
 def list_orders_with_supply_data(session: Session) -> list[dict[str, Any]]:

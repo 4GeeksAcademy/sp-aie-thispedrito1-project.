@@ -1,4 +1,5 @@
 import { clearAuthToken, getAuthToken } from "./session";
+import { track } from "./telemetry";
 
 const BASE_URL =
   (globalThis as { process?: { env?: { NEXT_PUBLIC_API_URL?: string } } }).process?.env?.NEXT_PUBLIC_API_URL ||
@@ -101,6 +102,10 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => null);
     if (response.status === 401 && options.authRequired) {
+      // Unlike the "no token at all" branch above, reaching here means the
+      // token existed and was sent — the server rejected it as expired/invalid
+      // mid-session, which is exactly what session_expired describes.
+      track("session_expired", { route_template: window.location.pathname });
       redirectToLogin();
       throw new Error("Sesion expirada o invalida. Inicia sesion nuevamente.");
     }
