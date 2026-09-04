@@ -11,7 +11,9 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 from fastapi import Request
+from sqlmodel import Session
 
+import telemetry_repository
 from models import TelemetryEvent
 from telemetry_models import TelemetryEventRecord
 
@@ -55,12 +57,20 @@ def emit_backend_event(
     properties: dict[str, Any],
     session_id: str = "backend",
     request_id: str | None = None,
+    db_session: Session | None = None,
 ) -> None:
     """For events the backend detects on its own — login outcomes, 5xx
     responses, inventory triggers — instead of receiving them from the
     frontend queue. Same envelope and log sink as POST /telemetry/events;
     built server-side because the data (or the HMAC secret in
-    hash_identifier) only exists here."""
+    hash_identifier) only exists here.
+
+    db_session is optional and only passed by call sites that also want the
+    event persisted to Supabase, not just logged (currently: login_succeeded/
+    login_failed from routes/auth.py, via get_inventory_db_optional — see
+    that dependency's docstring for why login can't depend on
+    get_inventory_db directly). Persistence failures are swallowed: a
+    Supabase hiccup must never turn into a broken login."""
     event = TelemetryEvent(
         eventId=str(uuid.uuid4()),
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -72,6 +82,15 @@ def emit_backend_event(
         properties=properties,
     )
     log_event(event)
+
+    if db_session is not None:
+        try:
+            record = build_event_record(event, service="api")
+            telemetry_repository.bulk_insert(db_session, [record])
+        except Exception:
+            telemetry_logger.warning(
+                "failed to persist backend-originated event_type=%s", event_type, exc_info=True
+            )
 
 
 def emit_api_error(request: Request) -> str:
@@ -184,23 +203,24 @@ def derive_level(event_type: str) -> str:
     return "info"
 
 
-def build_event_record(event: TelemetryEvent) -> TelemetryEventRecord:
+def build_event_record(event: TelemetryEvent, *, service: str = "backoffice") -> TelemetryEventRecord:
     """Maps one validated envelope to a telemetry_events row.
 
-    service is hardcoded to 'backoffice': every event reaching this
-    function comes through POST /telemetry/events, which only the
-    frontend's TelemetryService calls. Backend-originated events
-    (emit_backend_event above — login outcomes, 5xx responses, inventory
-    triggers) are deliberately NOT routed through here: persisting them
-    would mean opening a Supabase session from arbitrary request-handling
-    code paths (routes/auth.py, the global exception handler, inventory
-    routes) using the same cached engine the test suite's dependency
-    override does NOT intercept there — every test exercising login or
-    inventory writes would attempt a real Supabase connection. Scope
-    for this class is the batch endpoint only; see techContext.md."""
+    service defaults to 'backoffice': most callers reach this function
+    through POST /telemetry/events, which only the frontend's
+    TelemetryService calls. The one exception is emit_backend_event above
+    (login_succeeded/login_failed today), which passes service="api" since
+    those events never touch the frontend queue. Every OTHER
+    backend-originated event (5xx responses, inventory triggers) still
+    isn't routed through here at all: persisting them would mean opening a
+    Supabase session from request-handling code paths (the global exception
+    handler, inventory routes) that don't go through a FastAPI Depends the
+    test suite's override can intercept — see techContext.md. login is the
+    exception because get_inventory_db_optional (database.py) IS a regular
+    Depends, injected via the route signature."""
     return TelemetryEventRecord(
         timestamp=_parse_timestamp(event.timestamp),
-        service="backoffice",
+        service=service,
         event_type=event.event_type,
         level=derive_level(event.event_type),
         value=derive_value(event.properties),

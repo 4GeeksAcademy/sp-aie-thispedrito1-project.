@@ -35,7 +35,7 @@ from sqlmodel.pool import StaticPool  # noqa: E402
 import database  # noqa: E402
 import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 from cache import cache  # noqa: E402
-from database import get_inventory_db  # noqa: E402
+from database import get_inventory_db, get_inventory_db_optional  # noqa: E402
 from main import app  # noqa: E402
 
 TEST_PASSWORD = "SuperSecure123"
@@ -77,6 +77,10 @@ def client(inventory_engine) -> TestClient:
             yield session
 
     app.dependency_overrides[get_inventory_db] = override_get_inventory_db
+    # Same in-memory engine for the optional variant (routes/auth.py) — a
+    # login test can assert on the resulting telemetry_events row instead of
+    # this dependency silently doing nothing during tests.
+    app.dependency_overrides[get_inventory_db_optional] = override_get_inventory_db
     yield TestClient(app)
     app.dependency_overrides.clear()
 
