@@ -4,8 +4,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlmodel import Session
 
 import telemetry_service
+from database import get_inventory_db_optional
 from models import (
     AuthMeResponse,
     ChangePasswordRequest,
@@ -33,12 +35,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 auth_repo = AuthRepository()
 
 
-def _emit_login_outcome(*, email: str, user: dict[str, Any] | None, login_method: str) -> None:
+def _emit_login_outcome(
+    *, email: str, user: dict[str, Any] | None, login_method: str, db_session: Session | None
+) -> None:
     if user:
         telemetry_service.emit_backend_event(
             event_type="login_succeeded",
             user_id=user["id"],
             properties={"login_method": login_method},
+            db_session=db_session,
         )
     else:
         # authenticate_user deliberately collapses "no such user" and "wrong
@@ -53,13 +58,16 @@ def _emit_login_outcome(*, email: str, user: dict[str, Any] | None, login_method
                 "failure_reason": "invalid_credentials",
                 "login_method": login_method,
             },
+            db_session=db_session,
         )
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest) -> TokenResponse:
+def login(
+    payload: LoginRequest, db_session: Session | None = Depends(get_inventory_db_optional)
+) -> TokenResponse:
     user = authenticate_user(email=str(payload.email), password=payload.password)
-    _emit_login_outcome(email=str(payload.email), user=user, login_method="password")
+    _emit_login_outcome(email=str(payload.email), user=user, login_method="password", db_session=db_session)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
@@ -68,9 +76,14 @@ def login(payload: LoginRequest) -> TokenResponse:
 
 
 @router.post("/token", response_model=TokenResponse)
-def oauth_token(form_data: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
+def oauth_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db_session: Session | None = Depends(get_inventory_db_optional),
+) -> TokenResponse:
     user = authenticate_user(email=form_data.username, password=form_data.password)
-    _emit_login_outcome(email=form_data.username, user=user, login_method="oauth2_token")
+    _emit_login_outcome(
+        email=form_data.username, user=user, login_method="oauth2_token", db_session=db_session
+    )
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 

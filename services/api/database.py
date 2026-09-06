@@ -54,3 +54,22 @@ def get_inventory_db() -> Iterator[Session]:
     """FastAPI dependency: yields one SQLModel session per request."""
     with Session(get_inventory_engine()) as session:
         yield session
+
+
+def get_inventory_db_optional() -> Iterator[Session | None]:
+    """Same session as get_inventory_db, but degrades to None instead of
+    raising when Supabase isn't reachable (DATABASE_URL missing).
+
+    For call sites where Supabase is a side-channel, not the point of the
+    request — e.g. persisting a login telemetry event. /inventory and
+    /telemetry/events use get_inventory_db directly on purpose: there,
+    Supabase being unavailable IS a real failure the caller should see.
+    Login must keep working even if Supabase is down, so it depends on this
+    variant instead."""
+    try:
+        engine = get_inventory_engine()
+    except RuntimeError:
+        yield None
+        return
+    with Session(engine) as session:
+        yield session
