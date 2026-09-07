@@ -79,6 +79,32 @@ class Supplier(SupplierBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SupplierListItem(BaseModel):
+    """Proyeccion del listado GET /suppliers.
+
+    Se derivo siguiendo al consumidor real, no al modelo: la tabla de
+    uis/backoffice/components/ProviderDirectory.tsx lee exactamente estos 8
+    campos. El esquema Supplier completo enviaba 4 mas que la lista nunca
+    pinta —`contact_email`, `notes` (hasta 2000 caracteres por fila),
+    `compliance_agreement` y `contract_renewal_date`—, lo que multiplicaba el
+    payload sin que nadie lo usara. `contact_email` ademas es un dato de
+    contacto que no tiene por que viajar en una vista de listado.
+
+    El detalle GET /suppliers/{id} sigue devolviendo Supplier entero: ahi si
+    hay un consumidor plausible para el resto de campos."""
+
+    id: int
+    name: str
+    country: Country
+    categories: list[str]
+    monthly_rate: float
+    currency: Currency
+    status: SupplierStatus
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SupplierRateUpdate(BaseModel):
     monthly_rate: float = Field(gt=0)
 
@@ -117,8 +143,23 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileRead(ProfileBase):
+    """Proyeccion completa del perfil, con sus identificadores. Se conserva
+    para uso interno del repositorio y de los tests; los endpoints exponen
+    ProfilePublic, que omite los ids."""
+
     id: str
     user_id: str
+
+
+class ProfilePublic(ProfileBase):
+    """Lo que sale por la API: name / phone / address y nada mas.
+
+    `id` (identificador propio de la fila de perfil) es un detalle de
+    almacenamiento que ningun cliente usa, y `user_id` es redundante en los
+    dos sitios donde aparece: /profiles/me y /auth/me estan siempre acotados
+    al llamante, asi que ese valor o es el id que ya viene en el nivel
+    superior de la respuesta, o es el del propio token. Ver
+    docs/serialization-audit.md."""
 
 
 class UserCreate(BaseModel):
@@ -135,10 +176,46 @@ class UserUpdate(BaseModel):
 
 
 class UserPublic(BaseModel):
+    """Detalle de una cuenta. Incluye `email` a proposito: lo consumen
+    GET /users/{id} y PUT /users/{id}, y este ultimo esta acotado por
+    ensure_self_or_admin, de modo que quien recibe el email es el propio
+    titular o un admin. NO se usa en el listado (ver UserListItem) ni en
+    ningun flujo de auth no autenticado."""
+
     id: str
     email: EmailStr
     is_active: bool
     role: UserRole
+    created_at: datetime
+
+
+class UserListItem(BaseModel):
+    """Proyeccion del listado GET /users. Deliberadamente SIN `email`.
+
+    El listado es una vista de administracion —cuantas cuentas hay, con que
+    rol y cuales siguen activas—; ningun consumidor necesita la direccion de
+    correo de terceros, y devolverla convertia el endpoint en un enumerador
+    de emails de toda la organizacion. En una red sanitaria sujeta a HIPAA y
+    UK GDPR eso es exposicion innecesaria de dato personal. Para el correo de
+    una cuenta concreta esta GET /users/{id}."""
+
+    id: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+
+class UserRegistered(BaseModel):
+    """Respuesta de POST /users (registro), un flujo NO autenticado.
+
+    Devuelve solo la confirmacion de que la cuenta existe. No reenvia el
+    `email` —que el cliente acaba de mandar en el cuerpo de la peticion— ni
+    el perfil completo, porque el registro no es el momento de emitir datos
+    personales por una via sin autenticar. `id` se conserva porque es lo
+    unico que el cliente puede necesitar despues (y los tests lo usan para
+    encadenar operaciones)."""
+
+    id: str
     created_at: datetime
 
 
@@ -162,6 +239,12 @@ class TokenResponse(BaseModel):
 
 
 class AuthMeResponse(BaseModel):
+    """GET /auth/me. Es el unico endpoint de auth que SI devuelve `email`, y
+    lo hace a proposito: el llamante esta autenticado y el email es suyo, la
+    vista de perfil del backoffice depende de ello. `profile` se aplana a
+    ProfilePublic para no repetir el id del usuario dentro del objeto
+    anidado."""
+
     id: str
     email: EmailStr
     role: UserRole
@@ -196,6 +279,28 @@ class IncidentRead(BaseModel):
     branch: str
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IncidentListItem(BaseModel):
+    """Proyeccion del listado GET /api/incidents.
+
+    Los 8 campos que lee la tabla de uis/backoffice/app/incidents/page.tsx.
+    Frente a IncidentRead se omite `updated_at`, que el listado no muestra:
+    el ahorro por fila es pequeño, pero el listado no tiene limite de
+    paginacion y el criterio es el mismo que en el resto de la auditoria —
+    el esquema del listado lo define el consumidor, no el modelo. El detalle
+    GET /api/incidents/{id} conserva IncidentRead completo."""
+
+    id: int
+    title: str
+    description: str
+    category: str
+    status: str
+    origin: str
+    branch: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -345,3 +450,111 @@ class InventoryOrderRead(BaseModel):
     user_uuid: str
     vendor_name: Optional[str] = None
     consumption_type: Optional[str] = None
+
+
+# --- Esquemas de endpoints que antes devolvian dicts sin tipar ---
+# Anadidos en la auditoria de serializacion (docs/serialization-audit.md).
+# Un dict devuelto tal cual funciona, pero deja el contrato indefinido: no
+# aparece en /docs, no se valida, y cualquier cambio interno se filtra a los
+# clientes en silencio.
+
+
+class HealthStatus(BaseModel):
+    """GET /api/health. Contrato minimo pero explicito: lo consultan sondas
+    de disponibilidad, que necesitan una forma estable."""
+
+    status: str
+
+
+class IncidentAnalysisSummary(BaseModel):
+    """Agregados que produce analyze_rows() sobre el CSV historico.
+
+    Los cuatro `*_counts` y `invalid_reasons` se tipan como dict[str, int] a
+    proposito y no como campos fijos: sus claves son los valores validos de
+    packages/shared/incidents_validation, que es la fuente de verdad de esas
+    reglas. Fijarlas aqui duplicaria el catalogo en dos sitios y obligaria a
+    tocar este archivo cada vez que cambie una regla de negocio."""
+
+    total_records: int
+    valid_records: int
+    invalid_records: int
+    invalid_reasons: dict[str, int]
+    category_counts: dict[str, int]
+    status_counts: dict[str, int]
+    country_counts: dict[str, int]
+    score_counts: dict[str, int]
+    scored_closed_cases: int
+    total_closed: int
+    average_score: float
+
+
+class IncidentAnalysisResponse(BaseModel):
+    """POST /api/incidents/analyze."""
+
+    source_file: str
+    analyzed_at: str
+    summary: IncidentAnalysisSummary
+
+
+class DirectStockEditRejection(BaseModel):
+    """Cuerpo del 400 de PATCH /inventory/products/{id}/stock.
+
+    El endpoint nunca devuelve 200 —existe para rechazar la escritura directa
+    de stock—, pero su respuesta de error tambien es parte del contrato y
+    merece estar documentada en /docs igual que cualquier otra."""
+
+    detail: str
+
+
+class EventsPerDayRow(BaseModel):
+    date: str
+    event_type: str
+    count: int
+
+
+class ErrorRateRow(BaseModel):
+    date: str
+    total_events: int
+    error_events: int
+    error_rate: float
+
+
+class WebVitalLatencyRow(BaseModel):
+    date: str
+    metric_name: str
+    avg_value: float
+
+
+class AuthFailureRateRow(BaseModel):
+    date: str
+    total_attempts: int
+    failed_attempts: int
+    failure_rate: float
+
+
+class TelemetryReportPeriod(BaseModel):
+    """`from` es palabra reservada en Python, asi que el atributo se llama
+    `from_` y se publica como "from" mediante alias. `populate_by_name`
+    permite seguir construyendo el objeto por el nombre del atributo."""
+
+    from_: str = Field(alias="from")
+    to: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TelemetryReportMetrics(BaseModel):
+    events_per_day: list[EventsPerDayRow]
+    error_rate_by_day: list[ErrorRateRow]
+    web_vital_latency_by_day: list[WebVitalLatencyRow]
+    auth_failure_rate: list[AuthFailureRateRow]
+
+
+class TelemetryReport(BaseModel):
+    """GET /telemetry/report. Cada fila de cada metrica llegaba antes como un
+    dict sin tipar salido de Pandas (`.to_dict(orient="records")`), asi que
+    los nombres de columna del DataFrame eran, de hecho, el contrato publico
+    de la API. Estos esquemas lo hacen explicito."""
+
+    period: TelemetryReportPeriod
+    metrics: TelemetryReportMetrics
