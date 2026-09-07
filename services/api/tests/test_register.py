@@ -7,15 +7,36 @@ from fastapi.testclient import TestClient
 VALID_PAYLOAD = {"email": "ana.perez@healthcore.com", "password": "SuperSecure123", "name": "Ana Perez"}
 
 
-def test_register_happy_path_creates_active_user_with_profile(client: TestClient) -> None:
+def test_register_response_is_minimal_and_omits_email(client: TestClient) -> None:
+    """Contrato fijado en la auditoria de serializacion: el registro es un
+    flujo NO autenticado, asi que su respuesta se limita a confirmar que la
+    cuenta existe. No reenvia el email que el cliente acaba de mandar en el
+    cuerpo, ni el perfil, ni el rol."""
     response = client.post("/users", json=VALID_PAYLOAD)
 
     assert response.status_code == 201
     body = response.json()
-    assert body["email"] == VALID_PAYLOAD["email"]
-    assert body["role"] == "user"          # nadie se registra como admin
-    assert body["is_active"] is True
-    assert body["profile"]["name"] == "Ana Perez"
+    assert set(body) == {"id", "created_at"}
+    assert "email" not in body
+    assert "profile" not in body
+
+
+def test_register_creates_active_user_with_profile(client: TestClient) -> None:
+    """El comportamiento sigue siendo el mismo aunque la respuesta ya no lo
+    muestre: se verifica por donde corresponde, con la sesion ya iniciada."""
+    assert client.post("/users", json=VALID_PAYLOAD).status_code == 201
+
+    # Que el login funcione demuestra que la cuenta quedo activa.
+    login = client.post(
+        "/auth/login",
+        json={"email": VALID_PAYLOAD["email"], "password": VALID_PAYLOAD["password"]},
+    )
+    assert login.status_code == 200
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {login.json()['access_token']}"})
+    assert me.status_code == 200
+    assert me.json()["role"] == "user"          # nadie se registra como admin
+    assert me.json()["profile"]["name"] == "Ana Perez"
 
 
 def test_register_never_returns_password_or_hash(client: TestClient) -> None:

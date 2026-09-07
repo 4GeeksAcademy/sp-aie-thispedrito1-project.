@@ -9,12 +9,37 @@ def test_list_users_requires_authentication(client: TestClient) -> None:
     assert client.get("/users").status_code == 401
 
 
-def test_list_users_happy_path(client: TestClient, auth_headers: dict[str, str]) -> None:
-    response = client.get("/users", headers=auth_headers)
+def test_list_users_requires_admin(
+    client: TestClient, registered_user: dict[str, str], auth_headers: dict[str, str]
+) -> None:
+    """Antes lo servia cualquier autenticado. Un usuario normal ya no puede
+    enumerar las cuentas de la organizacion."""
+    assert client.get("/users", headers=auth_headers).status_code == 403
+
+
+def test_list_users_happy_path_for_admin(
+    client: TestClient, registered_user: dict[str, str], admin_headers: dict[str, str]
+) -> None:
+    response = client.get("/users", headers=admin_headers)
 
     assert response.status_code == 200
-    emails = [user["email"] for user in response.json()]
-    assert "ana.perez@healthcore.com" in emails
+    ids = [user["id"] for user in response.json()]
+    assert registered_user["id"] in ids
+
+
+def test_user_list_never_exposes_emails(
+    client: TestClient, registered_user: dict[str, str], admin_headers: dict[str, str]
+) -> None:
+    """Contrato fijado en la auditoria de serializacion: el listado es una
+    vista de administracion (cuantas cuentas, con que rol, cuales activas).
+    El correo de terceros no forma parte de esa pregunta, y devolverlo
+    convertia el endpoint en un enumerador de emails de toda la red."""
+    response = client.get("/users", headers=admin_headers)
+
+    assert response.status_code == 200
+    for user in response.json():
+        assert set(user) == {"id", "role", "is_active", "created_at"}
+        assert "email" not in user
 
 
 def test_get_missing_user_returns_404(client: TestClient, auth_headers: dict[str, str]) -> None:

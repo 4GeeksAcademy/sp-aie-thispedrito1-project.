@@ -219,15 +219,6 @@ class UserRegistered(BaseModel):
     created_at: datetime
 
 
-class UserWithProfile(BaseModel):
-    id: str
-    email: EmailStr
-    is_active: bool
-    role: UserRole
-    created_at: datetime
-    profile: ProfileRead
-
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1)
@@ -248,7 +239,7 @@ class AuthMeResponse(BaseModel):
     id: str
     email: EmailStr
     role: UserRole
-    profile: ProfileRead
+    profile: ProfilePublic
 
 
 class ForgotPasswordRequest(BaseModel):

@@ -108,3 +108,32 @@ def auth_token(client: TestClient, registered_user: dict[str, str]) -> str:
 @pytest.fixture()
 def auth_headers(auth_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture()
+def admin_headers(client: TestClient) -> dict[str, str]:
+    """Cabeceras de un usuario con rol admin.
+
+    No se puede conseguir por la API: POST /users siempre crea rol `user` (y
+    eso es intencionado — nadie se autoproclama admin). Se crea directamente
+    por el repositorio, que es como se aprovisiona un admin en la practica.
+    Necesario desde la auditoria de serializacion, que restringio
+    GET /users a admin.
+    """
+    from auth_repository import AuthRepository
+    from models import UserRole
+    from security import hash_password
+
+    repo = AuthRepository()
+    repo.create_user(
+        email="admin@healthcore.com",
+        hashed_password=hash_password(TEST_PASSWORD),
+        role=UserRole.admin,
+        profile_data={"name": "Admin HealthCore"},
+    )
+    response = client.post(
+        "/auth/login",
+        json={"email": "admin@healthcore.com", "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}

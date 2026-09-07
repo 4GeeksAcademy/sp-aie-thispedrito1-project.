@@ -5,15 +5,18 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from auth_repository import AuthRepository
-from models import ProfileRead, UserCreate, UserPublic, UserRole, UserUpdate, UserWithProfile
+from models import UserCreate, UserListItem, UserPublic, UserRegistered, UserRole, UserUpdate
 from security import ensure_self_or_admin, get_current_user, hash_password, require_admin
 
 router = APIRouter(prefix="/users", tags=["users"])
 auth_repo = AuthRepository()
 
 
-@router.post("", response_model=UserWithProfile, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate) -> UserWithProfile:
+@router.post("", response_model=UserRegistered, status_code=status.HTTP_201_CREATED)
+def create_user(payload: UserCreate) -> UserRegistered:
+    """Registro (no autenticado). Devuelve solo la confirmacion de que la
+    cuenta existe: ni el email que el cliente acaba de enviar ni el perfil.
+    Ver docs/serialization-audit.md."""
     hashed = hash_password(payload.password)
     try:
         user, profile = auth_repo.create_user(
@@ -29,20 +32,22 @@ def create_user(payload: UserCreate) -> UserWithProfile:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return UserWithProfile(
-        id=user["id"],
-        email=user["email"],
-        is_active=user["is_active"],
-        role=UserRole(user["role"]),
-        created_at=user["created_at"],
-        profile=ProfileRead.model_validate(profile),
-    )
+    # `profile` se crea aqui pero no se devuelve: el cliente lo consulta
+    # despues por /auth/me o /profiles/me, ya autenticado.
+    _ = profile
+    return UserRegistered(id=user["id"], created_at=user["created_at"])
 
 
-@router.get("", response_model=list[UserPublic])
-def list_users(current_user: dict[str, Any] = Depends(get_current_user)) -> list[UserPublic]:
-    _ = current_user
-    return [UserPublic.model_validate(item) for item in auth_repo.list_users()]
+@router.get("", response_model=list[UserListItem])
+def list_users(current_user: dict[str, Any] = Depends(get_current_user)) -> list[UserListItem]:
+    """Listado de cuentas. Solo admin, y sin emails.
+
+    Antes lo servia cualquier usuario autenticado devolviendo UserPublic, es
+    decir, el correo de toda la organizacion a quien tuviera una cuenta. Se
+    corrigen las dos cosas: la proyeccion (UserListItem no lleva email) y el
+    control de acceso (require_admin)."""
+    require_admin(current_user)
+    return [UserListItem.model_validate(item) for item in auth_repo.list_users()]
 
 
 @router.get("/{user_id}", response_model=UserPublic)

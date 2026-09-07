@@ -14,7 +14,7 @@ from models import (
     ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
-    ProfileRead,
+    ProfilePublic,
     ResetPasswordRequest,
     TokenResponse,
     UserRole,
@@ -148,5 +148,5 @@ def me(current_user: dict[str, Any] = Depends(get_current_user)) -> AuthMeRespon
         id=current_user["id"],
         email=current_user["email"],
         role=UserRole(current_user["role"]),
-        profile=ProfileRead.model_validate(profile),
+        profile=ProfilePublic.model_validate(profile),
     )
