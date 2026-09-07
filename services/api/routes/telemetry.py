@@ -11,7 +11,7 @@ import telemetry_repository
 import telemetry_service
 from cache import cache
 from database import get_inventory_db
-from models import TelemetryEvent, TelemetryIngestResponse
+from models import TelemetryEvent, TelemetryIngestResponse, TelemetryReport
 from services.telemetry.analysis import (
     auth_failure_rate,
     error_rate_by_day,
@@ -101,7 +101,7 @@ def _resolve_period(start_date: Optional[str], end_date: Optional[str]) -> tuple
     return start, end
 
 
-@router.get("/report")
+@router.get("/report", response_model=TelemetryReport)
 def get_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
