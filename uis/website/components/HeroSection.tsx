@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { stats } from "../data/content";
 
 export function HeroSection() {
@@ -45,11 +47,31 @@ export function HeroSection() {
             background: "rgba(15,23,42,.72)",
           }}
         >
-          <img
+          {/*
+            Esta es la imagen del LCP de la home. Antes era un <img> con
+            loading="lazy": le estabamos pidiendo al navegador que retrasara
+            justo el elemento que define el Largest Contentful Paint.
+            Lighthouse lo marcaba con dos avisos explicitos ("LCP resources
+            should not use loading=lazy" y "fetchpriority=high should be
+            applied").
+
+            Ahora usa next/image con loading="eager" + fetchPriority="high", que
+            segun los docs
+            de Next 16 es lo recomendado frente al `preload` (y `priority`
+            quedo deprecado en esta version). `sizes` le dice al navegador
+            cuanto espacio va a ocupar realmente, para que baje la variante
+            del srcset que corresponde en vez de la de 1280 px de ancho.
+            width/height fijan la relacion de aspecto y evitan layout shift.
+          */}
+          <Image
             src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1280&q=80"
             alt="Profesional sanitario usando una plataforma clinica digital en consulta ambulatoria"
+            width={1280}
+            height={853}
+            sizes="(max-width: 700px) 100vw, 560px"
+            loading="eager"
+            fetchPriority="high"
             style={{ width: "100%", height: 260, objectFit: "cover", borderRadius: 12 }}
-            loading="lazy"
           />
           <h2 style={{ marginBottom: 6 }}>Operacion clinica conectada y trazable</h2>
           <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.65 }}>
