@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { AsyncSection } from "../../components/AsyncSection";
+import { useAsyncData } from "../../hooks/useAsyncData";
 import { ApiFieldError } from "../../services/http";
 import { getIncidents, updateIncidentStatus } from "../../services/incidentsApi";
 import {
@@ -28,28 +30,26 @@ const STATUS_BADGE_STYLES: Record<IncidentStatus, React.CSSProperties> = {
 
 export default function IncidentsPage() {
   const [filters, setFilters] = useState<IncidentFilters>({ status: "", origin: "", branch: "" });
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
-  const loadIncidents = useCallback(async (activeFilters: IncidentFilters) => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      const results = await getIncidents(activeFilters);
-      setIncidents(results);
-    } catch {
-      setLoadError("No se pudo cargar la lista de incidencias. Verifica que la API esté activa e inténtalo de nuevo.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // `filters` es la dependencia real: el hook relanza la lectura cada vez que
+  // el usuario cambia un desplegable. Es tambien el motivo por el que
+  // useAsyncData lleva guarda de condicion de carrera — cambiar dos filtros
+  // seguidos deja dos peticiones en vuelo y la respuesta lenta de la primera
+  // no debe pisar a la de la segunda.
+  const fetchIncidents = useCallback(() => getIncidents(filters), [filters]);
+  const { data, isLoading, error, reload } = useAsyncData<Incident[]>(
+    fetchIncidents,
+    "No se pudo cargar la lista de incidencias. Verifica que la API esté activa e inténtalo de nuevo.",
+  );
 
+  // Copia local para poder aplicar el cambio de estado de forma optimista y
+  // revertirlo si la API lo rechaza, sin volver a pedir la lista entera.
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   useEffect(() => {
-    void loadIncidents(filters);
-  }, [filters, loadIncidents]);
+    setIncidents(data ?? []);
+  }, [data]);
 
   const setFilter = (key: keyof IncidentFilters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -137,28 +137,18 @@ export default function IncidentsPage() {
         </p>
       )}
 
-      {isLoading && <p style={{ color: "var(--muted)" }}>Cargando incidencias…</p>}
-
-      {!isLoading && loadError && (
-        <div className="panel" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="error-text">{loadError}</span>
-          <button type="button" onClick={() => void loadIncidents(filters)}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {!isLoading && !loadError && incidents.length === 0 && (
-        <div className="panel">
-          <p style={{ margin: 0, color: "var(--muted)" }}>
-            {hasActiveFilters
-              ? "Ninguna incidencia coincide con los filtros seleccionados. Prueba a quitarlos para ver la lista completa."
-              : "Todavía no se ha reportado ninguna incidencia. Usa “Reportar incidencia” para registrar la primera."}
-          </p>
-        </div>
-      )}
-
-      {!isLoading && !loadError && incidents.length > 0 && (
+      <AsyncSection
+        isLoading={isLoading}
+        error={error}
+        onRetry={reload}
+        loadingLabel="Cargando incidencias…"
+        isEmpty={incidents.length === 0}
+        emptyLabel={
+          hasActiveFilters
+            ? "Ninguna incidencia coincide con los filtros seleccionados. Prueba a quitarlos para ver la lista completa."
+            : "Todavía no se ha reportado ninguna incidencia. Usa “Reportar incidencia” para registrar la primera."
+        }
+      >
         <div className="panel" style={{ overflowX: "auto" }}>
           <table className="table">
             <thead>
@@ -217,7 +207,7 @@ export default function IncidentsPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </AsyncSection>
     </main>
   );
 }
