@@ -29,7 +29,9 @@ export type IncidentBranch =
   | "london_west"
   | "manchester_central";
 
-export type Incident = {
+// Lo que devuelve el LISTADO GET /api/incidents. Sin updated_at: la tabla
+// no lo muestra y la API dejó de enviarlo (auditoría de serialización).
+export type IncidentListItem = {
   id: number;
   title: string;
   description: string;
@@ -38,6 +40,10 @@ export type Incident = {
   origin: IncidentOrigin;
   branch: IncidentBranch;
   created_at: string;
+};
+
+// Proyección completa: detalle, creación y cambio de estado.
+export type Incident = IncidentListItem & {
   updated_at: string;
 };
 

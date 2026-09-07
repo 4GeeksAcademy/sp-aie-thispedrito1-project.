@@ -1,13 +1,7 @@
-import type {
-  Incident,
-  IncidentCreateInput,
-  IncidentFilters,
-  IncidentStatus,
-  IncidentSummary,
-} from "../types/incident";
+import type { Incident, IncidentCreateInput, IncidentFilters, IncidentListItem, IncidentStatus, IncidentSummary } from "../types/incident";
 import { requestJson } from "./http";
 
-export function getIncidents(filters: IncidentFilters): Promise<Incident[]> {
+export function getIncidents(filters: IncidentFilters): Promise<IncidentListItem[]> {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.origin) params.set("origin", filters.origin);
@@ -15,7 +9,7 @@ export function getIncidents(filters: IncidentFilters): Promise<Incident[]> {
   if (filters.category) params.set("category", filters.category);
 
   const query = params.toString();
-  return requestJson<Incident[]>(`/api/incidents${query ? `?${query}` : ""}`, undefined, { authRequired: true });
+  return requestJson<IncidentListItem[]>(`/api/incidents${query ? `?${query}` : ""}`, undefined, { authRequired: true });
 }
 
 export function createIncident(payload: IncidentCreateInput): Promise<Incident> {

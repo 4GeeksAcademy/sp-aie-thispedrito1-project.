@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
 import { createSupplier, deleteSupplier, getSuppliers, updateSupplierRate, updateSupplierStatus } from "../services/suppliersApi";
-import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type Supplier, type SupplierCreateInput, type SupplierStatus } from "../types/supplier";
+import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type SupplierCreateInput, type SupplierListItem, type SupplierStatus } from "../types/supplier";
 import { ProviderStatusBadge } from "./ProviderStatusBadge";
 
 // Most visits to this page are to browse/filter the existing directory, not
@@ -30,7 +30,10 @@ const categories = [
 ];
 
 export function ProviderDirectory() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  // El listado devuelve SupplierListItem (sin contact_email, notes,
+  // compliance_agreement ni contract_renewal_date, que esta tabla no
+  // muestra). Supplier, que devuelven los PATCH, es un superconjunto.
+  const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [filters, setFilters] = useState<{ country?: string; category?: string }>({});
@@ -81,7 +84,7 @@ export function ProviderDirectory() {
     return created;
   };
 
-  const saveRate = async (supplier: Supplier) => {
+  const saveRate = async (supplier: SupplierListItem) => {
     const rawValue = editingRateById[supplier.id] ?? String(supplier.monthly_rate);
     const monthlyRate = Number(rawValue);
     if (!Number.isFinite(monthlyRate) || monthlyRate <= 0) {
@@ -104,7 +107,7 @@ export function ProviderDirectory() {
     }
   };
 
-  const saveStatus = async (supplier: Supplier, status: SupplierStatus) => {
+  const saveStatus = async (supplier: SupplierListItem, status: SupplierStatus) => {
     setSavingById((prev) => ({ ...prev, [supplier.id]: true }));
     setErrorById((prev) => ({ ...prev, [supplier.id]: null }));
 
@@ -119,7 +122,7 @@ export function ProviderDirectory() {
     }
   };
 
-  const removeSupplier = async (supplier: Supplier) => {
+  const removeSupplier = async (supplier: SupplierListItem) => {
     setSavingById((prev) => ({ ...prev, [supplier.id]: true }));
     setErrorById((prev) => ({ ...prev, [supplier.id]: null }));
 
