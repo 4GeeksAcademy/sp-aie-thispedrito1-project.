@@ -16,7 +16,7 @@ from packages.shared.incidents_validation import (
 
 from cache import cache
 from incident_repository import IncidentRepository
-from models import IncidentRead, IncidentSummary
+from models import IncidentListItem, IncidentRead, IncidentSummary
 from security import get_current_user
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"], dependencies=[Depends(get_current_user)])
@@ -42,13 +42,15 @@ def create_incident(payload: dict[str, Any] = Body(...)) -> IncidentRead:
     return IncidentRead.model_validate(created)
 
 
-@router.get("", response_model=list[IncidentRead])
+@router.get("", response_model=list[IncidentListItem])
 def list_incidents(
     status_filter: str | None = Query(default=None, alias="status"),
     origin: str | None = Query(default=None),
     branch: str | None = Query(default=None),
     category: str | None = Query(default=None),
-) -> list[IncidentRead]:
+) -> list[IncidentListItem]:
+    """Listado con proyeccion propia: sin `updated_at`, que la tabla no
+    muestra. El detalle GET /{id} conserva IncidentRead completo."""
     filters = (
         ("status", status_filter, INCIDENT_STATUSES),
         ("origin", origin, INCIDENT_ORIGINS),
@@ -67,7 +69,7 @@ def list_incidents(
         raise _field_errors(errors)
 
     results = repo.list(status=status_filter, origin=origin, branch=branch, category=category)
-    return [IncidentRead.model_validate(item) for item in results]
+    return [IncidentListItem.model_validate(item) for item in results]
 
 
 @router.get("/summary", response_model=IncidentSummary)
