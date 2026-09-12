@@ -110,6 +110,12 @@
           "type": "integer",
           "required": true,
           "description": "id de la orden de entrada creada, para correlacionar con el historial."
+        },
+        {
+          "name": "unit_cost",
+          "type": "number (>=0, 2 decimales)",
+          "required": false,
+          "description": "Coste unitario del insumo en la moneda del pais de la clinica (US -> USD, UK -> GBP), sin convertir. Campo aditivo exigido por el CONTEXT del pipeline de desempeno de negocio (data/pipelines/PIPELINE_DESIGN.md) para calcular total_supply_cost = SUM(quantity * unit_cost). Opcional para no invalidar los eventos ya almacenados antes de existir: un evento sin unit_cost significa 'coste desconocido', nunca coste cero. Describe el precio de un insumo, nunca a un paciente."
         }
       ]
     },
