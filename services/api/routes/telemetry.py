@@ -101,6 +101,20 @@ def _resolve_period(start_date: Optional[str], end_date: Optional[str]) -> tuple
     return start, end
 
 
+def _report_cache_key(start_date: Optional[str], end_date: Optional[str]) -> str:
+    """Keys the cache on what the client ASKED for, not on the resolved
+    period. Resolving first and keying on the result broke the cache for
+    the default window: without params the period ends at datetime.now(),
+    so every request produced a brand-new key and recomputed the whole
+    pipeline (measured against real Supabase: ~370 ms on each of 3
+    back-to-back calls). Explicit dates are normalized so '...Z' and
+    '....000Z' share an entry; a missing bound becomes a fixed marker, so
+    repeated default requests hit the same entry for the TTL."""
+    start_part = _parse_query_datetime(start_date).isoformat() if start_date else "default"
+    end_part = _parse_query_datetime(end_date).isoformat() if end_date else "default"
+    return f"telemetry_report:{start_part}:{end_part}"
+
+
 @router.get("/report", response_model=TelemetryReport)
 def get_report(
     start_date: Optional[str] = None,
@@ -111,13 +125,12 @@ def get_report(
     resultado 60s por combinación de start_date/end_date, y solo recalcula
     cuando esa entrada expira o cambia. Ver services/telemetry/analysis.py
     para las funciones de métrica que hace cada key de "metrics"."""
-    period_start, period_end = _resolve_period(start_date, end_date)
-    cache_key = f"telemetry_report:{period_start.isoformat()}:{period_end.isoformat()}"
-
+    cache_key = _report_cache_key(start_date, end_date)
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
+    period_start, period_end = _resolve_period(start_date, end_date)
     report = {
         "period": {"from": period_start.isoformat(), "to": period_end.isoformat()},
         "metrics": {
