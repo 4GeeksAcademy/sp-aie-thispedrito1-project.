@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
+import { AsyncSection } from "../../../components/AsyncSection";
+import { useAsyncData } from "../../../hooks/useAsyncData";
 import { getProducts } from "../../../services/inventoryApi";
 import {
   CATEGORY_LABELS,
@@ -27,26 +29,14 @@ const STOCK_LEVEL_COLOR: Record<StockLevel, string> = {
 };
 
 export default function InventoryProductsPage() {
-  const [products, setProducts] = useState<MedicalSupply[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadProducts = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      const results = await getProducts();
-      setProducts(results);
-    } catch {
-      setLoadError("No se pudo cargar la lista de productos. Verifica que la API esté activa e inténtalo de nuevo.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadProducts();
-  }, [loadProducts]);
+  // El fetcher va en useCallback con dependencias vacias: esta pantalla no
+  // filtra, asi que la lectura es siempre la misma y el hook no debe repetirla.
+  const fetchProducts = useCallback(() => getProducts(), []);
+  const { data, isLoading, error, reload } = useAsyncData<MedicalSupply[]>(
+    fetchProducts,
+    "No se pudo cargar la lista de productos. Verifica que la API esté activa e inténtalo de nuevo.",
+  );
+  const products = data ?? [];
 
   return (
     <main className="shell" style={{ padding: "24px 0 48px" }}>
@@ -57,24 +47,14 @@ export default function InventoryProductsPage() {
         </Link>
       </div>
 
-      {isLoading && <p style={{ color: "var(--muted)" }}>Cargando productos…</p>}
-
-      {!isLoading && loadError && (
-        <div className="panel" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="error-text">{loadError}</span>
-          <button type="button" onClick={() => void loadProducts()}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {!isLoading && !loadError && products.length === 0 && (
-        <div className="panel">
-          <p style={{ margin: 0, color: "var(--muted)" }}>Todavía no se ha registrado ningún material sanitario.</p>
-        </div>
-      )}
-
-      {!isLoading && !loadError && products.length > 0 && (
+      <AsyncSection
+        isLoading={isLoading}
+        error={error}
+        onRetry={reload}
+        loadingLabel="Cargando productos…"
+        isEmpty={products.length === 0}
+        emptyLabel="Todavía no se ha registrado ningún material sanitario."
+      >
         <div className="panel" style={{ overflowX: "auto", marginTop: 16 }}>
           <table className="table">
             <thead>
@@ -140,7 +120,7 @@ export default function InventoryProductsPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </AsyncSection>
     </main>
   );
 }
