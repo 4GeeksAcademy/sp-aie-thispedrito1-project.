@@ -6,6 +6,22 @@ export type SupplierStatus = "active" | "suspended";
 
 export type ComplianceAgreement = "BAA" | "DPA" | "both" | null;
 
+// Lo que devuelve el LISTADO GET /suppliers. La API dejó de enviar
+// contact_email, notes, compliance_agreement y contract_renewal_date en el
+// listado porque esta tabla no los muestra (auditoría de serialización).
+export type SupplierListItem = {
+  id: number;
+  name: string;
+  country: Country;
+  categories: string[];
+  monthly_rate: number;
+  currency: Currency;
+  status: SupplierStatus;
+  updated_at: string;
+};
+
+// Proyección completa: la devuelven el detalle GET /suppliers/{id}, el POST
+// de creación y los PATCH de tarifa y estado.
 export type Supplier = {
   id: number;
   name: string;

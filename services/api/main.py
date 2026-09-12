@@ -27,6 +27,7 @@ import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.me
 import inventory_repository  # noqa: E402
 import telemetry_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 import telemetry_service  # noqa: E402
+from models import HealthStatus, IncidentAnalysisResponse  # noqa: E402
 from routes.auth import router as auth_router  # noqa: E402
 from routes.incidents import router as incidents_router  # noqa: E402
 from routes.inventory import router as inventory_router  # noqa: E402
@@ -143,19 +144,26 @@ _last_analysis: Dict[str, Any] | None = None
 WEB_INDEX_PATH = ROOT_DIR / "uis" / "web" / "index.html"
 
 
-@app.get("/api/health")
-def health() -> Dict[str, str]:
-    return {"status": "ok"}
+@app.get("/api/health", response_model=HealthStatus)
+def health() -> HealthStatus:
+    return HealthStatus(status="ok")
 
 
-@app.get("/")
+# response_class, no response_model: esta ruta devuelve el HTML estatico de
+# uis/web, no JSON. Declararlo hace que /docs lo muestre como text/html en
+# vez de prometer un objeto que nunca llega.
+@app.get(
+    "/",
+    response_class=FileResponse,
+    responses={200: {"content": {"text/html": {}}, "description": "UI estatica de uis/web"}},
+)
 def web_home() -> Response:
     if WEB_INDEX_PATH.exists():
         return FileResponse(WEB_INDEX_PATH)
     raise HTTPException(status_code=404, detail="Web UI not found")
 
 
-@app.post("/api/incidents/analyze")
+@app.post("/api/incidents/analyze", response_model=IncidentAnalysisResponse)
 async def analyze_incidents(
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -190,7 +198,18 @@ async def analyze_incidents(
     return response
 
 
-@app.get("/api/incidents/results/export")
+# Descarga de CSV: response_class en lugar de response_model, por el mismo
+# motivo que GET /. El Content-Type real es text/csv.
+@app.get(
+    "/api/incidents/results/export",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"text/csv": {}},
+            "description": "Descarga CSV del ultimo analisis ejecutado",
+        }
+    },
+)
 def export_last_results(current_user: Dict[str, Any] = Depends(get_current_user)) -> Response:
     _ = current_user
     with _last_analysis_lock:

@@ -70,7 +70,7 @@ Carga el histórico del CSV como incidencias `origin=customer` aplicando las tra
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
-# Backend (74 tests): desde services/api, con el venv activado
+# Backend (101 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -115,6 +115,21 @@ FastAPI + TinyDB (archivo único `services/api/data/suppliers.db.json` con tabla
 - Decisión registrada en techContext: `User`/`Profile` viven solo en TinyDB; reutilizar `user_id` como `user_uuid` de referencia en otros módulos.
 - Gestor de inventario (Hito 5, `routes/inventory.py` + `inventory_repository.py` + `inventory_models.py`): segunda conexión de base de datos, a Supabase (PostgreSQL) vía SQLModel — conviven con TinyDB en `database.py` (`get_inventory_engine`/`get_inventory_db`, sesión por petición vía `Depends`). CRUD bajo `/inventory` para `MedicalSupply`, `SupplyDelivery` y `SupplyConsumption` (nombres del CONTEXT del hito, no los genéricos `Product`/`InboundOrder`/`OutboundOrder` del README). `current_stock` es siempre calculado (`SUM(deliveries) - SUM(consumptions)`, en `inventory_repository.get_current_stock`), nunca una columna editable; un consumo que dejaría stock negativo se rechaza con `400` antes de escribir. `country` en este módulo usa `"US"/"UK"` (enum `SupplyCountry` en `models.py`) — distinto del `Country` de proveedores (`"USA"/"UK"`), mismo nombre de campo pero dominios de valores distintos. `SQLModel.metadata.create_all()` se ejecuta en el `startup` de `main.py` de forma no fatal: si `DATABASE_URL` falta o Supabase no responde, solo lo avisa por stderr y el resto de la API sigue viva.
 - Caching (Hito de optimización de rendimiento, rama `feat/caching-optimisation`, ver `CACHING_REPORT.md` en la raíz para el detalle completo con mediciones reales): `cache.py` expone un `TTLCache` en memoria (diccionario + `Lock`, singleton compartido entre routers — los handlers son `def` síncronos que FastAPI corre en threadpool). Cachea `GET /inventory/products` (30s; evita el N+1 de `get_current_stock` contra Supabase) y `GET /api/incidents/summary` (60s; evita barrer la tabla de incidencias 5 veces). Cada endpoint de escritura relevante invalida su clave explícitamente — nunca se depende solo del TTL. `main.py` también tiene un `timing_middleware` que loguea `método path → status | ms` de cada petición (usado para decidir estos dos candidatos con evidencia, no intuición). Gotcha real: la caché es un singleton de proceso, así que `tests/conftest.py` necesita `cache.clear()` en la fixture `clean_db` autouse — si no, tests que resetean la base de datos directamente (sin pasar por los endpoints que invalidan) reciben resultados cacheados de un test anterior.
+
+### Serialización de la API — `docs/serialization-audit.md`
+
+Auditoría de serialización del backend (rama `feat/serialization-audit` sobre `main`, 2026-09-07). Los 37 endpoints de `services/api` tienen contrato de respuesta explícito; el documento lista cada uno con su estado original y la decisión razonada.
+
+Reglas que quedan fijadas y conviene no romper:
+
+- **Un modelo, varios contratos.** Detalle, listado y escritura tienen esquemas distintos y no se reutilizan entre sí: `UserPublic` (detalle, con email) / `UserListItem` (listado, sin email) / `UserRegistered` (registro); `Supplier` / `SupplierListItem`; `IncidentRead` / `IncidentListItem`. **El esquema del listado lo define el consumidor, no el modelo**: se derivaron mirando qué campos lee el componente del backoffice, no qué columnas tiene la tabla. Al añadir un listado nuevo, hacer lo mismo.
+- **`response_model` no se aplica a ciegas.** `GET /` sirve el HTML de `uis/web` y `GET /api/incidents/results/export` devuelve un CSV: ahí va `response_class` + el content-type en `responses`, porque un `response_model` prometería JSON que nunca llega. Los dos `DELETE` responden 204, que no lleva cuerpo por definición.
+- **Los flujos de auth no autenticados no devuelven email** (registro, login, token, forgot, reset). `GET /auth/me` sí puede: el llamante está autenticado y el correo es suyo.
+- **`services/api/tests/test_serialization.py` es el guardián de toda la superficie.** Tres de sus tests recorren el esquema OpenAPI completo en vez de una lista escrita a mano, así que cubren rutas que todavía no existen: si alguien añade un endpoint que filtra `hashed_password` o que devuelve JSON sin esquema, falla solo. `access_token` está excluido de la lista de prohibidos a propósito — es el propósito de `/auth/login`.
+- **Fixture `admin_headers`** en `tests/conftest.py`: crea un admin por el repositorio, porque `POST /users` siempre crea rol `user` (intencionado). Necesaria desde que `GET /users` exige `require_admin`.
+- **`user_uuid` se mantiene en inventario a propósito**, contra la recomendación genérica sobre claves foráneas en bruto: es el rastro de auditoría que exigen HIPAA/UK GDPR, la tabla de `/inventory/orders` lo muestra, y no hay objeto usuario anidado que ofrecer — los usuarios viven en TinyDB y las órdenes en Supabase.
+- **Cambio de comportamiento**: `GET /users` pasa a exigir `require_admin`. Antes lo servía cualquier usuario autenticado devolviendo el email de toda la organización. Residual documentado y **no** resuelto: `GET /users/{id}` sigue devolviendo el email de cualquier cuenta a cualquier autenticado.
+- Impacto en el frontend: `uis/backoffice/types/` tiene ahora `IncidentListItem` y `SupplierListItem` junto a los tipos completos, y `AuthProfile` ya no declara `id` ni `user_id`. Al recortar un campo de la API, actualizar el tipo — `tsc --noEmit` localiza los puntos que asumían la proyección completa.
 
 ### Frontends
 

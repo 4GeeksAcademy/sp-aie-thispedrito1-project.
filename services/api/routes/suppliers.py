@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from models import Supplier, SupplierCreate, SupplierRateUpdate, SupplierStatusUpdate
+from models import Supplier, SupplierCreate, SupplierListItem, SupplierRateUpdate, SupplierStatusUpdate
 from repository import SupplierRepository
 from security import get_current_user
 
@@ -16,13 +16,16 @@ def create_supplier(payload: SupplierCreate) -> Supplier:
     return Supplier.model_validate(created)
 
 
-@router.get("", response_model=list[Supplier])
+@router.get("", response_model=list[SupplierListItem])
 def list_suppliers(
     country: str | None = Query(default=None),
     category: str | None = Query(default=None),
-) -> list[Supplier]:
+) -> list[SupplierListItem]:
+    """Listado con la proyeccion ligera: sin contact_email, notes,
+    compliance_agreement ni contract_renewal_date, que la tabla del
+    backoffice no muestra. El detalle los sigue devolviendo."""
     results = repo.list(country=country, category=category)
-    return [Supplier.model_validate(item) for item in results]
+    return [SupplierListItem.model_validate(item) for item in results]
 
 
 @router.get("/{supplier_id}", response_model=Supplier)

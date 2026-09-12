@@ -1,13 +1,13 @@
-import type { Supplier, SupplierCreateInput, SupplierFilters, SupplierStatus } from "../types/supplier";
+import type { Supplier, SupplierCreateInput, SupplierFilters, SupplierListItem, SupplierStatus } from "../types/supplier";
 import { requestJson } from "./http";
 
-export function getSuppliers(filters: SupplierFilters): Promise<Supplier[]> {
+export function getSuppliers(filters: SupplierFilters): Promise<SupplierListItem[]> {
   const params = new URLSearchParams();
   if (filters.country) params.set("country", filters.country);
   if (filters.category) params.set("category", filters.category);
 
   const query = params.toString();
-  return requestJson<Supplier[]>(`/suppliers${query ? `?${query}` : ""}`, undefined, { authRequired: true });
+  return requestJson<SupplierListItem[]>(`/suppliers${query ? `?${query}` : ""}`, undefined, { authRequired: true });
 }
 
 export function createSupplier(payload: SupplierCreateInput): Promise<Supplier> {

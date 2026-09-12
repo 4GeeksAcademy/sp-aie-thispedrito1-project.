@@ -16,9 +16,11 @@ export interface TokenResponse {
   token_type: "bearer" | string;
 }
 
+// Refleja ProfilePublic del backend (auditoría de serialización): la API ya
+// no devuelve el id de la fila de perfil ni user_id — el primero es detalle
+// de almacenamiento y el segundo es redundante, porque tanto /profiles/me
+// como /auth/me están siempre acotados al usuario del token.
 export interface AuthProfile {
-  id: string;
-  user_id: string;
   name?: string | null;
   phone?: string | null;
   address?: string | null;

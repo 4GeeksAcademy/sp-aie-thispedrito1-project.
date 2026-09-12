@@ -12,6 +12,7 @@ from database import get_inventory_db
 from inventory_models import MedicalSupply
 from models import (
     DirectStockEditAttempt,
+    DirectStockEditRejection,
     InventoryOrderRead,
     MedicalSupplyCreate,
     MedicalSupplyRead,
@@ -153,7 +154,11 @@ def create_outbound_order(
     return SupplyConsumptionRead.model_validate(consumption)
 
 
-@router.patch("/products/{supply_id}/stock")
+@router.patch(
+    "/products/{supply_id}/stock",
+    response_model=DirectStockEditRejection,
+    responses={400: {"model": DirectStockEditRejection}},
+)
 def reject_direct_stock_edit(
     supply_id: int,
     payload: DirectStockEditAttempt,

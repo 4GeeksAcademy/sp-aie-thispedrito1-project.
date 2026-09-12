@@ -16,7 +16,7 @@ import {
   STATUS_LABELS,
   STATUS_OPTIONS,
   STATUS_TRANSITIONS,
-  type Incident,
+  type IncidentListItem,
   type IncidentFilters,
   type IncidentStatus,
 } from "../../types/incident";
@@ -39,14 +39,17 @@ export default function IncidentsPage() {
   // seguidos deja dos peticiones en vuelo y la respuesta lenta de la primera
   // no debe pisar a la de la segunda.
   const fetchIncidents = useCallback(() => getIncidents(filters), [filters]);
-  const { data, isLoading, error, reload } = useAsyncData<Incident[]>(
+  const { data, isLoading, error, reload } = useAsyncData<IncidentListItem[]>(
     fetchIncidents,
     "No se pudo cargar la lista de incidencias. Verifica que la API esté activa e inténtalo de nuevo.",
   );
 
   // Copia local para poder aplicar el cambio de estado de forma optimista y
   // revertirlo si la API lo rechaza, sin volver a pedir la lista entera.
-  const [incidents, setIncidents] = useState<Incident[]>([]);
+  // El listado devuelve IncidentListItem (sin updated_at, que esta tabla no
+  // muestra). Las respuestas completas de PATCH encajan aquí sin problema:
+  // Incident extiende IncidentListItem.
+  const [incidents, setIncidents] = useState<IncidentListItem[]>([]);
   useEffect(() => {
     setIncidents(data ?? []);
   }, [data]);
@@ -55,7 +58,7 @@ export default function IncidentsPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const changeStatus = async (incident: Incident, nextStatus: IncidentStatus) => {
+  const changeStatus = async (incident: IncidentListItem, nextStatus: IncidentStatus) => {
     const previousStatus = incident.status;
     setUpdateNotice(null);
     setUpdatingId(incident.id);
