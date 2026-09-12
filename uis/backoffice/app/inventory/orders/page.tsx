@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 
+import { AsyncSection } from "../../../components/AsyncSection";
+import { useAsyncData } from "../../../hooks/useAsyncData";
 import { getOrders } from "../../../services/inventoryApi";
 import type { InventoryOrder, OrderType } from "../../../types/inventory";
 import { CONSUMPTION_TYPE_LABELS } from "../../../types/inventory";
@@ -26,27 +28,14 @@ const ORDER_TYPE_LABELS: Record<OrderType, string> = {
 };
 
 export default function InventoryOrdersPage() {
-  const [orders, setOrders] = useState<InventoryOrder[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  const loadOrders = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      const results = await getOrders();
-      setOrders(results);
-    } catch {
-      setLoadError("No se pudo cargar el historial de órdenes. Verifica que la API esté activa e inténtalo de nuevo.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
+  const fetchOrders = useCallback(() => getOrders(), []);
+  const { data, isLoading, error, reload } = useAsyncData<InventoryOrder[]>(
+    fetchOrders,
+    "No se pudo cargar el historial de órdenes. Verifica que la API esté activa e inténtalo de nuevo.",
+  );
+  const orders = data ?? [];
 
   return (
     <main className="shell" style={{ padding: "24px 0 48px" }}>
@@ -55,24 +44,14 @@ export default function InventoryOrdersPage() {
         Vista de solo lectura de todas las entregas y consumos registrados en todos los productos.
       </p>
 
-      {isLoading && <p style={{ color: "var(--muted)" }}>Cargando órdenes…</p>}
-
-      {!isLoading && loadError && (
-        <div className="panel" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="error-text">{loadError}</span>
-          <button type="button" onClick={() => void loadOrders()}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {!isLoading && !loadError && orders.length === 0 && (
-        <div className="panel">
-          <p style={{ margin: 0, color: "var(--muted)" }}>Todavía no se ha registrado ninguna orden.</p>
-        </div>
-      )}
-
-      {!isLoading && !loadError && orders.length > 0 && (
+      <AsyncSection
+        isLoading={isLoading}
+        error={error}
+        onRetry={reload}
+        loadingLabel="Cargando órdenes…"
+        isEmpty={orders.length === 0}
+        emptyLabel="Todavía no se ha registrado ninguna orden."
+      >
         <div className="panel" style={{ overflowX: "auto", marginTop: 16 }}>
           <table className="table">
             <thead>
@@ -131,7 +110,7 @@ export default function InventoryOrdersPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </AsyncSection>
     </main>
   );
 }

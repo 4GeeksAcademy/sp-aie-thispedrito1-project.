@@ -1,0 +1,3 @@
+
+# caché incremental de tsc (la genera `tsc --noEmit`)
+*.tsbuildinfo

@@ -1,0 +1,237 @@
+/*
+ * Estilos del formulario de registro de paciente.
+ *
+ * Antes vivían en dos bloques <style jsx> dentro de page.tsx, que es un
+ * Client Component. En el App Router, styled-jsx dentro de un Client
+ * Component inyecta su CSS por JavaScript DESPUÉS de la hidratación: el
+ * HTML del servidor llegaba sin una sola regla para .application-card,
+ * el navegador pintaba el formulario sin estilos y al hidratar recolocaba
+ * la sección entera (1286 px de alto) — CLS medido de 0.974.
+ *
+ * Como archivo .css importado por la página, Next.js lo extrae en tiempo
+ * de build y lo enlaza con <link rel="stylesheet"> en el <head>, así que
+ * los estilos llegan junto al HTML y no hay salto de layout. Además queda
+ * en el chunk de CSS de esta ruta, no en globals.css, para no enviar los
+ * estilos del formulario a quien solo visita la home.
+ *
+ * Los antiguos `:global(...)` de styled-jsx se escriben aquí como
+ * selectores normales: un archivo CSS ya es global por definición.
+ */
+
+.application-page {
+  display: grid;
+  gap: 12px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  color: #a5f3fc;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.back-link:hover {
+  color: #67e8f9;
+  border-color: rgba(103, 232, 249, 0.6);
+}
+
+.application-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(2, 6, 23, 0.88));
+  box-shadow: 0 14px 36px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(3px);
+}
+
+.status-banner {
+  transition: transform 0.18s ease;
+}
+
+.status-ok {
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.16) inset;
+}
+
+.status-error {
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.16) inset;
+}
+
+.application-form {
+  display: grid;
+  gap: 14px;
+}
+
+.consent-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.consent-check {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.4);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+}
+
+.btn-secondary:hover {
+  border-color: #334155;
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.btn-primary {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.24), rgba(16, 185, 129, 0.18));
+  color: #dcfce7;
+}
+
+.btn-primary:hover {
+  border-color: rgba(52, 211, 153, 0.9);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.3), rgba(16, 185, 129, 0.22));
+}
+
+@media (max-width: 680px) {
+  .application-card {
+    padding: 18px;
+  }
+
+  .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---- Campo de formulario (antes el <style jsx> del componente Field) ---- */
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field-label {
+  color: #dbeafe;
+  font-weight: 600;
+  font-size: 0.96rem;
+  letter-spacing: 0.01em;
+}
+
+.field-control {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: block;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(2, 6, 23, 0.9));
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.28) inset;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.field-control:focus-within {
+  border-color: rgba(103, 232, 249, 0.85);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.96));
+}
+
+.field-control-error {
+  border-color: #f87171;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.22) inset;
+}
+
+.field-error {
+  color: #fca5a5;
+}
+
+.field-control input,
+.field-control select {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  background-color: transparent;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.field-control input:-webkit-autofill,
+.field-control input:-webkit-autofill:hover,
+.field-control input:-webkit-autofill:focus,
+.field-control input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: 0 0 0 1000px #0b1220 inset;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+.field-control input::placeholder {
+  color: #64748b;
+}
+
+.field-control select {
+  cursor: pointer;
+  appearance: none;
+}
+
+.field-control select option {
+  background: #0f172a;
+  color: var(--text);
+}
+
+.field-control input[type="date"] {
+  color-scheme: dark;
+}
+
+.field-control input[type="date"]::-webkit-datetime-edit,
+.field-control input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.field-control input[type="date"]::-webkit-datetime-edit-text,
+.field-control input[type="date"]::-webkit-datetime-edit-month-field,
+.field-control input[type="date"]::-webkit-datetime-edit-day-field,
+.field-control input[type="date"]::-webkit-datetime-edit-year-field {
+  color: var(--text);
+  background: transparent;
+}
+
+.field-control input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.85;
+  cursor: pointer;
+  background: transparent;
+  filter: invert(87%) sepia(8%) saturate(500%) hue-rotate(161deg) brightness(102%) contrast(95%);
+}
