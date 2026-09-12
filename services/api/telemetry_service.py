@@ -58,6 +58,7 @@ def emit_backend_event(
     session_id: str = "backend",
     request_id: str | None = None,
     db_session: Session | None = None,
+    event_id: str | None = None,
 ) -> None:
     """For events the backend detects on its own — login outcomes, 5xx
     responses, inventory triggers — instead of receiving them from the
@@ -70,9 +71,14 @@ def emit_backend_event(
     login_failed from routes/auth.py, via get_inventory_db_optional — see
     that dependency's docstring for why login can't depend on
     get_inventory_db directly). Persistence failures are swallowed: a
-    Supabase hiccup must never turn into a broken login."""
+    Supabase hiccup must never turn into a broken login.
+
+    event_id is optional and only passed when the same real-world fact can
+    be detected more than once (supply_expiry_flagged, see
+    inventory_alerts.py): a deterministic id lets the emitter skip facts
+    already stored and lets consumers de-duplicate by eventId."""
     event = TelemetryEvent(
-        eventId=str(uuid.uuid4()),
+        eventId=event_id or str(uuid.uuid4()),
         timestamp=datetime.now(timezone.utc).isoformat(),
         sessionId=session_id,
         userId=user_id,

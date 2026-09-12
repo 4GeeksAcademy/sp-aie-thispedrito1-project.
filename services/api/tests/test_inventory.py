@@ -258,3 +258,104 @@ def test_list_supplies_expiring_within_skips_zero_stock(
         results = repo.list_supplies_expiring_within(session, days=30)
 
     assert results == []
+
+
+# --- Requisitos previos P2/P3 del pipeline de negocio (data/pipelines/PIPELINE_DESIGN.md) ---
+
+
+def _threshold_events(inventory_engine) -> list:
+    from sqlmodel import select
+
+    from telemetry_models import TelemetryEventRecord
+
+    with Session(inventory_engine) as session:
+        return list(
+            session.exec(
+                select(TelemetryEventRecord).where(TelemetryEventRecord.event_type == "stock_threshold_triggered")
+            ).all()
+        )
+
+
+def _order(client: TestClient, auth_headers: dict[str, str], direction: str, supply_id: int, quantity: int) -> None:
+    body = {"supply_id": supply_id, "quantity": quantity, "clinic_id": 1}
+    if direction == "inbound":
+        body["vendor_name"] = "MedLine Industries"
+    else:
+        body["consumption_type"] = "clinical_use"
+    response = client.post(f"/inventory/orders/{direction}", json=body, headers=auth_headers)
+    assert response.status_code == 201, response.text
+
+
+def test_stock_threshold_fires_once_per_crossing_and_is_persisted(
+    client: TestClient, auth_headers: dict[str, str], inventory_engine
+):
+    supply = _create_supply(client, auth_headers)
+    with Session(inventory_engine) as session:
+        repo.set_threshold(session, supply["id"], clinic_id=1, minimum_quantity=50)
+
+    _order(client, auth_headers, "inbound", supply["id"], 100)  # 0 -> 100: nunca estuvo por encima antes
+    _order(client, auth_headers, "outbound", supply["id"], 60)  # 100 -> 40: cruza -> 1 evento
+    _order(client, auth_headers, "outbound", supply["id"], 10)  # 40 -> 30: sigue bajo, no repite
+    _order(client, auth_headers, "inbound", supply["id"], 5)  # 30 -> 35: sigue bajo, no repite
+
+    events = _threshold_events(inventory_engine)
+    assert len(events) == 1
+    assert events[0].tags["clinic_id"] == 1
+    assert events[0].tags["current_stock"] == 40
+    assert events[0].tags["threshold_value"] == 50
+    assert events[0].service == "api"
+
+
+def test_stock_threshold_fires_again_after_recovery_and_new_fall(
+    client: TestClient, auth_headers: dict[str, str], inventory_engine
+):
+    supply = _create_supply(client, auth_headers)
+    with Session(inventory_engine) as session:
+        repo.set_threshold(session, supply["id"], clinic_id=1, minimum_quantity=50)
+
+    _order(client, auth_headers, "inbound", supply["id"], 100)
+    _order(client, auth_headers, "outbound", supply["id"], 60)  # cae: evento 1
+    _order(client, auth_headers, "inbound", supply["id"], 100)  # 40 -> 140: se recupera
+    _order(client, auth_headers, "outbound", supply["id"], 90)  # 140 -> 50: vuelve a caer (== umbral): evento 2
+
+    assert len(_threshold_events(inventory_engine)) == 2
+
+
+def test_flag_expiring_supplies_emits_one_persisted_event_per_clinic_lot(
+    client: TestClient, auth_headers: dict[str, str], inventory_engine
+):
+    from sqlmodel import select
+
+    import inventory_alerts
+    from telemetry_models import TelemetryEventRecord
+
+    supply = _create_supply(
+        client, auth_headers, sku="HCR-MED-LOT", expiry_date=(date.today() + timedelta(days=10)).isoformat()
+    )
+    for clinic_id, quantity in ((1, 40), (3, 25)):
+        client.post(
+            "/inventory/orders/inbound",
+            json={"supply_id": supply["id"], "quantity": quantity, "vendor_name": "MedLine Industries", "clinic_id": clinic_id},
+            headers=auth_headers,
+        )
+    # La clínica 3 consume todo su stock: sin nada en riesgo, no se marca.
+    client.post(
+        "/inventory/orders/outbound",
+        json={"supply_id": supply["id"], "quantity": 25, "consumption_type": "clinical_use", "clinic_id": 3},
+        headers=auth_headers,
+    )
+
+    with Session(inventory_engine) as session:
+        first_run = inventory_alerts.flag_expiring_supplies(session)
+        second_run = inventory_alerts.flag_expiring_supplies(session)  # p. ej. un reinicio de la API
+        events = session.exec(
+            select(TelemetryEventRecord).where(TelemetryEventRecord.event_type == "supply_expiry_flagged")
+        ).all()
+
+    assert first_run == 1
+    assert second_run == 0
+    assert len(events) == 1
+    tags = events[0].tags
+    assert tags["clinic_id"] == 1
+    assert tags["quantity_at_risk"] == 40
+    assert tags["eventId"] == inventory_alerts.expiry_event_id(1, supply["id"], date.today() + timedelta(days=10))

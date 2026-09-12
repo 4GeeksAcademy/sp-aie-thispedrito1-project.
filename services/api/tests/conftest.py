@@ -29,6 +29,7 @@ for path in (str(ROOT_DIR), str(API_DIR)):
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 from sqlmodel.pool import StaticPool  # noqa: E402
 
@@ -65,6 +66,14 @@ def inventory_engine():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
+
+    # SQLite no tiene esquemas con nombre: las tablas reporting.* del pipeline
+    # de negocio necesitan una base adjunta llamada `reporting`. Con StaticPool
+    # hay una sola conexion, asi que se adjunta una vez y vive lo que el engine.
+    @event.listens_for(engine, "connect")
+    def _attach_reporting_schema(dbapi_connection, _record):
+        dbapi_connection.execute("ATTACH DATABASE ':memory:' AS reporting")
+
     SQLModel.metadata.create_all(engine)
     yield engine
     SQLModel.metadata.drop_all(engine)

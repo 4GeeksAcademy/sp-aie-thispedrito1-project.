@@ -67,14 +67,23 @@ services/api/.venv/bin/python scripts/seed_incidents.py
 
 Carga el histórico del CSV como incidencias `origin=customer` aplicando las transformaciones del CONTEXT del hito (mapeo de estados, categorías y sedes). Es idempotente (usa el `incident_id` del CSV como `source_id` interno). Tras ejecutarlo, `/api/incidents/summary` debe dar: 94 total; open 28 / resolved 52 / discarded 14; patient_experience 61 / billing_error 20 / other 13.
 
+### Pipeline de desempeño de negocio (Prefect)
+
+```bash
+services/api/.venv/bin/python data/pipelines/pipeline.py                            # último mes cerrado
+services/api/.venv/bin/python data/pipelines/pipeline.py --month-start 2026-08-01   # un mes concreto
+```
+
+Desde la raíz del repo y con el venv de la API (Prefect `>=3.4,<4` está en `services/api/requirements.txt`; lee `DATABASE_URL` de `services/api/.env`). No hace falta servidor de Prefect: usa su API efímera en el propio proceso. Escribe en `reporting.*` de Supabase y deja un resumen de calidad en `data/eval/monthly_clinic_supply_performance/` (en `.gitignore`). Detalle en la sección de arquitectura y en `data/pipelines/PIPELINE_DESIGN.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
-# Backend (109 tests): desde services/api, con el venv activado
+# Backend (134 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (53 tests): desde uis/backoffice
+# Frontend (60 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -171,24 +180,42 @@ Dashboard técnico en el backoffice (rama `feat/telemetry-dashboard` sobre `main
 
 ### Pipeline de desempeño de negocio — `data/pipelines/PIPELINE_DESIGN.md`
 
-Hito de Data Pipelines, Parte 1 de 3: **solo diseño**, sin código de orquestación (rama `feat/business-pipeline-design`, apilada sobre `feat/telemetry-dashboard`, 2026-09-13). Pipeline `monthly_clinic_supply_performance`: produce el "Reporte Mensual de Desempeño de Insumos por Clínica" para la CEO y la CCO, con 4 KPIs (`total_supply_cost`, `supply_consumption_count`, `critical_stockout_count`, `expiry_risk_count`) por `clinic_id` × `month_start` (UTC) en `reporting.monthly_clinic_supply_performance`, con la tabla exacta del CONTEXT. Lee `telemetry_events` **en solo lectura** (nunca es destino) y **no** toca `services/telemetry/analysis.py` ni `GET /telemetry/report`. La Parte 2 lo implementará con Prefect en `data/pipelines/monthly_clinic_supply_performance/` + `data/process/`, expuesto por `services/reporting/` (`GET /reporting/monthly-clinic-supply-performance`, `GET /reporting/pipeline-runs/latest`, `POST /reporting/pipeline-runs`). `services/reporting/` importa de `data/pipelines/`, nunca al revés.
+Hito de Data Pipelines. **Parte 1 (diseño)** en `feat/business-pipeline-design`, apilada sobre `feat/telemetry-dashboard`. **Parte 2 (implementación resiliente con Prefect)** en `feat/resilient-business-pipeline`, apilada sobre la anterior. Ambas del 2026-09-13; la §9 del documento mapea cada requisito del ticket a su código.
 
-Requisitos previos que el diseño detectó en el código real y que **bloquean la Parte 2** (tabla P1-P6 del documento):
+Pipeline `monthly_clinic_supply_performance`: el "Reporte Mensual de Desempeño de Insumos por Clínica" para la CEO y la CCO. Calcula 4 KPIs (`total_supply_cost`, `supply_consumption_count`, `critical_stockout_count`, `expiry_risk_count`) por `clinic_id` × `month_start` (UTC) y los escribe en `reporting.monthly_clinic_supply_performance`, creada en Supabase con el DDL **literal** del CONTEXT. Lee `telemetry_events` **en solo lectura** y **no** toca `services/telemetry/analysis.py` ni `GET /telemetry/report`.
 
-- **P1 coste:** `unit_cost` añadido hoy como propiedad **opcional** de `inbound_order_created` en `docs/telemetry/event-schemas.json` (sin coste = coste desconocido, nunca cero). Falta el campo en el formulario de entregas y en el payload de `track()`.
-- **P2/P3:** `stock_threshold_triggered` y `supply_expiry_flagged` **no se persisten** (solo log), así que hoy dos de los cuatro KPIs darían siempre 0. Además, `supply_expiry_flagged` sale con `clinic_id: null` y se emite en cada arranque de la API (con `--reload`, en cada guardado). Solución prevista en el documento: `db_session` en `_check_stock_threshold` y un task diario con `eventId` determinista (`uuid5`).
-- **P5:** `clinic_id` se guarda como el id real en texto (`"7"`). Decisión del usuario: no inventar catálogo de nombres.
-- **P6:** `country` de los eventos es el del producto, no el de la clínica. Una partición con dos países se rechaza en lugar de mezclar USD y GBP.
+Mapa del código:
+- **`data/pipelines/pipeline.py`**: flow `monthly_clinic_supply_performance_flow` + 8 tasks + CLI + `run_manual_flow`.
+- **`data/pipelines/monthly_clinic_supply_performance/`**: `models.py` (3 tablas `reporting.*` y `ensure_reporting_schema`), `storage.py` (extracción y carga idempotente), `run_log.py` (log de corridas y lock), `queries.py` y `trigger.py` (lo que usa la API).
+- **`data/process/supply_performance_transforms.py`**: Pandas puro.
+- **`services/reporting/`**: `router.py` + `schemas.py`, con `GET /reporting/monthly-clinic-supply-performance` (KPIs), `GET /reporting/pipeline-runs/latest` (estado) y `POST /reporting/pipeline-runs` (solo admin, 202, 409 si el mes está bloqueado). `services/reporting/` importa de `data/pipelines/`, nunca al revés.
 
-Decisiones que conviene no romper al implementar:
+Requisitos previos de captura, resueltos en la Parte 2:
 
-- **`POST /telemetry/events` no deduplica**: el `eventId` vive en `tags` sin índice único, y el cliente reintenta con el mismo `eventId`. El pipeline deduplica por su cuenta (`eventId` y después `delivery_id`/`consumption_id`).
-- **Idempotencia:** recalcular siempre la ventana completa y sustituir (nunca sumar deltas), con upsert sobre `unique (clinic_id, month_start)` en una única transacción junto con `reporting.pipeline_run_partitions` (valores antes/después). Corridas el día 1 (cierre) y el día 8 (reconciliación de eventos tardíos). No se calcula el mes en curso.
-- **`critical_stockout_count` = insumos distintos en quiebre por clínica y mes, no eventos crudos**: `_check_stock_threshold` re-dispara tras cada orden mientras siga bajo mínimo. El conteo literal se conserva en `source_event_counts`.
-- **`supply_deliveries`/`supply_consumptions` solo auditan la captura** (`capture_ratio`), no alimentan KPIs. Si hay cero eventos con filas de dominio en la ventana, la corrida es `failed` y no se publica, para no repetir en silencio el bug del 2026-08-21.
-- **Caché de Prefect acotada al `run_id`**, no a los parámetros: con caché por parámetros, la reconciliación reutilizaría la extracción vieja. **Sin `TTLCache` en los endpoints de reporting**: quien escribe es un worker, otro proceso que no puede invalidar la caché de la API.
-- **`data/__init__.py` obligatorio** (verificado): sin él, Python fusiona `data/` de la raíz con `services/api/data/` (TinyDB) como un único namespace package.
-- Tests en la Parte 2: los esquemas con nombre no existen en SQLite, así que la fixture necesitará `ATTACH DATABASE ':memory:' AS reporting`, y los ids se generarán en Python (`uuid4`), como en `TelemetryEventRecord`.
+- **P1 coste:** `unit_cost` opcional en `inbound_order_created`, con campo "Coste unitario (USD/GBP)" en `/inventory/orders/inbound` (`parseUnitCost` en `types/inventory.ts`). Vacío = coste desconocido, nunca 0. Solo viaja en el evento: la API de inventario no guarda coste.
+- **P2:** `_check_stock_threshold` persiste (`db_session`) y **solo emite al cruzar el umbral** (stock `> threshold` antes de la orden y `<= threshold` después). Antes re-disparaba tras cada orden mientras la clínica siguiera bajo mínimo.
+- **P3:** `services/api/inventory_alerts.py` emite y persiste `supply_expiry_flagged` **una vez por lote (clínica, producto, `expiry_date`)**, con `eventId` determinista `uuid5` y comprobación previa en JSONB. Sigue corriendo en el startup de la API, ahora de forma idempotente.
+- **P5/P6 siguen abiertos:** `clinic_id` es el id real en texto (`"7"`), sin catálogo inventado. `country` de los eventos es el del **producto**, así que una clínica puede salir con la moneda de un producto de otro país (pasó con datos reales: la clínica 1 aparece `UK/GBP` en agosto). Si una partición mezcla dos países, se rechaza en vez de mezclar USD y GBP.
+
+Decisiones que conviene no romper:
+
+- **KPIs con la definición literal del CONTEXT** ("conteo de `stock_threshold_triggered`/`supply_expiry_flagged` del mes"). El brief de la Parte 2 prohíbe reinterpretarlos. Que ese conteo signifique "veces que cayó" y "lotes marcados" lo garantiza la **captura** (P2, P3), no la transformación. En la Parte 1 se había decidido "insumos distintos"; se descartó por eso.
+- **`POST /telemetry/events` no deduplica** (`eventId` va en `tags` sin índice único). La transformación deduplica por `eventId` y después por `delivery_id`/`consumption_id`.
+- **Idempotencia:** recalcular siempre la ventana completa y sustituir, nunca sumar deltas. Upsert `ON CONFLICT (clinic_id, month_start)` en una sola transacción con `reporting.pipeline_run_partitions` (valores antes/después). No se calcula el mes en curso (`resolve_month_start` lanza `ValueError`; el `POST` responde 400).
+- **Caché de la transformación: clave = huella del contenido** (mes + `TRANSFORM_VERSION` + `(id, timestamp)` de cada evento) y `cache_expiration` de 1 hora. Nunca una clave solo por mes: un evento tardío tiene que invalidarla. **Si cambias una regla de `supply_performance_transforms.py`, sube `TRANSFORM_VERSION`**, o durante una hora saldrá el resultado viejo de caché. Extracción y carga llevan `cache_policy=NONE`.
+- **Tolerancia a fallos parciales:** `extract_domain_activity` y `export_eval_snapshot` se llaman con `return_state=True`; si fallan, la corrida termina `completed_with_warnings`. Las críticas propagan: el `try/except` del flow registra `failed` en `pipeline_runs` y relanza. `start_pipeline_run` usa `retry_condition_fn` para no reintentar un `WindowLockedError`.
+- **`supply_deliveries`/`supply_consumptions` solo auditan la captura** (`capture_ratio`, aviso por debajo de 0.95). Cero eventos con filas de dominio en la ventana → `CaptureGapError`, `failed` y nada publicado.
+- **Disparo manual dentro de la API** (`BackgroundTasks` → `trigger.launch_manual_run`, que importa Prefect de forma diferida), sin servidor ni worker, por decisión del usuario. Si la API se reinicia a mitad de corrida, la corrida queda `running` hasta que el heartbeat (30 min) la marca `crashed` y libera el lock del mes. **Sin `TTLCache` en `/reporting`**: quien escribe no puede invalidar la caché del proceso de la API.
+- **Blocks de Prefect no implementados**: sin servidor persistente no hay dónde registrarlos. `DATABASE_URL` sale de `services/api/.env` a través de `database.get_inventory_engine()`.
+
+Gotchas reales encontrados:
+
+- **Prefect 3 y `from __future__ import annotations` en Python 3.9 no conviven en el módulo del flow**: Prefect genera el esquema de parámetros con Pydantic y falla con `CheckParameter is not fully defined`. `pipeline.py` no lleva ese import y usa `Optional[...]`. El resto de módulos sí puede llevarlo.
+- **Timestamps mezclados en `telemetry_events`**: `isoformat()` omite los microsegundos cuando valen 0, y Pandas 2 infiere el formato de la primera fila y revienta con las demás. Siempre `pd.to_datetime(..., utc=True, format="ISO8601")`. Lo encontró la primera ejecución real, no los tests. Tiene test de regresión que falla sin el arreglo.
+- **Columnas de enteros con `None` en Pandas**: con la inferencia por defecto pasan a `float64` (`clinic_id=1` llega como `1.0`). `events_to_frame` construye el DataFrame con `dtype=object`.
+- **`data/__init__.py` obligatorio** (verificado): sin él, Python fusiona `data/` de la raíz con `services/api/data/` (TinyDB) como un único namespace package. `data/pipelines/__init__.py` añade `services/api` a `sys.path` para que `python data/pipelines/pipeline.py` pueda importar `database`/`telemetry_models`.
+- **Tests:** SQLite no tiene esquemas con nombre, así que la fixture `inventory_engine` hace `ATTACH DATABASE ':memory:' AS reporting` en el evento `connect`. `test_business_pipeline.py` usa `prefect_test_harness` a nivel de módulo: sin él, Prefect apaga su servidor efímero en el `atexit` del intérprete y su log revienta contra la salida ya cerrada de pytest ("I/O operation on closed file"). `main.py` sube `httpx` a WARNING porque cada corrida de Prefect genera cientos de líneas `HTTP Request`. `pipeline.use_engine(engine)` sustituye Supabase en tests.
+- **Postgres necesita el esquema antes que las tablas**: `init_inventory_schema` en `main.py` llama a `ensure_reporting_schema` antes del `create_all` genérico, porque las tablas `reporting.*` quedan registradas en `SQLModel.metadata` al importar el router.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

@@ -131,6 +131,41 @@ def list_supplies_expiring_within(session: Session, days: int) -> list[tuple[Med
     return results
 
 
+def list_clinic_stock_expiring_within(
+    session: Session, days: int, today: date | None = None
+) -> list[tuple[MedicalSupply, int, int, int]]:
+    """Per-clinic version of list_supplies_expiring_within: one
+    (supply, clinic_id, clinic_stock, days_until_expiry) tuple for every
+    clinic that still holds stock of a supply expiring within `days` days.
+
+    supply_expiry_flagged must carry a real clinic_id — the business
+    pipeline aggregates by clinic, and the global reading above has none.
+    Clinics are discovered from deliveries (a clinic can only hold stock it
+    received); clinics already at zero are skipped, nothing at risk there."""
+    today = today or date.today()
+    supplies = session.exec(
+        select(MedicalSupply).where(MedicalSupply.expiry_date.is_not(None))
+    ).all()
+
+    results: list[tuple[MedicalSupply, int, int, int]] = []
+    for supply in supplies:
+        days_until_expiry = (supply.expiry_date - today).days
+        if not 0 <= days_until_expiry <= days:
+            continue
+        clinic_ids = sorted(
+            set(
+                session.exec(
+                    select(SupplyDelivery.clinic_id).where(SupplyDelivery.supply_id == supply.id)
+                ).all()
+            )
+        )
+        for clinic_id in clinic_ids:
+            stock = get_current_stock_for_clinic(session, supply.id, clinic_id)
+            if stock > 0:
+                results.append((supply, clinic_id, stock, days_until_expiry))
+    return results
+
+
 def list_orders_with_supply_data(session: Session) -> list[dict[str, Any]]:
     """Both order types, each with the supply's name/sku already attached.
 
