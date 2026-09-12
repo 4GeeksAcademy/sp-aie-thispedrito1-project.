@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from urllib.parse import quote
 
@@ -13,6 +14,16 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 logger = logging.getLogger(__name__)
 
 DEFAULT_SENDER = "onboarding@resend.dev"
+
+_EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def _redact_emails(text: str) -> str:
+    """HIPAA / UK GDPR: logs never carry email addresses. Provider error
+    messages can embed one (e.g. Resend's 'You can only send testing emails
+    to your own email address (...)'), so the reason is kept for debugging
+    but any address inside it is masked."""
+    return _EMAIL_PATTERN.sub("<email>", text)
 
 
 def _frontend_base_url() -> str:
@@ -84,6 +95,14 @@ def send_password_reset_email(to_email: str, token: str) -> bool:
             }
         )
         return True
-    except Exception:  # noqa: BLE001 - never let email delivery break the endpoint
-        logger.exception("Failed to send password reset email to %s", to_email)
+    except Exception as exc:  # noqa: BLE001 - never let email delivery break the endpoint
+        # No logger.exception on purpose: the traceback would repeat the raw
+        # provider message, email addresses included. The recipient is never
+        # logged either — the reason ("API key is invalid", etc.) is what
+        # actually diagnoses a delivery failure.
+        logger.error(
+            "Failed to send password reset email: %s: %s",
+            type(exc).__name__,
+            _redact_emails(str(exc)),
+        )
         return False

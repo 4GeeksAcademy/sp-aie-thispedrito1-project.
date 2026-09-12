@@ -46,6 +46,31 @@ def test_report_defaults_to_last_seven_days(client: TestClient) -> None:
     assert abs((end - start) - timedelta(days=7)) < timedelta(seconds=5)
 
 
+def test_report_accepts_backoffice_date_range_with_exclusive_end(client: TestClient) -> None:
+    """Contrato con la pantalla /telemetry del backoffice: toReportQuery
+    (uis/backoffice/types/telemetryReport.ts) manda Date.toISOString(), con
+    milisegundos, y convierte "del 15 al 15" en [15 00:00, 16 00:00). El
+    ultimo minuto del dia elegido entra; la medianoche siguiente no."""
+    client.post(
+        "/telemetry/events",
+        json={
+            "events": [
+                _event("page_viewed", "2026-06-15T23:30:00.000Z", {"route_template": "/telemetry"}, "evt-edge-in"),
+                _event("page_viewed", "2026-06-16T00:00:00.000Z", {"route_template": "/telemetry"}, "evt-edge-out"),
+            ]
+        },
+    )
+    response = client.get(
+        "/telemetry/report",
+        params={"start_date": "2026-06-15T00:00:00.000Z", "end_date": "2026-06-16T00:00:00.000Z"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert datetime.fromisoformat(body["period"]["from"]) == datetime.fromisoformat("2026-06-15T00:00:00+00:00")
+    rows = body["metrics"]["events_per_day"]
+    assert rows == [{"date": "2026-06-15", "event_type": "page_viewed", "count": 1}]
+
+
 def test_events_per_day_groups_by_date_and_event_type(client: TestClient) -> None:
     client.post(
         "/telemetry/events",
@@ -150,3 +175,51 @@ def test_report_is_cached_within_ttl(client: TestClient, monkeypatch) -> None:
     client.get("/telemetry/report", params=REPORT_WINDOW)
 
     assert calls["count"] == 1
+
+
+def _count_pipeline_runs(monkeypatch) -> dict:
+    calls = {"count": 0}
+    original = analysis.events_per_day
+
+    def counting_events_per_day(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr("routes.telemetry.events_per_day", counting_events_per_day)
+    return calls
+
+
+def test_report_default_window_is_cached_within_ttl(client: TestClient, monkeypatch) -> None:
+    """Regresion: sin parametros el periodo termina en datetime.now(), y la
+    clave de cache se construia con ese periodo ya resuelto — cada peticion
+    era una clave nueva y el pipeline se recalculaba siempre. El test de
+    arriba no lo detectaba porque solo usa fechas fijas."""
+    calls = _count_pipeline_runs(monkeypatch)
+
+    first = client.get("/telemetry/report")
+    second = client.get("/telemetry/report")
+
+    assert calls["count"] == 1
+    assert second.json() == first.json()
+
+
+def test_report_cache_treats_equivalent_timestamps_as_same_request(client: TestClient, monkeypatch) -> None:
+    calls = _count_pipeline_runs(monkeypatch)
+
+    client.get("/telemetry/report", params=REPORT_WINDOW)
+    client.get(
+        "/telemetry/report",
+        params={"start_date": "2026-06-14T00:00:00.000Z", "end_date": "2026-06-16T00:00:00.000Z"},
+    )
+
+    assert calls["count"] == 1
+
+
+def test_report_cache_does_not_mix_different_ranges(client: TestClient, monkeypatch) -> None:
+    calls = _count_pipeline_runs(monkeypatch)
+
+    client.get("/telemetry/report", params=REPORT_WINDOW)
+    client.get("/telemetry/report", params={"start_date": "2026-06-14T00:00:00Z", "end_date": "2026-06-17T00:00:00Z"})
+    client.get("/telemetry/report")
+
+    assert calls["count"] == 3
