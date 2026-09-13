@@ -51,6 +51,29 @@ services:
     networks:
       - healthcore-net
 
+  # Job nocturno (Ticket #DEV-53): supercronic lanza scripts/nightly_export.py
+  # según services/scheduler/crontab. Proceso aparte de `api` y SIN
+  # depends_on a propósito: el job habla directamente con Supabase y tiene que
+  # funcionar aunque la API esté caída o reiniciándose.
+  scheduler:
+    build:
+      context: .
+      dockerfile: services/scheduler/Dockerfile
+    env_file:
+      - .env
+    environment:
+      # La expresión cron del crontab se interpreta en UTC.
+      - TZ=UTC
+    volumes:
+      # El script importa services/job_runner y services/api (database,
+      # telemetry_models), lanza data/pipelines/pipeline.py y escribe los CSV
+      # en data/raw/, que así quedan en el host.
+      - ./scripts:/app/scripts
+      - ./services:/app/services
+      - ./data:/app/data
+    networks:
+      - healthcore-net
+
 networks:
   healthcore-net:
     name: healthcore-net

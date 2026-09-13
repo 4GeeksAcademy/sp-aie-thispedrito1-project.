@@ -1,0 +1,12 @@
+# Disparador del job nocturno (Ticket #DEV-53). Lo lee supercronic dentro del
+# contenedor `scheduler` de docker-compose.yml, que corre con TZ=UTC.
+#
+# 02:15 UTC todos los días:
+#   - después de medianoche UTC, así "ayer" ya es un día cerrado;
+#   - con 15 min de margen para eventos que el frontend manda en lote
+#     (cada 10 s, con reintentos) y llegan tarde;
+#   - antes de las 06:00 UTC, la hora a la que GET /reporting/pipeline-runs/latest
+#     empieza a marcar el informe como atrasado (is_report_stale).
+#
+# ┌ min  ┌ hora  ┌ día del mes  ┌ mes  ┌ día de la semana
+15       2       *              *      *     cd /app && python scripts/nightly_export.py
