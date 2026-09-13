@@ -60,6 +60,33 @@ ai-engineering-company-project-template/
 
 ---
 
+## Worker de tareas asíncronas (Celery + Redis)
+
+Las operaciones pesadas de la API se encolan en Redis y las ejecuta un worker de Celery en un proceso aparte
+(Ticket #DEV-55). Hoy: el recálculo del informe mensual (`POST /reporting/pipeline-runs` → `GET /tasks/{task_id}`).
+Detalle completo en [`docs/async-tasks.md`](docs/async-tasks.md).
+
+**Levantar** (desde la raíz del repo):
+
+```bash
+docker compose up -d --build redis worker flower   # broker, worker y Flower (http://localhost:5555)
+docker compose logs -f worker                      # logs: task_id, intento, estado y duración
+```
+
+En nativo, con Redis en Docker: `services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --concurrency=1`.
+
+**Detener:**
+
+```bash
+docker compose stop worker flower redis   # parada en caliente: el worker termina la tarea en curso
+docker compose down -v                    # además borra contenedores y el volumen de Redis
+```
+
+En nativo, `Ctrl+C` una vez (dos veces fuerza la salida). Detener la API no detiene el worker ni borra los mensajes
+que ya están en Redis.
+
+---
+
 ## Hitos (referencia)
 
 | Hito | Enfoque       | Entregables típicos                              |

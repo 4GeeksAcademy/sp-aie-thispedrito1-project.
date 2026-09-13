@@ -1,0 +1,17 @@
+[2026-09-13 18:44:04,179: INFO/MainProcess] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] received
+[2026-09-13 18:44:04,207: INFO/ForkPoolWorker-1] task_started task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=1
+[2026-09-13 18:44:08,792: WARNING/ForkPoolWorker-1] task_retry task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=1 status=retry duration_ms=4584.9 next_retry_in_s=10 error_type=RuntimeError error=Failed to reach API at http://127.0.0.1:9/api/
+[2026-09-13 18:44:08,870: INFO/ForkPoolWorker-1] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] retry: Retry in 10s: RuntimeError('Failed to reach API at http://127.0.0.1:9/api/')
+[2026-09-13 18:44:08,879: INFO/MainProcess] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] received
+[2026-09-13 18:44:18,779: INFO/ForkPoolWorker-1] task_started task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=2
+[2026-09-13 18:44:20,355: WARNING/ForkPoolWorker-1] task_retry task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=2 status=retry duration_ms=1576.7 next_retry_in_s=20 error_type=RuntimeError error=Failed to reach API at http://127.0.0.1:9/api/
+[2026-09-13 18:44:20,361: INFO/ForkPoolWorker-1] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] retry: Retry in 20s: RuntimeError('Failed to reach API at http://127.0.0.1:9/api/')
+[2026-09-13 18:44:20,369: INFO/MainProcess] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] received
+[2026-09-13 18:44:40,345: INFO/ForkPoolWorker-1] task_started task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=3
+[2026-09-13 18:44:41,889: WARNING/ForkPoolWorker-1] task_retry task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=3 status=retry duration_ms=1543.6 next_retry_in_s=40 error_type=RuntimeError error=Failed to reach API at http://127.0.0.1:9/api/
+[2026-09-13 18:44:41,893: INFO/ForkPoolWorker-1] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] retry: Retry in 40s: RuntimeError('Failed to reach API at http://127.0.0.1:9/api/')
+[2026-09-13 18:44:41,902: INFO/MainProcess] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] received
+[2026-09-13 18:45:21,903: INFO/ForkPoolWorker-1] task_started task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=4
+[2026-09-13 18:45:23,428: ERROR/ForkPoolWorker-1] task_failed task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=4 status=failure duration_ms=1524.8 error_type=RuntimeError error=Failed to reach API at http://127.0.0.1:9/api/
+[2026-09-13 18:45:23,923: ERROR/ForkPoolWorker-1] task_dead_lettered task=reporting.run_monthly_clinic_supply_performance task_id=dde9a57e-f41a-4874-a69e-505187677b60 attempt=4 error_type=RuntimeError
+[2026-09-13 18:45:23,924: ERROR/ForkPoolWorker-1] Task reporting.run_monthly_clinic_supply_performance[dde9a57e-f41a-4874-a69e-505187677b60] raised unexpected: RuntimeError('Failed to reach API at http://127.0.0.1:9/api/')

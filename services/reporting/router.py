@@ -11,7 +11,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from kombu.exceptions import OperationalError
+from redis.exceptions import RedisError
 from sqlmodel import Session
 
 from data.pipelines.monthly_clinic_supply_performance import queries, run_log, trigger
@@ -23,6 +25,7 @@ from services.reporting.schemas import (
     PipelineRunStatus,
     PipelineRunTriggerRequest,
 )
+from services.tasks.pipeline_tasks import enqueue_monthly_pipeline_run
 
 router = APIRouter(prefix="/reporting", tags=["reporting"], dependencies=[Depends(get_current_user)])
 
@@ -65,7 +68,6 @@ def get_latest_pipeline_run(session: Session = Depends(get_inventory_db)) -> Dic
     status_code=status.HTTP_202_ACCEPTED,
 )
 def trigger_pipeline_run(
-    background_tasks: BackgroundTasks,
     payload: Optional[PipelineRunTriggerRequest] = None,
     session: Session = Depends(get_inventory_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -73,12 +75,16 @@ def trigger_pipeline_run(
     """Disparo manual. Solo admin: recalcular el paquete de la junta no es una
     accion de cualquier usuario autenticado.
 
-    202 en cuanto la corrida queda encolada (con su lock); el flow corre en
-    segundo plano y su resultado se consulta en /pipeline-runs/latest."""
+    202 en cuanto la corrida queda encolada. Desde el Ticket #DEV-55 el flow
+    ya no corre en este proceso: se encola en Celery y lo ejecuta el worker,
+    que es quien crea la fila con el lock usando el run_id reservado aquí.
+    Esta petición solo lee (el 202 debe salir en <200 ms). El task_id se
+    consulta en GET /tasks/{task_id}; el detalle de negocio sigue en
+    /pipeline-runs/latest en cuanto el worker recoge la tarea."""
     require_admin(current_user)
     requested_month = payload.month_start if payload else None
     try:
-        run = trigger.trigger_monthly_run(session, requested_month, triggered_by=current_user["id"])
+        month_start, run_id = trigger.reserve_monthly_run(session, requested_month)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except run_log.WindowLockedError as exc:
@@ -90,5 +96,10 @@ def trigger_pipeline_run(
             },
         ) from exc
 
-    background_tasks.add_task(trigger.launch_manual_run, str(run.run_id), run.window_start, current_user["id"])
-    return {"run_id": run.run_id, "status": "queued", "month_start": run.window_start}
+    try:
+        task_id = enqueue_monthly_pipeline_run(str(run_id), month_start, current_user["id"])
+    except (RedisError, OperationalError, OSError) as exc:
+        # Sin broker no se ha escrito nada: ni fila ni lock que liberar.
+        raise HTTPException(status_code=503, detail="Task queue unavailable. Try again later.") from exc
+
+    return {"task_id": task_id, "run_id": run_id, "status": "queued", "month_start": month_start}

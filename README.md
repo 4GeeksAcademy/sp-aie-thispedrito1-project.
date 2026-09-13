@@ -60,6 +60,33 @@ ai-engineering-company-project-template/
 
 ---
 
+## Async task worker (Celery + Redis)
+
+Heavy API operations are queued in Redis and executed by a Celery worker in a separate process (Ticket #DEV-55).
+Currently: the monthly report recompute (`POST /reporting/pipeline-runs` → `GET /tasks/{task_id}`).
+Full details (in Spanish) in [`docs/async-tasks.md`](docs/async-tasks.md).
+
+**Start** (from the repo root):
+
+```bash
+docker compose up -d --build redis worker flower   # broker, worker and Flower (http://localhost:5555)
+docker compose logs -f worker                      # logs: task_id, attempt, status and duration
+```
+
+Natively, with Redis in Docker: `services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --concurrency=1`.
+
+**Stop:**
+
+```bash
+docker compose stop worker flower redis   # warm shutdown: the worker finishes the running task
+docker compose down -v                    # also removes containers and the Redis volume
+```
+
+Natively, press `Ctrl+C` once (twice forces exit). Stopping the API does not stop the worker or drop messages
+already in Redis.
+
+---
+
 ## Milestones (reference)
 
 | Milestone | Focus        | Typical deliverables                        |

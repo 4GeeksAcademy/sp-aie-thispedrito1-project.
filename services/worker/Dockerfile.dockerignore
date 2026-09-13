@@ -1,0 +1,4 @@
+# El build del worker usa la raíz del repo como contexto; sin esto Docker
+# enviaría también node_modules, .venv y .git. Solo hace falta un archivo.
+*
+!services/api/requirements.txt

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from data.pipelines import pipeline
-from data.pipelines.monthly_clinic_supply_performance import run_log, storage, trigger
+from data.pipelines.monthly_clinic_supply_performance import run_log, storage
 from data.pipelines.monthly_clinic_supply_performance.models import (
     MonthlyClinicSupplyPerformance,
     PipelineRun,
@@ -29,6 +29,8 @@ from data.process.supply_performance_transforms import (
     transform_supply_events,
 )
 from inventory_models import MedicalSupply, SupplyDelivery
+from services.reporting import router as reporting_router
+from services.tasks import pipeline_tasks
 from telemetry_models import TelemetryEventRecord
 
 AUGUST = date(2026, 8, 1)
@@ -455,7 +457,7 @@ def test_latest_run_endpoint_exposes_run_metadata(client: TestClient, auth_heade
 
 
 def test_manual_trigger_requires_admin_and_valid_closed_month(client: TestClient, auth_headers, admin_headers, monkeypatch):
-    monkeypatch.setattr(trigger, "launch_manual_run", lambda *args: None)
+    monkeypatch.setattr(reporting_router, "enqueue_monthly_pipeline_run", lambda *args: "task-never-used")
     current_month = datetime.now(timezone.utc).date().replace(day=1).isoformat()
 
     assert client.post("/reporting/pipeline-runs", json={"month_start": "2026-01-01"}, headers=auth_headers).status_code == 403
@@ -463,30 +465,94 @@ def test_manual_trigger_requires_admin_and_valid_closed_month(client: TestClient
     assert client.post("/reporting/pipeline-runs", json={"month_start": "2026-01-15"}, headers=admin_headers).status_code == 400
 
 
-def test_manual_trigger_queues_run_launches_flow_and_rejects_overlap(client: TestClient, admin_headers, monkeypatch):
-    launched = []
-    monkeypatch.setattr(trigger, "launch_manual_run", lambda *args: launched.append(args))
+def test_manual_trigger_reserves_run_enqueues_task_and_writes_nothing(
+    client: TestClient, admin_headers, inventory_engine, monkeypatch
+):
+    """Ticket #DEV-55: la petición solo lee; la fila con el lock la crea el
+    worker, con el run_id que se devuelve aquí."""
+    enqueued = []
+
+    def fake_enqueue(run_id, month_start, triggered_by):
+        enqueued.append((run_id, month_start, triggered_by))
+        return "5f0c3d1e-8f5b-4c55-9a52-6f7f2b1f0a11"
+
+    monkeypatch.setattr(reporting_router, "enqueue_monthly_pipeline_run", fake_enqueue)
 
     response = client.post("/reporting/pipeline-runs", json={"month_start": "2026-01-01"}, headers=admin_headers)
 
     assert response.status_code == 202
     body = response.json()
+    assert body["task_id"] == "5f0c3d1e-8f5b-4c55-9a52-6f7f2b1f0a11"
     assert body["status"] == "queued" and body["month_start"] == "2026-01-01"
-    assert launched == [(body["run_id"], date(2026, 1, 1), launched[0][2])]
+    assert enqueued == [(body["run_id"], date(2026, 1, 1), enqueued[0][2])]
+    with Session(inventory_engine) as session:
+        assert session.exec(select(PipelineRun)).all() == []
 
-    # El launcher simulado no avanza la corrida: sigue activa -> 409 con su run_id.
+
+def test_manual_trigger_rejects_a_month_with_a_live_run_but_not_a_stale_one(
+    client: TestClient, admin_headers, inventory_engine, monkeypatch
+):
+    monkeypatch.setattr(reporting_router, "enqueue_monthly_pipeline_run", lambda *args: "task-id")
+    with Session(inventory_engine) as session:
+        live = run_log.create_queued_run(session, month_start=date(2026, 1, 1), trigger_type="manual")
+        live_id = str(live.run_id)
+        stale = run_log.create_queued_run(session, month_start=date(2026, 2, 1), trigger_type="manual")
+        stale.queued_at = datetime.now(timezone.utc) - timedelta(minutes=run_log.HEARTBEAT_STALE_MINUTES + 1)
+        session.add(stale)
+        session.commit()
+
     overlap = client.post("/reporting/pipeline-runs", json={"month_start": "2026-01-01"}, headers=admin_headers)
     assert overlap.status_code == 409
-    assert overlap.json()["detail"]["run_id"] == body["run_id"]
+    assert overlap.json()["detail"]["run_id"] == live_id
+    # La caducada no bloquea: el worker la marcará crashed al tomar el lock.
+    assert client.post("/reporting/pipeline-runs", json={"month_start": "2026-02-01"}, headers=admin_headers).status_code == 202
 
 
-def test_manual_trigger_runs_the_real_flow_in_background(client: TestClient, admin_headers, pipeline_engine):
+def test_task_is_cancelled_when_the_month_was_taken_after_the_api_check(pipeline_engine):
+    """Carrera: dos peticiones pasan la comprobación a la vez. El índice único
+    sigue impidiendo dos corridas: la segunda tarea termina `cancelled`."""
+    pipeline_tasks.use_engine(pipeline_engine)
+    with Session(pipeline_engine) as session:
+        winner_id = run_log.create_queued_run(session, month_start=AUGUST, trigger_type="manual").run_id
+    reserved = str(uuid.uuid4())
+    try:
+        result = pipeline_tasks.run_monthly_clinic_supply_performance.apply(
+            kwargs={"month_start": "2026-08-01", "run_id": reserved, "triggered_by": "u-1"}
+        )
+    finally:
+        pipeline_tasks.use_engine(None)
+
+    assert result.state == "SUCCESS"
+    assert result.result["status"] == "cancelled"
+    assert str(winner_id) in result.result["reason"]
+    with Session(pipeline_engine) as session:
+        assert session.get(PipelineRun, uuid.UUID(reserved)) is None  # el id reservado nunca llegó a existir
+        assert session.get(PipelineRun, winner_id).status == "queued"  # la corrida ganadora sigue intacta
+
+
+def test_celery_task_runs_the_real_flow_for_the_queued_run(client: TestClient, admin_headers, pipeline_engine, monkeypatch):
+    """De punta a punta sin Redis: la API encola y la tarea de Celery se
+    ejecuta en modo síncrono (`apply`), con el flow real de Prefect."""
     _seed_august(pipeline_engine)
+    pipeline_tasks.use_engine(pipeline_engine)
+    executed = {}
 
-    response = client.post("/reporting/pipeline-runs", json={"month_start": "2026-08-01"}, headers=admin_headers)
+    def enqueue_and_run_inline(run_id, month_start, triggered_by):
+        result = pipeline_tasks.run_monthly_clinic_supply_performance.apply(
+            kwargs={"month_start": month_start.isoformat(), "run_id": run_id, "triggered_by": triggered_by}
+        )
+        executed["state"], executed["result"] = result.state, result.result
+        return result.id
+
+    monkeypatch.setattr(reporting_router, "enqueue_monthly_pipeline_run", enqueue_and_run_inline)
+    try:
+        response = client.post("/reporting/pipeline-runs", json={"month_start": "2026-08-01"}, headers=admin_headers)
+    finally:
+        pipeline_tasks.use_engine(None)
     assert response.status_code == 202
 
-    # TestClient ejecuta las BackgroundTasks antes de devolver la respuesta.
+    assert executed["state"] == "SUCCESS"
+    assert executed["result"]["run_id"] == response.json()["run_id"]  # el primer intento usa la fila de la API
     latest = client.get("/reporting/pipeline-runs/latest", headers=admin_headers).json()
     assert latest["run_id"] == response.json()["run_id"]
     assert latest["trigger_type"] == "manual"

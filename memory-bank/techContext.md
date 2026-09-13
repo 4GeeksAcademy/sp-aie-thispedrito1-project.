@@ -9,6 +9,7 @@
 - Backend API en FastAPI con TinyDB para persistencia operativa local de proveedores, usuarios y perfiles.
 - Seguridad backend con JWT stateless (python-jose), hash de contrasenas con passlib+bcrypt y dependencia OAuth2PasswordBearer.
 - Envio de correo transaccional con Resend (SDK python) para el flujo de restablecimiento de contrasena (AUTH-03); API key y remitente por variables de entorno.
+- Cola de tareas asincronas con Celery 5.6 + Redis 7.4 (broker y result backend) y Flower 2.0 para monitorizarla (Ticket #DEV-55). Worker en proceso aparte de FastAPI; `REDIS_URL` por entorno.
 
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:
@@ -129,3 +130,15 @@
   - **Contenedores cron:** supercronic en vez del `cron` de Debian, porque cron borra las variables de entorno (`DATABASE_URL` llega por `env_file`) y no escribe en stdout. La descarga se verifica con el sha256 publicado en la API de releases de GitHub (`assets[].digest`), por arquitectura (`TARGETARCH`). Un build con contexto en la raíz del monorepo necesita `<Dockerfile>.dockerignore` junto al Dockerfile.
   - **`docker compose` usa el `.env` de la raíz, no `services/api/.env`**, y `load_dotenv` no sobreescribe variables ya definidas. Si ambos archivos divergen, el contenedor gana. Para probar un contenedor con otra variable sin tocar archivos de secretos: `VAR=... docker compose run --rm --no-deps -e VAR servicio ...`.
   - **Tests de concurrencia con procesos reales:** SQLite en archivo con `connect_args={"timeout": 30}`, arranque sincronizado pasando un instante futuro como argumento, y el DDL hecho antes de lanzarlos (`create(checkfirst=True)` no es atómico).
+
+- Cola de tareas asincronas con Celery (`feat/async-task-queue`, 2026-09-13, Ticket #DEV-55). Lecciones tecnicas reutilizables:
+  - **Medir antes de culpar a la cola.** El 202 tardaba ~500 ms y parecia Celery; publicar en Redis costaba 2-4 ms y el tiempo era el lock en Supabase (varios viajes de ~60 ms a Irlanda). Se movio la escritura del lock al worker y la API solo lee.
+  - **psycopg2 envia `BEGIN` como viaje aparte.** Para una lectura suelta en una peticion sensible a latencia: `session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})` antes de consultar (~170 -> ~113 ms). Funciona tambien con la SQLite de tests.
+  - **Celery `retry_jitter` es `True` por defecto** y sortea la espera entre 0 y el tope: un "backoff" puede reintentar al instante. Desactivarlo si hay que garantizar una espera minima.
+  - **`task.apply()` ejecuta los reintentos de autoretry de forma sincrona** (sin esperar el countdown) y llama a `on_failure` al agotarlos: permite probar reintentos + DLQ sin Redis. `on_failure` solo se llama en el fallo definitivo, no en cada reintento.
+  - **Un `__call__` propio en una clase base de tarea es seguro:** `push_request` fusiona la peticion existente, asi que `self.request.id` y `retries` se conservan.
+  - **El limite duro (`time_limit`) mata el proceso hijo y no llama a `on_failure`**; el blando (`soft_time_limit`) si pasa por el. Poner el blando por debajo si la DLQ depende de `on_failure`.
+  - **Con `acks_late`, `visibility_timeout` de Redis debe superar `task_time_limit`**, o Redis reentrega una tarea sana y se ejecuta dos veces.
+  - **El logger `celery.app.trace` repite el mensaje crudo de la excepcion** (y su traceback) fuera del control de la tarea: un `logging.Filter` en ese logger que enmascare `msg` y precalcule `record.exc_text`.
+  - **Prefect 3 lanza `CancelledRun` cuando un flow devuelve `Cancelled(...)` y se llama directamente**; no devuelve el estado. Hay que capturarlo explicitamente en quien llama (y no dejar que un autoretry lo trate como fallo).
+  - **Llamar a Prefect desde un worker de Celery (prefork) funciona** con su API efimera por proceso hijo, igual que en la API. Para simular un fallo de infraestructura sin tocar datos: `PREFECT_API_URL` a un puerto cerrado y `PREFECT_CLIENT_MAX_RETRIES=0`.
