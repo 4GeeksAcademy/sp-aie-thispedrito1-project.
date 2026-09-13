@@ -18,7 +18,12 @@ from data.pipelines.monthly_clinic_supply_performance.models import (
     MonthlyClinicSupplyPerformance,
     PipelineRunPartition,
 )
-from data.process.supply_performance_transforms import KPI_FIELDS, SOURCE_EVENT_TYPES, row_values
+from data.process.supply_performance_transforms import (
+    EXTRACTED_TAG_KEYS,
+    KPI_FIELDS,
+    SOURCE_EVENT_TYPES,
+    row_values,
+)
 from inventory_models import SupplyConsumption, SupplyDelivery
 from telemetry_models import TelemetryEventRecord
 
@@ -30,8 +35,10 @@ def fetch_supply_events(session: Session, window_start: datetime, window_end: da
     existentes), refinado despues con Pandas. Solo SELECT: este pipeline
     nunca escribe en telemetry_events.
 
-    Devuelve dicts con timestamp en ISO: son el input de la task de
-    transformacion, que Prefect serializa para calcular su clave de cache."""
+    Devuelve dicts con timestamp en ISO y `tags` recortado a
+    EXTRACTED_TAG_KEYS: sin userId ni requestId. Son el parametro del subflow
+    de KPIs, y Prefect guarda los parametros de cada flow run en su base, asi
+    que la minimizacion tiene que ocurrir aqui y no despues."""
     statement = (
         select(
             TelemetryEventRecord.id,
@@ -47,7 +54,12 @@ def fetch_supply_events(session: Session, window_start: datetime, window_end: da
         .order_by(TelemetryEventRecord.timestamp, TelemetryEventRecord.id)
     )
     return [
-        {"id": row_id, "timestamp": timestamp.isoformat(), "event_type": event_type, "tags": tags or {}}
+        {
+            "id": row_id,
+            "timestamp": timestamp.isoformat(),
+            "event_type": event_type,
+            "tags": {key: tags[key] for key in EXTRACTED_TAG_KEYS if key in tags} if isinstance(tags, dict) else {},
+        }
         for row_id, timestamp, event_type, tags in session.exec(statement).all()
     ]
 

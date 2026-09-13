@@ -49,6 +49,7 @@ class PipelineRunStatus(BaseModel):
     partitions_removed: Optional[int] = None
     partitions_rejected: Optional[int] = None
     warnings: List[str]
+    clinics_with_unrecorded_cost: List[str] = []
     error_type: Optional[str] = None
     error_message: Optional[str] = None
     is_stale: bool
