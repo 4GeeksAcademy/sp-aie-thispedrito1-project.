@@ -1,9 +1,9 @@
-# Diseño — Pipeline de Desempeño de Negocio (Partes 1 y 2 de 3)
+# Diseño — Pipeline de Desempeño de Negocio (Partes 1, 2 y 3)
 
 > **Pipeline:** `monthly_clinic_supply_performance`
 > **Entregable de negocio:** "Reporte Mensual de Desempeño de Insumos por Clínica"
 > **Audiencia:** Dra. Okonkwo (CEO) y Claire (Chief Compliance Officer)
-> **Estado:** Parte 1 (diseño) en `feat/business-pipeline-design` · **Parte 2 (implementación resiliente) en `feat/resilient-business-pipeline`** · Parte 3 pendiente (subflows, tests y dashboard)
+> **Estado:** Parte 1 (diseño) en `feat/business-pipeline-design` · Parte 2 (implementación resiliente) en `feat/resilient-business-pipeline` · **Parte 3 (subflows, tests unitarios y dashboard) en `feat/pipeline-subflows-dashboard`**
 > **Fecha:** 2026-09-13
 
 ## Cómo ejecutarlo
@@ -17,7 +17,9 @@ services/api/.venv/bin/python data/pipelines/pipeline.py --month-start 2026-08-0
 - **Frecuencia prevista del ciclo de reporting:** mensual, **día 1 a las 02:00 UTC** (cierre del mes anterior, listo antes del primer día hábil, como exige el CONTEXT) y **día 8 a las 02:00 UTC** (reconciliación de eventos tardíos, misma ventana). Además, disparo manual desde `POST /reporting/pipeline-runs` (solo admin).
 - No hace falta arrancar un servidor de Prefect: sin `PREFECT_API_URL`, Prefect levanta su API efímera dentro del propio proceso. El programador (los dos cron) es trabajo de despliegue, fuera de esta entrega (§9.4).
 - Código de salida `0` si la corrida termina `completed` o `completed_with_warnings`; `1` si falla (el error queda en `reporting.pipeline_runs`).
-- Lo implementado y en qué se aparta del diseño original: **§9**.
+- Lo implementado y en qué se aparta del diseño original: **§9** (Parte 2) y **§10** (Parte 3: subflows, tests y dashboard).
+- Tests unitarios de las tasks de transformación, sin base de datos: `services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py`.
+- Dashboard para la dirección: `/reporting` en el backoffice ("Informe mensual" en el menú).
 
 Este documento describe un pipeline **nuevo**. No sustituye ni modifica el reporte técnico de telemetría (`services/telemetry/analysis.py`, `GET /telemetry/report`), que sigue sirviendo a ingeniería igual que antes. `telemetry_events` es la **fuente** de este pipeline y se lee en modo solo lectura: nunca es su destino.
 
@@ -34,6 +36,7 @@ Este documento describe un pipeline **nuevo**. No sustituye ni modifica el repor
 7. [Cumplimiento HIPAA / UK GDPR](#7-cumplimiento-hipaa--uk-gdpr)
 8. [Fuera de alcance de la v1](#8-fuera-de-alcance-de-la-v1)
 9. [Implementación (Parte 2)](#9-implementación-parte-2)
+10. [Subflows, tests unitarios y dashboard (Parte 3)](#10-subflows-tests-unitarios-y-dashboard-parte-3)
 
 ---
 
@@ -489,7 +492,9 @@ def monthly_clinic_supply_performance_flow(
 ) -> dict: ...
 ```
 
-En lugar de hooks `on_failure`/`on_crashed`, el flow envuelve las tasks críticas en un `try/except` que registra el fallo en `pipeline_runs` y relanza la excepción, para que Prefect marque `Failed`. Es más explícito, y el hook no tendría acceso al `run_id` cuando lo crea el propio flow. Un `Crashed` real (proceso muerto) lo recoge el heartbeat en la siguiente corrida.
+**Desde la Parte 3 el flow principal no contiene lógica de ETL**: coordina cuatro subflows (§10.1) con entradas y salidas explícitas.
+
+En lugar de hooks `on_failure`/`on_crashed`, el flow envuelve los subflows críticos en un `try/except` que registra el fallo en `pipeline_runs` y relanza la excepción, para que Prefect marque `Failed`. Es más explícito, y el hook no tendría acceso al `run_id` cuando lo crea el propio flow. Un `Crashed` real (proceso muerto) lo recoge el heartbeat en la siguiente corrida.
 
 ### 4.2 Tasks
 
@@ -498,10 +503,15 @@ En lugar de hooks `on_failure`/`on_crashed`, el flow envuelve las tasks crítica
 | `start_pipeline_run` | Control | Crea el esquema `reporting` si falta, marca como `crashed` las corridas sin heartbeat, adquiere el lock y pasa la corrida a `running` con `prefect_flow_run_id` | `retries=2`, `[5, 15]` s, con `retry_condition_fn` que **no** reintenta `WindowLockedError` (el flow termina `Cancelled`) |
 | `extract_supply_events` | Extracción | Consulta §2.2 sobre `telemetry_events` (solo `SELECT`); checkpoint `phase=extracted` | `retries=3`, `[10, 30, 90]` s, `timeout_seconds=120`, `cache_policy=NONE` |
 | `extract_domain_activity` | Extracción | Conteos por `clinic_id` de `supply_deliveries` y `supply_consumptions` | Igual que la anterior. **No crítica**: el flow la llama con `return_state=True` y, si falla, sigue con el aviso `coverage_unavailable` |
-| `transform_monthly_clinic_metrics` | Transformación | Pasos 1-7 de §2.4 (`data/process/supply_performance_transforms.py`) | Sin reintentos (determinista). `cache_key_fn=supply_events_cache_key` + `cache_expiration=timedelta(hours=1)` (§3.5) |
+| `prepare_clinic_supply_events` | Transformación | Pasos 1-3 de §2.4: aplanar, recortar al mes, validar y deduplicar | Sin reintentos (determinista). `cache_key_fn=supply_events_cache_key` + `cache_expiration=timedelta(hours=1)` (§3.5) |
+| `compute_total_supply_cost` | Transformación | KPI "Costo de insumos por clínica" | Pura, `cache_policy=NONE` |
+| `compute_supply_consumption_count` | Transformación | KPI "Volumen de consumo de insumos" | Pura, `cache_policy=NONE` |
+| `compute_critical_stockout_count` | Transformación | KPI "Frecuencia de quiebre crítico" | Pura, `cache_policy=NONE` |
+| `compute_expiry_risk_count` | Transformación | KPI "Conteo de riesgo de vencimiento" | Pura, `cache_policy=NONE` |
+| `assemble_monthly_clinic_supply_performance` | Transformación | Une los 4 KPIs en filas: país, moneda y rechazo de clínicas con dos países | Pura, `cache_policy=NONE` |
 | `validate_monthly_aggregates` | Validación | Cobertura contra dominio (§3.4); lanza `CaptureGapError` si la captura está rota | Sin reintentos |
-| `load_monthly_clinic_supply_performance` | Carga | Transacción única: lectura previa, upsert `ON CONFLICT (clinic_id, month_start)`, borrados y `pipeline_run_partitions`; checkpoint `phase=loaded` | `retries=3`, `[15, 60, 180]` s, `timeout_seconds=180`. Es seguro reintentar porque la transacción es atómica |
-| `export_eval_snapshot` | Eval (opcional) | Escribe `data/eval/monthly_clinic_supply_performance/<mes>/<run_id>.json` con agregados y métricas de calidad (sin `userId` ni payloads) | **No crítica**: `return_state=True`; si falla, la corrida termina `completed_with_warnings` (`eval_snapshot_failed`) con la carga ya confirmada |
+| `upsert_monthly_clinic_supply_performance_rows` | Carga | Transacción única: lectura previa, upsert `ON CONFLICT (clinic_id, month_start)`, borrados y `pipeline_run_partitions`; checkpoint `phase=loaded` | `retries=3`, `[15, 60, 180]` s, `timeout_seconds=180`. Es seguro reintentar porque la transacción es atómica |
+| `write_supply_performance_eval_snapshot` | Eval (opcional) | Escribe `data/eval/monthly_clinic_supply_performance/<mes>/<run_id>.json` con agregados y métricas de calidad (sin `userId` ni payloads) | Va dentro de un subflow **no crítico**, invocado con `return_state=True`; si falla, la corrida termina `completed_with_warnings` (`eval_snapshot_failed`) con la carga ya confirmada |
 | `finish_pipeline_run` | Control | Cierra `pipeline_runs` con contadores, `quality_checks` y `status` final | `retries=3`, `[5, 15, 45]` s |
 
 ### 4.3 Estados relevantes
@@ -549,7 +559,7 @@ data/
   pipelines/
     __init__.py                                 # añade services/api a sys.path
     PIPELINE_DESIGN.md                          # este documento
-    pipeline.py                                 # @flow + 8 @task + CLI (__main__) + run_manual_flow
+    pipeline.py                                 # flow principal + 4 subflows + 13 @task + CLI (__main__) + run_manual_flow
     monthly_clinic_supply_performance/
       __init__.py
       models.py      # SQLModel de las 3 tablas reporting.* + ensure_reporting_schema (DDL literal del CONTEXT)
@@ -562,11 +572,18 @@ data/
     supply_performance_transforms.py            # funciones puras de Pandas (§2.4)
   eval/
     monthly_clinic_supply_performance/          # snapshots por corrida (en .gitignore)
+tests/
+  pipelines/
+    conftest.py                                 # añade la raíz a sys.path
+    test_pipeline.py                            # tests unitarios de las tasks de transformación (Parte 3)
 services/
   reporting/
     __init__.py
     schemas.py       # response_model de cada endpoint
     router.py        # APIRouter(prefix="/reporting"), montado en services/api/main.py
+uis/backoffice/
+  app/reporting/page.tsx                        # dashboard de negocio (Parte 3)
+  types/businessReport.ts, services/reportingApi.ts, components/BarList.tsx
 services/api/
   inventory_alerts.py                           # P3: supply_expiry_flagged por lote y clínica, idempotente
 ```
@@ -683,6 +700,89 @@ Rama `feat/resilient-business-pipeline`, apilada sobre `feat/business-pipeline-d
 ### 9.4 Pendiente (Parte 3 y despliegue)
 
 - Programar los dos cron (día 1 y día 8) como deployments de Prefect con un worker, y mover `DATABASE_URL` y los umbrales a blocks (§4.4).
-- Dividir las etapas en subflows (Parte 3) y construir el dashboard sobre `GET /reporting/monthly-clinic-supply-performance`.
+- ~~Dividir las etapas en subflows y construir el dashboard~~: hecho en la Parte 3 (§10).
 - Catálogo de clínicas con su país (P5, P6) y captura de `department` (P4).
 - Índice único de `eventId` en la ingesta de `POST /telemetry/events` (§3.5), independiente de este pipeline.
+
+---
+
+## 10. Subflows, tests unitarios y dashboard (Parte 3)
+
+Rama `feat/pipeline-subflows-dashboard`, apilada sobre `feat/resilient-business-pipeline`.
+
+### 10.1 Topología de subflows
+
+```mermaid
+flowchart TD
+    MAIN["monthly_clinic_supply_performance_flow<br/>(coordina, sin lógica de ETL)"]
+    START["start_pipeline_run<br/>(lock + log)"]
+    EXT["subflow extract_clinic_supply_activity"]
+    KPI["subflow compute_monthly_clinic_supply_kpis"]
+    LOAD["subflow load_monthly_clinic_supply_performance"]
+    EVAL["subflow export_supply_performance_eval_snapshot<br/>(opcional, return_state=True)"]
+    FINISH["finish_pipeline_run"]
+
+    MAIN --> START --> EXT --> KPI --> LOAD --> EVAL --> FINISH
+
+    EXT -.-> T1["extract_supply_events"]
+    EXT -.-> T2["extract_domain_activity<br/>(return_state=True)"]
+    KPI -.-> P["prepare_clinic_supply_events<br/>(caché 1 h)"]
+    P -.-> K1["compute_total_supply_cost"]
+    P -.-> K2["compute_supply_consumption_count"]
+    P -.-> K3["compute_critical_stockout_count"]
+    P -.-> K4["compute_expiry_risk_count"]
+    K1 & K2 & K3 & K4 -.-> A["assemble_monthly_clinic_supply_performance"]
+    A -.-> V["validate_monthly_aggregates"]
+    LOAD -.-> U["upsert_monthly_clinic_supply_performance_rows"]
+```
+
+| Subflow | Entradas explícitas | Salida | Ejecutable por separado |
+| --- | --- | --- | --- |
+| `extract_clinic_supply_activity` | `month_start`, `run_id` opcional | `{events, domain_activity}` (tags minimizados, sin `userId`) | Sí: sin `run_id` no escribe checkpoint |
+| `compute_monthly_clinic_supply_kpis` | `events`, `month_start`, `domain_activity` opcional | `rows`, `rejected`, `partition_event_counts`, `quality`, `counts`, `validation` (sin DataFrames) | Sí: no toca la base de datos |
+| `load_monthly_clinic_supply_performance` | `run_id`, `month_start`, `rows`, `rejected`, `partition_event_counts` | `inserted/updated/unchanged/removed/rejected` | Sí, con el `run_id` de una corrida existente: cada fila publicada se audita contra él |
+| `export_supply_performance_eval_snapshot` | `run_id`, `month_start`, `transformed`, `load_counts` | Ruta del JSON en `data/eval/` | Sí; el flow principal lo llama con `return_state=True` |
+
+Decisiones del refactor:
+
+- **Una task por KPI**, con el nombre del campo del CONTEXT. Antes los 4 KPIs salían de una sola función. Ahora cada uno es una función pura en `data/process/supply_performance_transforms.py` (`total_supply_cost_by_clinic`, etc.) envuelta en su task, y puede testearse, reutilizarse y verse en la UI de Prefect por separado. `transform_supply_events` se mantiene como composición de las mismas funciones.
+- **Funciones de KPI defensivas por sí mismas**: cada una ignora `clinic_id` fuera de 1-12 o no entero, y trata un `unit_cost` ausente, negativo o no numérico como coste desconocido, aunque se la llame sin pasar por la validación previa. `events_to_frame` tolera `tags` que no son un objeto y timestamps ilegibles (`errors="coerce"`, contados como filas inválidas).
+- **Minimización adelantada a la extracción**: `storage.fetch_supply_events` recorta `tags` a `EXTRACTED_TAG_KEYS`. Con subflows, los eventos son **parámetros** de `compute_monthly_clinic_supply_kpis`, y Prefect guarda los parámetros de cada flow run en su propia base. Recortar después habría dejado `userId` en esa base.
+- **Logging tolerante al contexto** (`_logger()`): `get_run_logger()` lanza `MissingContextError` fuera de un flow o task run, y las tasks se llaman sueltas en los tests unitarios (`task.fn`).
+- **Verificado con datos reales**: tras el refactor, `python data/pipelines/pipeline.py` contra Supabase dio `unchanged: 2` para agosto. El código nuevo produce exactamente los mismos KPIs que publicó la Parte 2.
+
+### 10.2 Tests unitarios (`tests/pipelines/test_pipeline.py`)
+
+```bash
+services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py   # desde la raíz: 10 tests, <2 s
+```
+
+Llaman a la función de cada task (`task.fn`) con eventos en memoria con la forma de `telemetry_events`, sin base de datos, servidor de Prefect ni APIs externas:
+
+| Requisito | Test |
+| --- | --- |
+| ≥ 3 tasks de transformación | `compute_total_supply_cost`, `compute_supply_consumption_count`, `compute_critical_stockout_count`, `compute_expiry_risk_count`, `prepare_clinic_supply_events`, `assemble_monthly_clinic_supply_performance`, `validate_monthly_aggregates` |
+| KPI contra la definición del CONTEXT, calculado a mano | `test_compute_total_supply_cost_matches_context_definition_for_hand_computed_input`: 120 × 0,35 + 40 × 1,10 = **86,00 USD**, con el GBP aparte |
+| Comportamiento defensivo ante input inválido | Coste ausente, negativo o texto; `clinic_id` nulo, en texto, decimal o fuera de rango; `tags` que no es un objeto; timestamp ilegible; mes vacío |
+
+Comprobado que los tests protegen de verdad: con la fórmula del coste saboteada (sin multiplicar por la cantidad) fallan 3 de los 10.
+
+### 10.3 Dashboard de negocio (`/reporting`)
+
+Pantalla del backoffice para la CEO y la CCO, alimentada por `GET /reporting/monthly-clinic-supply-performance` y `GET /reporting/pipeline-runs/latest`:
+
+- Un panel por KPI con el **nombre exacto** y la descripción ("Qué mide") de la sección 2 del CONTEXT.
+- **Período** visible ("Agosto de 2026 · del 1 al 31"), selector de mes y "Último mes calculado".
+- **Costo por país y moneda**, con total propio y nota explícita de que USD y GBP no se suman. Los conteos llevan total de la red.
+- Lenguaje de negocio: "Clínica 7", "EE. UU." / "Reino Unido", importes con formato de moneda. Sin `run_id`, `event_type` ni estados técnicos.
+- Un mes sin informe (404) se explica como estado vacío, no como error. Un fallo real muestra "Reintentar".
+- **Costo incompleto marcado** (hallazgo del recorrido en Chrome con datos reales): las entradas de agosto de 2026 son anteriores al campo "Coste unitario", así que su `total_supply_cost` publicado es `0,00`, un coste desconocido y no un gasto cero. La tabla del KPI se limitaba a mostrar "0,00 US$" y la dirección lo habría leído como gasto nulo. Ahora `GET /reporting/pipeline-runs/latest` expone `clinics_with_unrecorded_cost` (a partir de `quality_checks.inbound_events_missing_cost`, que la Parte 2 ya calculaba). El dashboard marca esas clínicas como "Incompleto: incluye compras sin coste registrado" y añade un aviso. El contrato de `GET /reporting/monthly-clinic-supply-performance` no cambia.
+- Recorrido verificado en Chrome con sesión real contra Supabase: los 4 paneles con datos de agosto, avisos, modo claro, un mes sin informe (julio) y consola sin errores.
+
+### 10.4 Mejora adicional de las preguntas de diseño
+
+Implementada: **alertas de silencio y de captura incompleta visibles para la dirección** (preguntas 4 y 6 de la Parte 1).
+
+- **Qué responde:** la pregunta 4 (distinguir "no pasó nada" de "el informe no se generó") y la 6 (distinguir actividad real de pérdida de mediciones). El backend ya calculaba `is_stale` y los avisos `low_capture_ratio`/`coverage_unavailable` desde la Parte 2, pero solo los veía quien consultara la API.
+- **Por qué se priorizó:** es la única de las mejoras pendientes que cambia cómo la audiencia del CONTEXT interpreta los números. El lock de concurrencia y el heartbeat ya estaban hechos en la Parte 2. El `Idempotency-Key` / índice único de `eventId` (pregunta 9) exige modificar `telemetry_events`, que esta parte pide dejar intacta, y el pipeline ya deduplica por su cuenta.
+- **Cómo:** `describeReportNotices` (`uis/backoffice/types/businessReport.ts`) traduce esas señales a avisos en lenguaje llano: "El informe del último mes cerrado todavía no se ha generado…", "Parte de la actividad de inventario de este mes no quedó registrada…". Solo se aplican al mes de la corrida correspondiente y ocultan avisos puramente técnicos (`eval_snapshot_failed`).

@@ -83,6 +83,12 @@ def get_latest_run_status(session: Session) -> Optional[dict[str, Any]]:
         "partitions_removed": run.partitions_removed,
         "partitions_rejected": run.partitions_rejected,
         "warnings": list((run.quality_checks or {}).get("warnings", [])),
+        # Clinicas con compras (inbound_order_created) sin unit_cost en el mes
+        # de esta corrida: su total_supply_cost publicado esta incompleto, no
+        # es un gasto cero. Sin esto el dashboard mostraria "0,00" sin aviso.
+        "clinics_with_unrecorded_cost": sorted(
+            (run.quality_checks or {}).get("inbound_events_missing_cost", {}), key=int
+        ),
         "error_type": run.error_type,
         "error_message": run.error_message,
         "is_stale": run_log.is_report_stale(run_log.get_latest_completed_window(session)),
