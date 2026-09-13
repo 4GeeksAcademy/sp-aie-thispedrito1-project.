@@ -16,7 +16,10 @@ dependencies = [
   "sqlmodel==0.0.24",
   "psycopg2-binary==2.9.12",
   "pandas==2.2.3",
-  "prefect>=3.4,<4"
+  "prefect>=3.4,<4",
+  "celery[redis]==5.6.3",
+  "redis==6.4.0",
+  "flower==2.0.1"
 ]
 
 [project.scripts]

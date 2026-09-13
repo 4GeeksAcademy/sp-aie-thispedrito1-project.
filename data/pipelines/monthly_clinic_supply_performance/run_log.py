@@ -77,22 +77,41 @@ def get_active_run(session: Session, month_start: date) -> Optional[PipelineRun]
     ).first()
 
 
-def release_stale_runs(session: Session, month_start: date, now: Optional[datetime] = None) -> int:
-    """Una corrida activa sin heartbeat reciente murio sin ejecutar su
-    manejo de errores (proceso matado, estado Crashed de Prefect). Se marca
-    crashed para liberar el lock del mes."""
-    now = now or _now()
-    limit = now - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
-    released = 0
-    for run in session.exec(
+def is_stale(run: PipelineRun, now: Optional[datetime] = None) -> bool:
+    """Corrida activa sin heartbeat reciente: murio sin ejecutar su manejo de
+    errores (proceso matado, estado Crashed de Prefect)."""
+    last_signal = _as_utc(run.heartbeat_at) or _as_utc(run.queued_at)
+    return last_signal < (now or _now()) - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
+
+
+def _active_runs(session: Session, month_start: date) -> list:
+    return session.exec(
         select(PipelineRun).where(
             PipelineRun.pipeline_name == PIPELINE_NAME,
             PipelineRun.window_start == month_start,
             PipelineRun.status.in_(ACTIVE_RUN_STATUSES),
         )
-    ).all():
-        last_signal = _as_utc(run.heartbeat_at) or _as_utc(run.queued_at)
-        if last_signal < limit:
+    ).all()
+
+
+def find_blocking_run(session: Session, month_start: date, now: Optional[datetime] = None) -> Optional[PipelineRun]:
+    """Comprobacion de SOLO LECTURA, en una consulta: la corrida activa y viva
+    que bloquea el mes, si la hay. La usa POST /reporting/pipeline-runs para
+    responder 409 sin escribir (Ticket #DEV-55: el 202 debe salir en <200 ms,
+    y crear el lock en Supabase costaba ~500 ms). No sustituye al lock: el
+    worker lo toma despues con create_queued_run y el indice unico parcial.
+    Una corrida caducada no bloquea, igual que en create_queued_run."""
+    return next((run for run in _active_runs(session, month_start) if not is_stale(run, now)), None)
+
+
+def release_stale_runs(session: Session, month_start: date, now: Optional[datetime] = None) -> int:
+    """Una corrida activa sin heartbeat reciente murio sin ejecutar su
+    manejo de errores (proceso matado, estado Crashed de Prefect). Se marca
+    crashed para liberar el lock del mes."""
+    now = now or _now()
+    released = 0
+    for run in _active_runs(session, month_start):
+        if is_stale(run, now):
             run.status = "crashed"
             run.finished_at = now
             run.error_type = "stale_heartbeat"
@@ -110,12 +129,17 @@ def create_queued_run(
     month_start: date,
     trigger_type: str,
     triggered_by: Optional[str] = None,
+    run_id: Optional[uuid.UUID] = None,
 ) -> PipelineRun:
     """Inserta la fila `queued` que ES el lock del mes: el indice unico
     parcial impide una segunda corrida activa. Si choca, WindowLockedError
-    con el run_id de la corrida que ya esta en marcha."""
+    con el run_id de la corrida que ya esta en marcha.
+
+    `run_id`: el que reservo la API al encolar (Ticket #DEV-55), para que el
+    id devuelto en el 202 sea el de la fila que crea el worker."""
     release_stale_runs(session, month_start)
     run = PipelineRun(
+        run_id=run_id or uuid.uuid4(),
         pipeline_name=PIPELINE_NAME,
         trigger_type=trigger_type,
         triggered_by=triggered_by,

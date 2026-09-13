@@ -5,13 +5,22 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      # Productor de la cola (Ticket #DEV-55): mismo Redis que el worker, por
+      # nombre de servicio Docker. Gana sobre el valor de .env.
+      - REDIS_URL=redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
       # Live source for --reload; packages/ carries the shared Python
       # package (packages/shared/incidents_validation) main.py imports via
       # a repo-root sys.path insert — same relative depth as on the host.
-      - ./services/api:/app/services/api
+      # All of services/ (not just services/api): main.py imports
+      # services.reporting and services.tasks, and those import data/pipelines.
+      # Before #DEV-55 only ./services/api was mounted, so /reporting could
+      # not even be imported inside this container.
+      - ./services:/app/services
+      - ./data:/app/data
       - ./packages:/app/packages
       # main.py also serves the legacy static page from uis/web/index.html
       # at GET / (ROOT_DIR / "uis" / "web" / "index.html") — without this,
@@ -73,6 +82,85 @@ services:
       - ./data:/app/data
     networks:
       - healthcore-net
+
+  # --- Cola de tareas asíncronas (Ticket #DEV-55, docs/async-tasks.md) -------
+  # Productor (api) → broker (redis) → consumidor (worker), con flower para
+  # verlo. Ninguno lleva `restart:`: es un entorno de clase y nada debe quedar
+  # corriendo solo. Se levantan con
+  #   docker compose up -d --build redis worker flower
+  # y se paran con `docker compose stop worker flower redis`.
+  redis:
+    image: redis:7.4-alpine
+    # noeviction: con la memoria llena, Redis rechaza escrituras nuevas en vez
+    # de borrar claves en silencio, que podrían ser encargos en cola. Sin un
+    # maxmemory la política no tendría efecto (el límite por defecto es 0,
+    # "sin límite"). appendonly: los mensajes sobreviven a un reinicio de Redis.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction", "--appendonly", "yes"]
+    ports:
+      # Solo desde este Mac: el broker no tiene contraseña en desarrollo.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - healthcore-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    image: healthcore-celery:dev
+    # --concurrency=1: el recálculo mensual es pesado y hay una corrida por
+    # mes; un solo proceso hijo basta y evita dos pipelines compitiendo.
+    command: ["celery", "-A", "services.celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - TZ=UTC
+    volumes:
+      # La tarea importa services/ (celery_app, tasks, services/api/database)
+      # y ejecuta data/pipelines. SIN depends_on a api: detener la API no
+      # debe detener el worker ni los mensajes que ya están en Redis.
+      - ./services:/app/services
+      - ./data:/app/data
+    # Parada en caliente: Celery termina la tarea en curso antes de salir.
+    stop_grace_period: 60s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - healthcore-net
+
+  flower:
+    image: healthcore-celery:dev
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    command: ["celery", "-A", "services.celery_app", "flower", "--port=5555"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      # Flower no tiene login en desarrollo y muestra los argumentos de las
+      # tareas (ids de usuario): accesible solo desde este Mac.
+      - "127.0.0.1:5555:5555"
+    volumes:
+      - ./services:/app/services
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - healthcore-net
+
+volumes:
+  redis-data:
 
 networks:
   healthcore-net:
