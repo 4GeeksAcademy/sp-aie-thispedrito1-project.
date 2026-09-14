@@ -1,0 +1,12 @@
+# Dependencias del modelo de predicción de ventas (scripts/train_sales_forecast.py).
+#
+# Van aparte de services/api/requirements.txt a propósito: la API y el worker
+# de Celery no las usan, y meterlas allí engordaría sus imágenes Docker.
+# Se instalan en el mismo venv de la API, con el que se ejecuta todo el Python
+# del monorepo (pandas ya viene de allí):
+#
+#     uv pip install --python services/api/.venv/bin/python -r requirements-ml.txt
+#
+# Versiones: las últimas compatibles con Python 3.9 (el venv local).
+scikit-learn==1.6.1
+matplotlib==3.9.4
