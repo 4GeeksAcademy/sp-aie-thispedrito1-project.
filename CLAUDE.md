@@ -76,6 +76,15 @@ services/api/.venv/bin/python data/pipelines/pipeline.py --month-start 2026-08-0
 
 Desde la raíz del repo y con el venv de la API (Prefect `>=3.4,<4` está en `services/api/requirements.txt`; lee `DATABASE_URL` de `services/api/.env`). No hace falta servidor de Prefect: usa su API efímera en el propio proceso. Escribe en `reporting.*` de Supabase y deja un resumen de calidad en `data/eval/monthly_clinic_supply_performance/` (en `.gitignore`). Detalle en la sección de arquitectura y en `data/pipelines/PIPELINE_DESIGN.md`.
 
+### Modelo de predicción de ventas (regresión)
+
+```bash
+uv pip install --python services/api/.venv/bin/python -r requirements-ml.txt   # scikit-learn + matplotlib, una vez
+services/api/.venv/bin/python scripts/train_sales_forecast.py                   # escribe docs/sales-forecast/
+```
+
+Desde la raíz. `uv` está en `~/.local/bin` (instalado el 2026-09-14). Detalle en la sección de arquitectura y en `docs/sales-forecast.md`.
+
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
 ```bash
@@ -105,6 +114,9 @@ services/api/.venv/bin/python -m pytest tests/jobs
 
 # Tests unitarios del pipeline de negocio (10 tests, sin base de datos): desde la RAÍZ del repo
 services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py
+
+# Tests del modelo de predicción de ventas (15: split 8/2, fuga de datos, limpieza, métricas): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 
 # Backend (167 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
@@ -304,6 +316,25 @@ Decisiones que conviene no romper:
 - **`pipeline_tasks.py` no importa Prefect a nivel de módulo** (lo importa la API para encolar). `celery_app.py` sube `httpx` a WARNING, como `main.py`: sin eso, ~40 líneas `HTTP Request` por corrida en el log del worker.
 - **Gotcha de verificación:** la TinyDB real no tiene ningún admin. Se verificó con un admin en una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un token generado con `create_access_token`, sin login, para no escribir `login_succeeded` en Supabase. Para reproducir la DLQ sin tocar datos ni código: worker con `PREFECT_API_URL=http://127.0.0.1:9/api PREFECT_CLIENT_MAX_RETRIES=0`.
 - **No verificado:** el build de `services/worker/Dockerfile` y `worker`/`flower` dentro de Docker (quedaban 2,8 GB de disco). `docker compose config` sí resuelve. Todo lo demás se verificó contra Supabase real: API/worker/Flower nativos + Redis en Docker, ciclo `started→success`, 409, API apagada con mensaje en cola, DLQ tras 4 intentos y capturas de Flower en `docs/async-tasks/`.
+
+### Predicción de ventas con regresión — `docs/sales-forecast.md`
+
+Clase "Predicción de Ventas con un Modelo de Regresión", rama `feature/sales-forecast-model` (nombre del README de la clase) apilada sobre `feat/async-task-queue`, 2026-09-14. Responde a la RFI de Finanzas: predecir `revenue_usd` de la fila `consolidated` de `data/raw/healthcore_sales.csv` (2016-01 a 2025-12, copia byte a byte del provisto).
+
+Mapa del código:
+- **`data/process/sales_forecast.py`**: lógica pura (carga + limpieza + validación del CONTEXT, `split_train_test`, `fit_forecast_model`, `predict`, métricas).
+- **`scripts/train_sales_forecast.py`**: CLI que entrena, imprime el informe y escribe `forecast.png`, `metrics.json` y `test_predictions.csv` en `docs/sales-forecast/` (versionados como evidencia del PR).
+- **`tests/pipelines/test_sales_forecast.py`**: 15 tests con el CSV real.
+- **`requirements-ml.txt`** en la raíz: fuera de `services/api/requirements.txt` a propósito, para no engordar las imágenes de la API y del worker.
+
+Decisiones que conviene no romper:
+- **Split por año natural y cronológico** (2016-2023 / 2024-2025), nunca aleatorio. Con un split aleatorio fallan 4 tests (comprobado). El test `test_model_never_sees_test_values` multiplica la prueba ×10 y exige predicciones idénticas: vigila el entrenamiento, no el split, así que hacen falta las dos capas.
+- **Modelo = tendencia × patrón estacional** (decisión del usuario, junto con Random Forest). Regresión lineal sobre `log(revenue)` con `StandardScaler` y RF sobre `month_of_year` con el ingreso dividido por la tendencia. Un RF directo no extrapola (máximo train 3,73 M, test hasta 4,04 M): 6,0 % de error frente a 2,4 %.
+- **`visits_count` y `avg_revenue_per_visit_usd` no son variables del modelo**: `revenue = visits × avg` exactamente (fuga de datos). La identidad sí se usa para reconstruir un `revenue_usd` nulo; si no se puede, no se interpola y la validación rechaza el hueco.
+- **Franja del 80 % = percentiles 10/90 de los errores out-of-bag del RF**, no la dispersión entre árboles. Esta última mide la duda sobre la media y cubría 4 de 24 meses reales; la OOB cubre 20 de 24.
+- **Métricas sobre la prueba:** "K2 Score" del enunciado = R² (`k2_score`). Gini normalizado. MSE en USD² y como RMSE en % del ingreso mensual medio (el CONTEXT pide un "porcentaje"; el MSE en USD² dividido por USD no tiene sentido). PSI con 5 cubetas (24 meses) sobre `avg_revenue_per_visit_usd` train vs test, como indicador indirecto de la mezcla, porque el CSV no trae filas por país; más un PSI de predicción vs real.
+- Resultados con `random_state=42`: RMSE 2,82 %, R² 0,929, Gini 0,936, PSI de mezcla 0,48 (cambio significativo real: +1,3 % de ingreso por consulta, documentado como hallazgo) y PSI de predicción 0,09.
+- **Desviación del README de la clase:** pide `uv add` en un proyecto de raíz, pero aquí todo el Python usa el venv de la API, así que se usa `uv pip install --python services/api/.venv/bin/python`. scikit-learn 1.6.1 y matplotlib 3.9.4 son las últimas compatibles con Python 3.9.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

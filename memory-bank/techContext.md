@@ -10,6 +10,7 @@
 - Seguridad backend con JWT stateless (python-jose), hash de contrasenas con passlib+bcrypt y dependencia OAuth2PasswordBearer.
 - Envio de correo transaccional con Resend (SDK python) para el flujo de restablecimiento de contrasena (AUTH-03); API key y remitente por variables de entorno.
 - Cola de tareas asincronas con Celery 5.6 + Redis 7.4 (broker y result backend) y Flower 2.0 para monitorizarla (Ticket #DEV-55). Worker en proceso aparte de FastAPI; `REDIS_URL` por entorno.
+- Machine learning: scikit-learn 1.6.1 + matplotlib 3.9.4 (ultimas compatibles con Python 3.9), declaradas en `requirements-ml.txt` de la raiz e instaladas con `uv pip install` en el venv de la API. `uv` 0.12.13 esta instalado en `~/.local/bin` desde el 2026-09-14.
 
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:
@@ -142,3 +143,10 @@
   - **El logger `celery.app.trace` repite el mensaje crudo de la excepcion** (y su traceback) fuera del control de la tarea: un `logging.Filter` en ese logger que enmascare `msg` y precalcule `record.exc_text`.
   - **Prefect 3 lanza `CancelledRun` cuando un flow devuelve `Cancelled(...)` y se llama directamente**; no devuelve el estado. Hay que capturarlo explicitamente en quien llama (y no dejar que un autoretry lo trate como fallo).
   - **Llamar a Prefect desde un worker de Celery (prefork) funciona** con su API efimera por proceso hijo, igual que en la API. Para simular un fallo de infraestructura sin tocar datos: `PREFECT_API_URL` a un puerto cerrado y `PREFECT_CLIENT_MAX_RETRIES=0`.
+
+- Prediccion de ventas con regresion (`feature/sales-forecast-model`, 2026-09-14, ver `docs/sales-forecast.md`). Lecciones reutilizables para cualquier modelo sobre series temporales del proyecto:
+  - **Random Forest y XGBoost no extrapolan:** predicen promediando valores vistos, asi que una serie con crecimiento necesita separar la tendencia (regresion sobre `log(y)`, ajustada solo con entrenamiento) y dejar al arbol lo estacionario (`y / tendencia`). Sin eso, el RF directo tuvo un 6,0 % de error frente al 2,4 %.
+  - **Buscar identidades exactas antes de elegir variables:** en `healthcore_sales.csv`, `revenue_usd = visits_count × avg_revenue_per_visit_usd` al 0,00 %. Una variable contemporanea que reconstruye el target es fuga de datos aunque el split sea correcto. La identidad si sirve para imputar nulos del target.
+  - **Rango de variabilidad de un RF: errores out-of-bag (`oob_score=True`, `oob_prediction_`), no la dispersion entre arboles.** La dispersion mide la incertidumbre de la media y dio una franja con cobertura real de 4/24; los percentiles 10/90 del error OOB relativo cubrieron 20/24 sin gastar datos de prueba. Reportar siempre la cobertura observada junto a la nominal.
+  - **Tests de fuga en dos capas:** una comprueba el split (meses disjuntos, orden cronologico) y otra el entrenamiento (alterar la prueba no cambia las predicciones). Un split aleatorio saboteado rompe la primera y no la segunda.
+  - **PSI con pocas observaciones:** con 24 meses de prueba, 5 cubetas por cuantiles de la referencia (10 dejarian ~2 meses por cubeta), extremos abiertos (`-inf`/`inf`) y proporciones minimas de 1e-4 para evitar `ln(0)`.

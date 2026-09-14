@@ -1,0 +1,38 @@
+{
+  "periods": {
+    "train": "2016-01 a 2023-12",
+    "test": "2024-01 a 2025-12",
+    "train_rows": 96,
+    "test_rows": 24
+  },
+  "mse": {
+    "mse_usd2": 8982703155.110956,
+    "rmse_usd": 94777.12358534076,
+    "rmse_pct_of_mean_monthly_revenue": 2.8151689984906403,
+    "mae_usd": 81453.94100267316,
+    "mape_pct": 2.440629185250185,
+    "mean_monthly_revenue_usd": 3366658.4008333334
+  },
+  "k2_score_r2": 0.9290170303757308,
+  "gini_normalized": 0.9361250523578063,
+  "psi": {
+    "avg_revenue_per_visit_train_vs_test": {
+      "value": 0.4799866280235139,
+      "label": "cambio significativo"
+    },
+    "predicted_vs_actual_test": {
+      "value": 0.09325194049401977,
+      "label": "estable"
+    },
+    "bins": 5
+  },
+  "variability_band": {
+    "nominal_coverage_pct": 80.0,
+    "observed_coverage_pct": 83.33333333333334,
+    "months_inside": 20,
+    "lower_error_pct": -3.782861961379652,
+    "upper_error_pct": 3.865054742770324
+  },
+  "implied_annual_growth_pct": 4.156006451388805,
+  "random_state": 42
+}
