@@ -12,7 +12,11 @@ Pasos:
    2016-2023: MAE y RMSE de entrenamiento y validación, media ± desviación.
 3. Curva de aprendizaje con ventanas móviles de 24 a 84 meses.
 4. Diagnóstico: bien ajustado / underfitting / overfitting.
-5. Escribe en --output-dir: learning_curve.png y sales_forecast_evaluation.json.
+5. Repite 2-4 con los dos modelos de comparación, malos a propósito
+   (data/process/sales_forecast_comparison.py), para mostrar cómo se ven de
+   verdad un underfitting y un overfitting con estos datos.
+6. Escribe en --output-dir: learning_curve.png, fit_diagnosis_map.png y
+   sales_forecast_evaluation.json.
 
 El reporte razonado está en data/eval/evaluation_report.md.
 Solo cifras agregadas mensuales: ningún dato de pacientes (CONTEXT, sección 1).
@@ -36,16 +40,21 @@ matplotlib.use("Agg")  # sin ventana: el script también corre en terminal/CI
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from matplotlib import patheffects  # noqa: E402
+from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from data.process.sales_forecast import (  # noqa: E402
     SalesDataError,
     load_sales_data,
     split_train_test,
 )
+from data.process.sales_forecast_comparison import COMPARISON_MODELS  # noqa: E402
 from data.process.sales_forecast_evaluation import (  # noqa: E402
+    CURRENT_MODEL,
+    OVERFIT_GAP_RATIO,
     PRIMARY_METRIC,
     cross_validate_forecast,
-    diagnose_fit,
+    diagnose_cross_validation,
     learning_curve,
 )
 
@@ -150,32 +159,152 @@ def print_report(cv: dict, curve: list, diagnosis: str) -> None:
     print(f"Diagnóstico: {diagnosis}")
 
 
+# Mismos colores que la paleta validada de las gráficas del proyecto: azul y
+# naranja para las dos series; verde, amarillo y salmón solo para las zonas
+# del diagnóstico, siempre con su nombre escrito.
+INK = "#121412"
+INK_2 = "#4b4e49"
+MUTED = "#7d8079"
+TRAIN_COLOR = "#2a78d6"
+VALIDATION_COLOR = "#eb6834"
+ZONE_COLORS = {"bien ajustado": "#0ca30c", "overfitting": "#fab219", "underfitting": "#ec835a"}
+MARKERS = {"Nuestro modelo": "o", "Solo tendencia": "s", "Bosque que memoriza": "^"}
+HALO = [patheffects.withStroke(linewidth=4, foreground="white")]
+
+
+def _es(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
+def evaluate_forecaster(train, forecaster) -> dict:
+    cv = cross_validate_forecast(train, forecaster)
+    return {
+        "name": forecaster.name,
+        "diagnosis": diagnose_cross_validation(cv),
+        "cross_validation": cv,
+        "learning_curve": learning_curve(train, forecaster=forecaster),
+    }
+
+
+def plot_fit_diagnosis_map(evaluations: list, path: Path) -> None:
+    """Arriba: mapa de diagnóstico con las tres zonas. Abajo: las tres curvas."""
+    baseline = evaluations[0]["cross_validation"]["summary"]["seasonal_naive_validation"]["rmse_pct"]["mean"]
+    limit = 12.0
+    kink = baseline / OVERFIT_GAP_RATIO  # donde la línea 1,5× alcanza la referencia
+
+    fig = plt.figure(figsize=(13, 12.5))
+    grid = fig.add_gridspec(2, 3, height_ratios=[1.45, 1], hspace=0.34, wspace=0.14)
+    ax = fig.add_subplot(grid[0, :])
+
+    ax.fill([baseline, limit, limit, baseline], [0, 0, limit, limit], color=ZONE_COLORS["underfitting"], alpha=0.16, lw=0)
+    ax.fill([0, baseline, baseline, kink], [0, 0, baseline, baseline], color=ZONE_COLORS["bien ajustado"], alpha=0.16, lw=0)
+    ax.fill([0, kink, baseline, baseline, 0], [0, baseline, baseline, limit, limit], color=ZONE_COLORS["overfitting"], alpha=0.2, lw=0)
+    ax.plot([0, limit], [0, limit], color=MUTED, lw=1, ls=(0, (1, 3)))
+    ax.plot([0, kink, baseline], [0, baseline, baseline], color=INK_2, lw=1.5)
+    ax.axvline(baseline, color=INK_2, lw=1.5)
+
+    line_text = dict(fontsize=9, color=MUTED, rotation_mode="anchor", transform_rotates_text=True, path_effects=HALO)
+    ax.text(0.3, 0.45 + 0.25, f"{OVERFIT_GAP_RATIO:g} × entrenamiento".replace(".", ","), rotation=np.degrees(np.arctan(OVERFIT_GAP_RATIO)), **line_text)
+    ax.text(6.6, 6.6 - 0.45, "validación = entrenamiento", rotation=45, **line_text)
+    ax.text(baseline + 0.12, 0.3, f"{_es(baseline)} % referencia ingenua", fontsize=9, color=MUTED, path_effects=HALO)
+
+    zone_text = dict(fontsize=14, fontweight="bold", color=INK, path_effects=HALO)
+    ax.text(0.3, 11.2, "OVERFITTING", **zone_text)
+    ax.text(baseline + 0.3, 11.2, "UNDERFITTING", **zone_text)
+    ax.text(baseline - 0.2, 0.3, "BIEN AJUSTADO", ha="right", **zone_text)
+
+    label_offsets = {"Nuestro modelo": (14, 2, "left"), "Bosque que memoriza": (14, 2, "left"), "Solo tendencia": (-16, -34, "right")}
+    for evaluation in evaluations:
+        name = evaluation["name"]
+        cv = evaluation["cross_validation"]
+        for fold in cv["folds"]:
+            ax.plot(fold["train"]["rmse_pct"], fold["validation"]["rmse_pct"], "o", ms=5, color=INK_2, alpha=0.45, mec="white", mew=0.8, zorder=3)
+        summary = cv["summary"]
+        x, x_std = summary["train"]["rmse_pct"]["mean"], summary["train"]["rmse_pct"]["std"]
+        y, y_std = summary["validation"]["rmse_pct"]["mean"], summary["validation"]["rmse_pct"]["std"]
+        ax.errorbar(x, y, xerr=x_std, yerr=y_std, fmt=MARKERS[name], ms=11, color=INK, mec="white", mew=2, ecolor=INK, elinewidth=1.4, capsize=4, zorder=4)
+        dx, dy, align = label_offsets[name]
+        ax.annotate(
+            f"{name} · {evaluation['diagnosis']}\n{_es(x)} % → {_es(y)} %",
+            (x, y), xytext=(dx, dy), textcoords="offset points", ha=align, va="center",
+            fontsize=10.5, color=INK, fontweight="bold", path_effects=HALO, zorder=5,
+        )
+
+    ax.set_xlim(0, limit)
+    ax.set_ylim(0, limit)
+    ax.set_xticks(range(0, 13, 2))
+    ax.set_yticks(range(0, 13, 2))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f} %"))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f} %"))
+    ax.set_xlabel("Error de entrenamiento: meses que ya vio (RMSE % del ingreso mensual medio)")
+    ax.set_ylabel("Error de validación: año siguiente")
+    ax.set_title(
+        "Mapa de diagnóstico · media de los 5 años de validación (± 1 desviación); puntos pequeños = cada año",
+        loc="left", fontsize=11, color=INK_2,
+    )
+    ax.grid(alpha=0.25)
+
+    sizes = [point["train_months"] for point in evaluations[0]["learning_curve"]]
+    for column, evaluation in enumerate(evaluations):
+        panel = fig.add_subplot(grid[1, column], sharey=fig.axes[1] if column else None)
+        curve = evaluation["learning_curve"]
+        for split, color, label in (("validation", VALIDATION_COLOR, "Validación (12 meses siguientes)"), ("train", TRAIN_COLOR, "Entrenamiento")):
+            means, stds = _series(curve, split, "rmse_pct")
+            panel.fill_between(sizes, means - stds, means + stds, color=color, alpha=0.16, lw=0)
+            panel.plot(sizes, means, color=color, lw=2, marker="o", ms=4, label=label)
+        baseline_curve, _ = _series(curve, "seasonal_naive_validation", "rmse_pct")
+        panel.plot(sizes, baseline_curve, color=MUTED, lw=1.3, ls="--", label="Referencia: mismo mes del año anterior")
+        panel.set_ylim(0, limit)
+        panel.set_xticks(sizes)
+        panel.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f} %"))
+        panel.set_xlabel("Meses de historia usados para entrenar")
+        panel.grid(alpha=0.25)
+        panel.set_title(evaluation["name"], loc="left", fontsize=12, fontweight="bold", color=INK)
+        panel.text(
+            1.0, 1.035, evaluation["diagnosis"], transform=panel.transAxes, ha="right", va="bottom", fontsize=10, color=INK,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor=ZONE_COLORS[evaluation["diagnosis"]], alpha=0.35, lw=0),
+        )
+        if column:
+            panel.tick_params(labelleft=False)
+        else:
+            panel.set_ylabel("RMSE % del ingreso mensual medio")
+
+    handles, labels = fig.axes[1].get_legend_handles_labels()  # dibujadas: validación, entrenamiento, referencia
+    order = [1, 0, 2]
+    fig.legend([handles[i] for i in order], [labels[i] for i in order], loc="lower center", ncol=3, frameon=False, fontsize=10)
+    fig.suptitle(
+        "Cómo se ven los tres casos con los datos de HealthCore (2016-2023)\n"
+        "Bien ajustado: juntas y abajo · Underfitting: juntas pero arriba · Overfitting: separadas",
+        fontsize=13, x=0.06, ha="left",
+    )
+    fig.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.08)
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
 def main() -> int:
     args = parse_args()
     try:
         sales = load_sales_data(args.data)
         train, _test = split_train_test(sales)  # la prueba no se toca aquí
-        cv = cross_validate_forecast(train)
-        curve = learning_curve(train)
+        evaluations = [evaluate_forecaster(train, forecaster) for forecaster in (CURRENT_MODEL,) + COMPARISON_MODELS]
     except (OSError, SalesDataError) as error:
         print(f"Error con los datos de ventas: {error}", file=sys.stderr)
         return 1
 
-    summary = cv["summary"]
-    diagnosis = diagnose_fit(
-        train_rmse_pct=summary["train"]["rmse_pct"]["mean"],
-        validation_rmse_pct=summary["validation"]["rmse_pct"]["mean"],
-        baseline_rmse_pct=summary["seasonal_naive_validation"]["rmse_pct"]["mean"],
-    )
+    current = evaluations[0]
+    cv, curve, diagnosis = current["cross_validation"], current["learning_curve"], current["diagnosis"]
 
     try:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         plot_learning_curve(curve, diagnosis, args.output_dir / "learning_curve.png")
+        plot_fit_diagnosis_map(evaluations, args.output_dir / "fit_diagnosis_map.png")
         payload = {
             "primary_metric": PRIMARY_METRIC,
             "diagnosis": diagnosis,
             "cross_validation": cv,
             "learning_curve": curve,
+            "comparison_models": evaluations[1:],
         }
         (args.output_dir / "sales_forecast_evaluation.json").write_text(
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -185,6 +314,13 @@ def main() -> int:
         return 1
 
     print_report(cv, curve, diagnosis)
+    print("\nModelos de comparación (malos a propósito), RMSE % media ± desviación entre pliegues")
+    for evaluation in evaluations[1:]:
+        summary = evaluation["cross_validation"]["summary"]
+        print(
+            f"  {evaluation['name']:<20} entrenamiento {_mean_std(summary['train']['rmse_pct'])} | "
+            f"validación {_mean_std(summary['validation']['rmse_pct'])} -> {evaluation['diagnosis']}"
+        )
     print(f"\nResultados en {args.output_dir}")
     return 0
 

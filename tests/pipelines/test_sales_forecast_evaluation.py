@@ -18,6 +18,7 @@ import pytest
 from sklearn.model_selection import KFold
 
 from data.process.sales_forecast import SalesDataError, load_sales_data, split_train_test
+from data.process.sales_forecast_comparison import MEMORIZING_FOREST, TREND_ONLY
 from data.process.sales_forecast_evaluation import (
     CV_SPLITS,
     LEARNING_CURVE_SIZES,
@@ -26,7 +27,10 @@ from data.process.sales_forecast_evaluation import (
     FIT_WELL,
     VALIDATION_MONTHS,
     check_chronological_folds,
+    cross_validate_forecast,
+    diagnose_cross_validation,
     diagnose_fit,
+    evaluate_window,
     learning_curve_windows,
     seasonal_naive_predictions,
     summarize_windows,
@@ -195,3 +199,23 @@ def test_diagnose_fit(train_pct, validation_pct, baseline_pct, expected):
 def test_diagnose_checks_underfitting_before_the_gap():
     # Brecha pequeña (cociente 1,1) pero falla en todo: no es "bien ajustado".
     assert diagnose_fit(9.0, 9.9, 6.0) == FIT_UNDERFITTING
+
+
+# --- Modelos de comparación (malos a propósito) -------------------------------
+
+
+def test_evaluation_uses_the_given_forecaster(train):
+    folds = temporal_cv_folds(train)
+    train_idx, val_idx = folds[-1]
+    current = evaluate_window(train.iloc[train_idx], train.iloc[val_idx])
+    trend_only = evaluate_window(train.iloc[train_idx], train.iloc[val_idx], TREND_ONLY)
+    # Mismos meses y misma referencia, distinto modelo.
+    assert trend_only["seasonal_naive_validation"] == current["seasonal_naive_validation"]
+    assert trend_only["train"]["rmse_pct"] > current["train"]["rmse_pct"]
+
+
+def test_diagnosis_recognises_real_underfitting_and_overfitting(train):
+    """La regla no solo aprueba nuestro modelo: detecta los dos fallos reales."""
+    assert diagnose_cross_validation(cross_validate_forecast(train, TREND_ONLY)) == FIT_UNDERFITTING
+    assert diagnose_cross_validation(cross_validate_forecast(train, MEMORIZING_FOREST)) == FIT_OVERFITTING
+    assert diagnose_cross_validation(cross_validate_forecast(train)) == FIT_WELL

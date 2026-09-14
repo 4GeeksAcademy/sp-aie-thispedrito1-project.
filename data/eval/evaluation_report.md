@@ -17,11 +17,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_eval
 |---|---|
 | Pliegues temporales, curva, métricas y diagnóstico (lógica pura) | `data/process/sales_forecast_evaluation.py` |
 | Ejecución, gráfico y JSON | `scripts/evaluate_sales_forecast.py` |
+| Modelos de comparación, malos a propósito | `data/process/sales_forecast_comparison.py` |
 | Curva de aprendizaje | `data/eval/learning_curve.png` |
+| Mapa de diagnóstico con los tres modelos | `data/eval/fit_diagnosis_map.png` |
 | Todas las cifras de este reporte | `data/eval/sales_forecast_evaluation.json` |
 | Tests (orden cronológico de los pliegues, métricas, diagnóstico) | `tests/pipelines/test_sales_forecast_evaluation.py` |
 
-Determinista (`random_state=42`), unos 10 s. Solo cifras agregadas mensuales: ningún dato de pacientes (CONTEXT, sección 1).
+Determinista (`random_state=42`), unos 18 s. Solo cifras agregadas mensuales: ningún dato de pacientes (CONTEXT, sección 1).
 
 ## Qué datos se usan y cuáles no
 
@@ -122,6 +124,32 @@ El MAE sigue siendo útil como lectura complementaria: *"de media nos desviamos 
 Se comprueba primero el underfitting, porque un modelo que falla en todo puede tener poca brecha y colarse como "bien ajustado".
 
 **El veredicto no depende de un redondeo.** Además de la tabla, la curva de aprendizaje lo respalda sin necesidad de umbrales: el entrenamiento se queda en el suelo de ruido, la validación desciende hacia él y la dispersión entre ventanas se reduce.
+
+### Cómo se ven los tres casos con estos mismos datos
+
+Una regla que solo se ha probado con el modelo que aprueba no demuestra nada. Para comprobar que distingue los tres casos, el script evalúa también dos modelos **malos a propósito**. Están en `data/process/sales_forecast_comparison.py`, no son candidatos a producción y usan las mismas variables de calendario que el modelo real:
+
+- **Solo tendencia:** la recta de crecimiento sin el bosque estacional. No sabe que octubre-diciembre suben y julio-agosto bajan.
+- **Bosque que memoriza:** un Random Forest sobre el ingreso en USD con el mes concreto como variable, sin separar la tendencia. Cada mes de entrenamiento es un valor único que se aprende de memoria, ruido incluido.
+
+![Mapa de diagnóstico y curvas de los tres modelos](fit_diagnosis_map.png)
+
+| Modelo | RMSE % entrenamiento | RMSE % validación | Cociente | Veredicto de `diagnose_fit` | Forma de la curva |
+|---|---|---|---|---|---|
+| **Nuestro modelo** | 2,37 ± 0,17 | 3,22 ± 0,58 | 1,36 | **bien ajustado** | Juntas y abajo |
+| Solo tendencia | 10,29 ± 0,10 | 10,47 ± 0,39 | 1,02 | underfitting | Juntas pero arriba: falla igual en lo visto y en lo nuevo |
+| Bosque que memoriza | 1,35 ± 0,03 | 5,61 ± 1,75 | 4,16 | overfitting | Separadas y muy inestable |
+
+**Rangos para nuestro modelo:**
+- Sería **underfitting** si su error de entrenamiento llegara a 5,70 %.
+- Sería **overfitting** si su error de validación llegara a 3,55 % (1,5 × 2,37).
+- Está en 3,22 %, a 0,33 puntos del límite.
+
+**El error de entrenamiento no debe llegar a 0 %.** El bosque que memoriza baja a 1,35 %, por debajo del ruido del dataset (~2,9 %). Se está aprendiendo ese ruido mes a mes, y por eso al llegar un año nuevo falla tanto como "copiar el año anterior".
+
+**Un año suelto puede engañar.** En el mapa, el punto pequeño de 2020 de nuestro modelo (2,27 % → 4,00 %, cociente 1,76) cae él solo en la zona de overfitting. Es el año de crecimiento bajo de la sección 5. Por eso el veredicto usa la media de los 5 años.
+
+El test `test_diagnosis_recognises_real_underfitting_and_overfitting` fija los tres veredictos.
 
 ## 5. Problema detectado y acción correctiva (pregunta 3 del ticket)
 

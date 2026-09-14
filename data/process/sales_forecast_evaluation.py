@@ -20,7 +20,8 @@ scripts/evaluate_sales_forecast.py.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -55,6 +56,23 @@ FIT_OVERFITTING = "overfitting"
 OVERFIT_GAP_RATIO = 1.5
 
 Fold = Tuple[np.ndarray, np.ndarray]
+
+
+@dataclass(frozen=True)
+class Forecaster:
+    """Un modelo evaluable: cómo se entrena y cómo predice.
+
+    `predict` debe devolver un DataFrame con la columna `predicted_usd`, igual
+    que sales_forecast.predict. Permite pasar por la misma evaluación los
+    modelos de comparación de sales_forecast_comparison.py.
+    """
+
+    name: str
+    fit: Callable[[pd.DataFrame], Any]
+    predict: Callable[[Any, pd.DataFrame], pd.DataFrame]
+
+
+CURRENT_MODEL = Forecaster("Nuestro modelo", fit_forecast_model, predict)
 
 
 # ---------------------------------------------------------------------------
@@ -208,17 +226,21 @@ def seasonal_naive_predictions(history: pd.DataFrame, target: pd.DataFrame) -> n
     return values.to_numpy()
 
 
-def evaluate_window(train_part: pd.DataFrame, validation_part: pd.DataFrame) -> Dict[str, object]:
+def evaluate_window(
+    train_part: pd.DataFrame,
+    validation_part: pd.DataFrame,
+    forecaster: Forecaster = CURRENT_MODEL,
+) -> Dict[str, object]:
     """Entrena con `train_part` y mide el error en entrenamiento y en validación."""
-    model = fit_forecast_model(train_part)
+    model = forecaster.fit(train_part)
     train_true = train_part[TARGET_COLUMN].to_numpy()
     validation_true = validation_part[TARGET_COLUMN].to_numpy()
     return {
         "train_period": _period(train_part),
         "validation_period": _period(validation_part),
         "train_months": int(len(train_part)),
-        "train": window_errors(train_true, predict(model, train_part)["predicted_usd"]),
-        "validation": window_errors(validation_true, predict(model, validation_part)["predicted_usd"]),
+        "train": window_errors(train_true, forecaster.predict(model, train_part)["predicted_usd"]),
+        "validation": window_errors(validation_true, forecaster.predict(model, validation_part)["predicted_usd"]),
         "seasonal_naive_validation": window_errors(
             validation_true, seasonal_naive_predictions(train_part, validation_part)
         ),
@@ -250,11 +272,11 @@ def summarize_windows(results: Sequence[Dict[str, object]]) -> Dict[str, Dict[st
 # ---------------------------------------------------------------------------
 
 
-def cross_validate_forecast(train: pd.DataFrame) -> Dict[str, object]:
+def cross_validate_forecast(train: pd.DataFrame, forecaster: Forecaster = CURRENT_MODEL) -> Dict[str, object]:
     """Validación cruzada temporal con CV_SPLITS pliegues sobre el entrenamiento."""
     folds = temporal_cv_folds(train)
     results = [
-        {"fold": number, **evaluate_window(train.iloc[train_idx], train.iloc[val_idx])}
+        {"fold": number, **evaluate_window(train.iloc[train_idx], train.iloc[val_idx], forecaster)}
         for number, (train_idx, val_idx) in enumerate(folds, start=1)
     ]
     return {
@@ -264,13 +286,20 @@ def cross_validate_forecast(train: pd.DataFrame) -> Dict[str, object]:
     }
 
 
-def learning_curve(train: pd.DataFrame, sizes: Sequence[int] = LEARNING_CURVE_SIZES) -> List[Dict[str, object]]:
+def learning_curve(
+    train: pd.DataFrame,
+    sizes: Sequence[int] = LEARNING_CURVE_SIZES,
+    forecaster: Forecaster = CURRENT_MODEL,
+) -> List[Dict[str, object]]:
     """Error de entrenamiento y validación según los meses de historia usados."""
     ensure_chronological(train)
     points = []
     for size, windows in learning_curve_windows(len(train), sizes).items():
         check_chronological_folds(windows, train["month"])
-        results = [evaluate_window(train.iloc[train_idx], train.iloc[val_idx]) for train_idx, val_idx in windows]
+        results = [
+            evaluate_window(train.iloc[train_idx], train.iloc[val_idx], forecaster)
+            for train_idx, val_idx in windows
+        ]
         points.append(
             {
                 "train_months": size,
@@ -310,6 +339,16 @@ def diagnose_fit(
     ):
         return FIT_OVERFITTING
     return FIT_WELL
+
+
+def diagnose_cross_validation(cv: Dict[str, object]) -> str:
+    """diagnose_fit aplicado a la media entre pliegues de cross_validate_forecast."""
+    summary = cv["summary"]
+    return diagnose_fit(
+        train_rmse_pct=summary["train"]["rmse_pct"]["mean"],
+        validation_rmse_pct=summary["validation"]["rmse_pct"]["mean"],
+        baseline_rmse_pct=summary["seasonal_naive_validation"]["rmse_pct"]["mean"],
+    )
 
 
 def _period(df: pd.DataFrame) -> str:

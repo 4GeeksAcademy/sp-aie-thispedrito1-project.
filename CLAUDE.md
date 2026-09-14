@@ -88,10 +88,10 @@ Desde la raíz. `uv` está en `~/.local/bin` (instalado el 2026-09-14). Detalle 
 ### Evaluación del modelo de ventas (validación cruzada + curva de aprendizaje)
 
 ```bash
-services/api/.venv/bin/python scripts/evaluate_sales_forecast.py   # escribe learning_curve.png y sales_forecast_evaluation.json en data/eval/
+services/api/.venv/bin/python scripts/evaluate_sales_forecast.py   # escribe learning_curve.png, fit_diagnosis_map.png y sales_forecast_evaluation.json en data/eval/
 ```
 
-Desde la raíz, mismas dependencias que el modelo. ~10 s. Reporte razonado en `data/eval/evaluation_report.md`.
+Desde la raíz, mismas dependencias que el modelo. ~18 s. Reporte razonado en `data/eval/evaluation_report.md`.
 
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
@@ -126,7 +126,7 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py
 # Tests del modelo de predicción de ventas (15: split 8/2, fuga de datos, limpieza, métricas): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 
-# Tests de la evaluación del modelo (19: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
+# Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
 # Backend (167 tests): desde services/api, con el venv activado
@@ -352,9 +352,13 @@ Decisiones que conviene no romper:
 Clase "Evaluación de un Modelo de Regresión", rama `feature/regression-model-eval` (nombre del README de la clase) apilada sobre `feature/sales-forecast-model`, 2026-09-14. Mismo CONTEXT y mismo CSV que la clase anterior (verificado byte a byte). Evalúa el modelo **sin modificarlo**.
 
 Mapa del código:
-- **`data/process/sales_forecast_evaluation.py`**: lógica pura. Contiene `temporal_cv_folds` + `check_chronological_folds`, `learning_curve_windows`/`learning_curve`, `window_errors` (MAE, RMSE y sesgo en USD y en % de la ventana), `seasonal_naive_predictions`, `summarize_windows` y `diagnose_fit`.
-- **`scripts/evaluate_sales_forecast.py`**: CLI. Escribe `data/eval/learning_curve.png` y `data/eval/sales_forecast_evaluation.json`, versionados (el `.gitignore` solo ignora `data/eval/monthly_clinic_supply_performance/`).
-- **`tests/pipelines/test_sales_forecast_evaluation.py`**: 19 tests.
+- **`data/process/sales_forecast_evaluation.py`**: lógica pura. Contiene `temporal_cv_folds` + `check_chronological_folds`, `learning_curve_windows`/`learning_curve`, `window_errors` (MAE, RMSE y sesgo en USD y en % de la ventana), `seasonal_naive_predictions`, `summarize_windows`, `diagnose_fit`/`diagnose_cross_validation` y `Forecaster` (fit + predict). Toda función de evaluación acepta un `Forecaster` y usa por defecto `CURRENT_MODEL`, el modelo real.
+- **`data/process/sales_forecast_comparison.py`**: `TREND_ONLY` (underfitting) y `MEMORIZING_FOREST` (overfitting), malos **a propósito**, para demostrar que la regla distingue los tres casos. No son candidatos a producción.
+- **`scripts/evaluate_sales_forecast.py`**: CLI. Escribe en `data/eval/`, versionados (el `.gitignore` solo ignora `data/eval/monthly_clinic_supply_performance/`):
+  - `learning_curve.png`;
+  - `fit_diagnosis_map.png`: mapa de zonas + curvas de los tres modelos;
+  - `sales_forecast_evaluation.json`: las cifras del modelo real en las claves de siempre, más `comparison_models`.
+- **`tests/pipelines/test_sales_forecast_evaluation.py`**: 21 tests.
 
 Decisiones que conviene no romper:
 - **Solo 2016-2023.** La prueba 2024-2025 no decide diagnóstico ni corrección; hay un test que lo fija. Cualquier cambio del modelo se valida primero con este script y después se mide **una sola vez** en prueba.
