@@ -85,6 +85,14 @@ services/api/.venv/bin/python scripts/train_sales_forecast.py                   
 
 Desde la raíz. `uv` está en `~/.local/bin` (instalado el 2026-09-14). Detalle en la sección de arquitectura y en `docs/sales-forecast.md`.
 
+### Evaluación del modelo de ventas (validación cruzada + curva de aprendizaje)
+
+```bash
+services/api/.venv/bin/python scripts/evaluate_sales_forecast.py   # escribe learning_curve.png y sales_forecast_evaluation.json en data/eval/
+```
+
+Desde la raíz, mismas dependencias que el modelo. ~10 s. Reporte razonado en `data/eval/evaluation_report.md`.
+
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
 ```bash
@@ -117,6 +125,9 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py
 
 # Tests del modelo de predicción de ventas (15: split 8/2, fuga de datos, limpieza, métricas): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
+
+# Tests de la evaluación del modelo (19: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
 # Backend (167 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
@@ -335,6 +346,24 @@ Decisiones que conviene no romper:
 - **Métricas sobre la prueba:** "K2 Score" del enunciado = R² (`k2_score`). Gini normalizado. MSE en USD² y como RMSE en % del ingreso mensual medio (el CONTEXT pide un "porcentaje"; el MSE en USD² dividido por USD no tiene sentido). PSI con 5 cubetas (24 meses) sobre `avg_revenue_per_visit_usd` train vs test, como indicador indirecto de la mezcla, porque el CSV no trae filas por país; más un PSI de predicción vs real.
 - Resultados con `random_state=42`: RMSE 2,82 %, R² 0,929, Gini 0,936, PSI de mezcla 0,48 (cambio significativo real: +1,3 % de ingreso por consulta, documentado como hallazgo) y PSI de predicción 0,09.
 - **Desviación del README de la clase:** pide `uv add` en un proyecto de raíz, pero aquí todo el Python usa el venv de la API, así que se usa `uv pip install --python services/api/.venv/bin/python`. scikit-learn 1.6.1 y matplotlib 3.9.4 son las últimas compatibles con Python 3.9.
+
+### Evaluación del modelo de ventas — `data/eval/evaluation_report.md`
+
+Clase "Evaluación de un Modelo de Regresión", rama `feature/regression-model-eval` (nombre del README de la clase) apilada sobre `feature/sales-forecast-model`, 2026-09-14. Mismo CONTEXT y mismo CSV que la clase anterior (verificado byte a byte). Evalúa el modelo **sin modificarlo**.
+
+Mapa del código:
+- **`data/process/sales_forecast_evaluation.py`**: lógica pura. Contiene `temporal_cv_folds` + `check_chronological_folds`, `learning_curve_windows`/`learning_curve`, `window_errors` (MAE, RMSE y sesgo en USD y en % de la ventana), `seasonal_naive_predictions`, `summarize_windows` y `diagnose_fit`.
+- **`scripts/evaluate_sales_forecast.py`**: CLI. Escribe `data/eval/learning_curve.png` y `data/eval/sales_forecast_evaluation.json`, versionados (el `.gitignore` solo ignora `data/eval/monthly_clinic_supply_performance/`).
+- **`tests/pipelines/test_sales_forecast_evaluation.py`**: 19 tests.
+
+Decisiones que conviene no romper:
+- **Solo 2016-2023.** La prueba 2024-2025 no decide diagnóstico ni corrección; hay un test que lo fija. Cualquier cambio del modelo se valida primero con este script y después se mide **una sola vez** en prueba.
+- **`TimeSeriesSplit(n_splits=5, test_size=12)`**: entrenamiento de 36 a 84 meses, cada pliegue valida el año siguiente. `check_chronological_folds` corre siempre, no solo en tests, y un frame desordenado se rechaza. Con `KFold` barajado fallan los 2 tests de orden (comprobado).
+- **Curva con ventanas móviles** de 24 a 84 meses en años completos, todas las posiciones anuales de cada tamaño. El punto de 84 meses es una sola ventana (`std` = `None`, nunca 0) y no se usa como evidencia principal.
+- **Métrica principal RMSE en %** (decisión del usuario), porque importan los meses atípicos y es la raíz del MSE del CONTEXT. Porcentajes sobre la media de cada ventana, porque el ingreso crece ~4 % al año. Desviación muestral (ddof=1).
+- **`diagnose_fit`**: underfitting si el error de entrenamiento ≥ referencia ingenua ("mismo mes del año anterior"); overfitting si validación ≥ 1,5 × entrenamiento (`OVERFIT_GAP_RATIO`) o validación ≥ referencia; si no, bien ajustado. El underfitting va primero a propósito.
+- Resultado: **bien ajustado**. RMSE 2,37 ± 0,17 % en entrenamiento, 3,22 ± 0,58 % en validación y 5,70 % la referencia.
+- **Acción correctiva propuesta, no implementada:** `year_parity` en `TREND_FEATURES`. Los años de crecimiento del 2 % (2020, 2022) tienen un sesgo de +2,3/+2,7 %, el 45-47 % de su error. En una prueba exploratoria la CV baja a 2,98 ± 0,45 %, pero aparece un sesgo de ~+1 % sin explicar. Pendiente de que Revenue Cycle confirme que la alternancia 6 %/2 % es estructural.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
