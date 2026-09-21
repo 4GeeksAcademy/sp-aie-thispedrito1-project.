@@ -27,3 +27,7 @@ coverage/
 # Local Claude Code config (settings.local.json, commands/) — machine/session
 # specific, not shared project tooling.
 .claude/
+
+# Salidas de validacion del pipeline de negocio (data/pipelines/pipeline.py):
+# agregados de negocio por corrida, se regeneran en cada ejecucion.
+data/eval/monthly_clinic_supply_performance/

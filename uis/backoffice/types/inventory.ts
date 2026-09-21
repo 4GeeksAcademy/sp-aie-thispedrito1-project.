@@ -87,6 +87,35 @@ export function getStockLevel(currentStock: number): StockLevel {
   return "healthy";
 }
 
+// Pipeline de desempeño de negocio (data/pipelines/PIPELINE_DESIGN.md): el
+// coste se reporta en la moneda del país, sin convertir, y nunca se suman
+// USD y GBP entre sí.
+export type SupplyCurrency = "USD" | "GBP";
+
+export const CURRENCY_BY_COUNTRY: Record<SupplyCountry, SupplyCurrency> = {
+  US: "USD",
+  UK: "GBP",
+};
+
+export type UnitCostParse = { ok: true; value: number | null } | { ok: false; error: string };
+
+/**
+ * Lee el "coste unitario" del formulario de entregas. Vacío = coste
+ * desconocido (`null`), NUNCA cero: el pipeline trata un evento sin
+ * `unit_cost` como gasto no registrado, y un cero inventado lo haría pasar
+ * por una entrega gratuita. Se redondea a 2 decimales, como la columna
+ * `total_supply_cost` que alimenta.
+ */
+export function parseUnitCost(raw: string): UnitCostParse {
+  const trimmed = raw.trim().replace(",", ".");
+  if (trimmed === "") return { ok: true, value: null };
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) {
+    return { ok: false, error: "El coste unitario debe ser un número mayor o igual que cero." };
+  }
+  return { ok: true, value: Math.round(value * 100) / 100 };
+}
+
 export const STOCK_LEVEL_LABELS: Record<StockLevel, string> = {
   low: "Stock bajo",
   medium: "Stock moderado",

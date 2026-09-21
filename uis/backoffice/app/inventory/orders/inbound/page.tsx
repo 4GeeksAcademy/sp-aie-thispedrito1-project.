@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 
 import { createInboundOrder, getProducts } from "../../../../services/inventoryApi";
 import { track } from "../../../../services/telemetry";
-import { CLINIC_ID_MAX, CLINIC_ID_MIN, type InboundOrderInput, type MedicalSupply } from "../../../../types/inventory";
+import {
+  CLINIC_ID_MAX,
+  CLINIC_ID_MIN,
+  CURRENCY_BY_COUNTRY,
+  parseUnitCost,
+  type InboundOrderInput,
+  type MedicalSupply,
+} from "../../../../types/inventory";
 
 const EMPTY_FORM: InboundOrderInput = {
   supply_id: 0,
@@ -17,6 +24,10 @@ export default function InboundOrderPage() {
   const [products, setProducts] = useState<MedicalSupply[]>([]);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [form, setForm] = useState<InboundOrderInput>(EMPTY_FORM);
+  // Fuera de InboundOrderInput a propósito: la API de inventario no guarda
+  // coste; solo viaja en el evento inbound_order_created, que es la fuente
+  // del KPI "Costo de insumos por clínica" (data/pipelines/PIPELINE_DESIGN.md).
+  const [unitCost, setUnitCost] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +49,9 @@ export default function InboundOrderPage() {
       })
       .catch(() => setProductsError("No se pudo cargar la lista de productos. Verifica que la API esté activa."));
   }, []);
+
+  const selectedProduct = products.find((product) => product.id === form.supply_id);
+  const selectedCurrency = selectedProduct ? CURRENCY_BY_COUNTRY[selectedProduct.country] : null;
 
   const setField = <K extends keyof InboundOrderInput>(key: K, value: InboundOrderInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -64,6 +78,11 @@ export default function InboundOrderPage() {
       setFormError(`El id de clínica debe estar entre ${CLINIC_ID_MIN} y ${CLINIC_ID_MAX}.`);
       return;
     }
+    const parsedCost = parseUnitCost(unitCost);
+    if (!parsedCost.ok) {
+      setFormError(parsedCost.error);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -79,10 +98,13 @@ export default function InboundOrderPage() {
           quantity: trimmedForm.quantity,
           vendor_name: trimmedForm.vendor_name,
           delivery_id: delivery.id,
+          // Ausente (no 0) cuando se deja vacío: coste desconocido.
+          ...(parsedCost.value !== null ? { unit_cost: parsedCost.value } : {}),
         });
       }
       setSuccess("Entrega registrada correctamente. El stock del producto se ha actualizado.");
       setForm((prev) => ({ ...EMPTY_FORM, supply_id: prev.supply_id }));
+      setUnitCost("");
     } catch (submitError) {
       setFormError(submitError instanceof Error ? submitError.message : "No se pudo registrar la entrega.");
     } finally {
@@ -135,6 +157,17 @@ export default function InboundOrderPage() {
               max={CLINIC_ID_MAX}
               value={form.clinic_id}
               onChange={(event) => setField("clinic_id", Number(event.target.value))}
+            />
+          </label>
+
+          <label>
+            Coste unitario{selectedCurrency ? ` (${selectedCurrency})` : ""}
+            <input
+              type="text"
+              inputMode="decimal"
+              value={unitCost}
+              onChange={(event) => setUnitCost(event.target.value)}
+              placeholder="p. ej. 0.42"
             />
           </label>
 

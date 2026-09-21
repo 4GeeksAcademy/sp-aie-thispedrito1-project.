@@ -23,8 +23,8 @@ from packages.shared.incidents_validation import (  # noqa: E402
     load_csv_rows_from_bytes,
 )
 from database import get_inventory_engine  # noqa: E402
+import inventory_alerts  # noqa: E402
 import inventory_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
-import inventory_repository  # noqa: E402
 import telemetry_models  # noqa: E402,F401  (registers ORM tables on SQLModel.metadata)
 import telemetry_service  # noqa: E402
 from models import HealthStatus, IncidentAnalysisResponse  # noqa: E402
@@ -36,12 +36,18 @@ from routes.suppliers import router as suppliers_router  # noqa: E402
 from routes.telemetry import router as telemetry_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
 from security import get_current_user  # noqa: E402
+from services.reporting.router import router as reporting_router  # noqa: E402
+from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
 
 app = FastAPI(title="HealthCore Incidents API", version="1.0.0")
 
 # Python's root logger defaults to WARNING with no handler attached, which
 # would silently swallow the INFO-level timing logs below.
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+# Prefect (disparo manual de POST /reporting/pipeline-runs) habla con su API
+# efimera por httpx, que loguea cada peticion a INFO: cientos de lineas
+# "HTTP Request: POST .../logs/" por corrida que taparian los logs de timing.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +64,7 @@ app.include_router(profiles_router)
 app.include_router(incidents_router)
 app.include_router(inventory_router)
 app.include_router(telemetry_router)
+app.include_router(reporting_router)
 
 timing_logger = logging.getLogger("api.timing")
 
@@ -96,8 +103,15 @@ def init_inventory_schema() -> None:
 
     Left non-fatal on purpose: the rest of the API (auth, suppliers, incidents)
     must keep working locally even before Supabase is wired up.
+
+    The business pipeline's reporting.* tables are registered on the same
+    metadata (services/reporting imports their models), but Postgres needs
+    the `reporting` schema to exist first — and the KPI table is created
+    with the CONTEXT's literal DDL — so ensure_reporting_schema runs before
+    the generic create_all.
     """
     try:
+        ensure_reporting_schema(get_inventory_engine())
         SQLModel.metadata.create_all(get_inventory_engine())
     except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
         print(f"[inventory] skipping schema init: {exc}", file=sys.stderr)
@@ -107,28 +121,14 @@ def init_inventory_schema() -> None:
 def flag_expiring_supplies() -> None:
     """Stand-in for the 'daily job' the telemetry plan describes for
     supply_expiry_flagged — this project has no scheduler/cron
-    infrastructure, so running the same check once at API startup is enough
-    to prove the event fires end-to-end without building one. Non-fatal for
-    the same reason as init_inventory_schema above: Supabase may not be
+    infrastructure. Safe to run on every startup now: inventory_alerts
+    emits (and persists) each lot per clinic only once, via a deterministic
+    eventId, so restarts no longer multiply the event. Non-fatal for the
+    same reason as init_inventory_schema above: Supabase may not be
     configured locally."""
     try:
         with Session(get_inventory_engine()) as session:
-            for supply, stock, days_until_expiry in inventory_repository.list_supplies_expiring_within(
-                session, days=30
-            ):
-                telemetry_service.emit_backend_event(
-                    event_type="supply_expiry_flagged",
-                    user_id=None,
-                    properties={
-                        "clinic_id": None,
-                        "country": supply.country,
-                        "product_id": supply.id,
-                        "product_category": supply.category,
-                        "expiry_date": supply.expiry_date.isoformat(),
-                        "days_until_expiry": days_until_expiry,
-                        "quantity_at_risk": stock,
-                    },
-                )
+            inventory_alerts.flag_expiring_supplies(session)
     except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
         print(f"[telemetry] skipping expiry check: {exc}", file=sys.stderr)
 

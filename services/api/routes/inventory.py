@@ -41,17 +41,34 @@ def _to_supply_read(session: Session, supply: MedicalSupply) -> MedicalSupplyRea
 
 
 def _check_stock_threshold(
-    session: Session, supply: MedicalSupply, clinic_id: int, user_id: str
+    session: Session, supply: MedicalSupply, clinic_id: int, user_id: str, quantity_delta: int
 ) -> None:
-    """Emits stock_threshold_triggered when this clinic's stock for this
-    supply is at/below its configured minimum. Runs after every order that
-    can move stock (inbound or outbound) — cheap, and correct either way:
-    a delivery can only ever raise stock, so it just won't fire there."""
+    """Emits stock_threshold_triggered only when this order makes the
+    clinic's stock CROSS its configured minimum: above it before the order,
+    at/below it after. quantity_delta is the stock movement the order just
+    committed (+quantity inbound, -quantity outbound), so the pre-order
+    stock is derived without a second read.
+
+    Crossing-only on purpose: the old "stock <= threshold after any order"
+    rule re-fired on every order while the clinic stayed below minimum, so
+    counting events measured order activity, not stockouts. The business
+    pipeline's critical_stockout_count is literally "count of
+    stock_threshold_triggered in the month" (CONTEXT, data/pipelines/
+    PIPELINE_DESIGN.md), and that count only means "times a clinic fell
+    below minimum" if each fall emits exactly once. Consequence: a clinic
+    that was already below minimum when the threshold was configured emits
+    nothing until it recovers and falls again.
+
+    Persisted to telemetry_events via the request's own session (same
+    Depends(get_inventory_db) the tests override), which is what makes the
+    KPI computable at all; emit_backend_event swallows persistence errors
+    so a telemetry hiccup never fails an order already committed."""
     threshold = repo.get_threshold(session, supply.id, clinic_id)
     if threshold is None:
         return  # no minimum configured for this supply+clinic yet
-    clinic_stock = repo.get_current_stock_for_clinic(session, supply.id, clinic_id)
-    if clinic_stock <= threshold:
+    stock_after = repo.get_current_stock_for_clinic(session, supply.id, clinic_id)
+    stock_before = stock_after - quantity_delta
+    if stock_before > threshold >= stock_after:
         telemetry_service.emit_backend_event(
             event_type="stock_threshold_triggered",
             user_id=user_id,
@@ -60,9 +77,10 @@ def _check_stock_threshold(
                 "country": supply.country,
                 "product_id": supply.id,
                 "product_category": supply.category,
-                "current_stock": clinic_stock,
+                "current_stock": stock_after,
                 "threshold_value": threshold,
             },
+            db_session=session,
         )
 
 
@@ -116,7 +134,7 @@ def create_inbound_order(
     data["user_uuid"] = current_user["id"]
     delivery = repo.create_delivery(session, data)
     cache.invalidate(PRODUCTS_CACHE_KEY)
-    _check_stock_threshold(session, supply, payload.clinic_id, current_user["id"])
+    _check_stock_threshold(session, supply, payload.clinic_id, current_user["id"], quantity_delta=payload.quantity)
     return SupplyDeliveryRead.model_validate(delivery)
 
 
@@ -150,7 +168,7 @@ def create_outbound_order(
         )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     cache.invalidate(PRODUCTS_CACHE_KEY)
-    _check_stock_threshold(session, supply, payload.clinic_id, current_user["id"])
+    _check_stock_threshold(session, supply, payload.clinic_id, current_user["id"], quantity_delta=-payload.quantity)
     return SupplyConsumptionRead.model_validate(consumption)
 
 
