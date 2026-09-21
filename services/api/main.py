@@ -36,6 +36,7 @@ from routes.suppliers import router as suppliers_router  # noqa: E402
 from routes.telemetry import router as telemetry_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
 from security import get_current_user  # noqa: E402
+from services.knowledge.router import router as knowledge_router  # noqa: E402
 from services.reporting.router import router as reporting_router  # noqa: E402
 from services.tasks.router import router as tasks_router  # noqa: E402
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
@@ -68,6 +69,7 @@ app.include_router(inventory_router)
 app.include_router(telemetry_router)
 app.include_router(reporting_router)
 app.include_router(tasks_router)
+app.include_router(knowledge_router)
 
 timing_logger = logging.getLogger("api.timing")
 

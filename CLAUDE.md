@@ -93,6 +93,17 @@ services/api/.venv/bin/python scripts/evaluate_sales_forecast.py   # escribe lea
 
 Desde la raíz, mismas dependencias que el modelo. ~18 s. Reporte razonado en `data/eval/evaluation_report.md`.
 
+### Base de conocimiento RAG (Hito 7)
+
+```bash
+docker compose up -d qdrant                                                  # Qdrant 1.16.3, solo en 127.0.0.1:6333
+services/api/.venv/bin/python scripts/index_knowledge_base.py                # setup(): 14 chunks en `healthcore_knowledge`
+services/api/.venv/bin/python scripts/evaluate_rag_retrieval.py              # Recall@3 → data/eval/rag_retrieval_evaluation.json
+docker compose stop qdrant
+```
+
+Desde la raíz. Necesita `LLM_BASE_URL`, `LLM_API_KEY`, `EMBEDDING_MODEL` y `GENERATION_MODEL` en `services/api/.env` (IDs en `.env.example`). `qdrant-client` y `openai` están en `services/api/requirements.txt`. Detalle en `docs/rag/rag-design.md`.
+
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
 ```bash
@@ -129,11 +140,14 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Backend (167 tests): desde services/api, con el venv activado
+# Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
+
+# Backend (172 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (84 tests): desde uis/backoffice
+# Frontend (94 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -368,6 +382,37 @@ Decisiones que conviene no romper:
 - **`diagnose_fit`**: underfitting si el error de entrenamiento ≥ referencia ingenua ("mismo mes del año anterior"); overfitting si validación ≥ 1,5 × entrenamiento (`OVERFIT_GAP_RATIO`) o validación ≥ referencia; si no, bien ajustado. El underfitting va primero a propósito.
 - Resultado: **bien ajustado**. RMSE 2,37 ± 0,17 % en entrenamiento, 3,22 ± 0,58 % en validación y 5,70 % la referencia.
 - **Acción correctiva propuesta, no implementada:** `year_parity` en `TREND_FEATURES`. Los años de crecimiento del 2 % (2020, 2022) tienen un sesgo de +2,3/+2,7 %, el 45-47 % de su error. En una prueba exploratoria la CV baja a 2,98 ± 0,45 %, pero aparece un sesgo de ~+1 % sin explicar. Pendiente de que Revenue Cycle confirme que la alternancia 6 %/2 % es estructural.
+
+### Base de conocimiento RAG — `docs/rag/rag-design.md`
+
+Hito 7 "RAG y Base de Conocimiento", rama `feature/rag-knowledge-base` (nombre del README de la clase) sobre `main`, 2026-09-21. Asistente para los coordinadores de pacientes de Priya Nair: pregunta en lenguaje natural → respuesta redactada por un modelo a partir de 4 políticas internas, "como el mejor vendedor de servicios de la clínica".
+
+Mapa del código:
+- **`docs/company-knowledge-base/`**: los 4 documentos del CONTEXT, copia literal. Es lo único que indexa `setup()`.
+- **`data/process/rag.py`**: `chunk_document`/`load_chunks`, `embed()` y `setup()`, más los clientes (`get_llm_client`, `get_qdrant_client`) y `RagConfigError`. Carga `services/api/.env`.
+- **`data/pipelines/rag.py`**: `retrieve()`, `generate_answer()`, `query()` y el prompt en tres capas (`ASSISTANT_ROLE`, `GROUNDING_RULES`, `BUSINESS_RULES`).
+- **`services/knowledge/`**: `POST /knowledge/query` (`{question}` → `{answer}`), con autenticación obligatoria. Mismo patrón que `services/reporting/`: solo HTTP, llama a `query()`.
+- **`uis/backoffice/app/knowledge/`**: pantalla "Asistente" (`services/knowledgeApi.ts`, `types/knowledge.ts`).
+- **`scripts/index_knowledge_base.py`** y **`scripts/evaluate_rag_retrieval.py`**, sobre **`data/eval/test-queries.json`** (14 preguntas, una por chunk, más 4 fuera de tema).
+- Qdrant en `docker-compose.yml` (servicio `qdrant`, volumen `qdrant-data`, sin `restart:`). La API en Docker lo encuentra por nombre (`QDRANT_URL=http://qdrant:6333`).
+
+Decisiones que conviene no romper:
+- **Colección `healthcore_knowledge` y payload literales del CONTEXT** (`company`, `source_document` con los 4 slugs, `section`, `language`, `chunk_index`) + `text`.
+- **Chunking por bloque semántico, no por tamaño**: etiqueta + su lista, etiqueta en línea, frase de entrada unida a su lista y párrafo suelto con el título como `section`. Salen 14 chunks (3/4/4/3); `load_chunks()` falla si un documento da menos de 3. Si se añade un documento con otra estructura, revisar `chunk_document` antes de indexar.
+- **`setup()` limpia y recarga, con IDs `uuid5`**, y calcula los vectores **antes** de tocar Qdrant: un fallo del proveedor no deja la colección vacía.
+- **Se embebe `título — sección + cuerpo`, pero `text` guarda solo el cuerpo.** Mismo preprocesado (colapsar espacios) al indexar y al consultar.
+- **`retrieve(query, *, k, min_score)`**: `min_score` sin valor por defecto (firma del README). Filtra en Python, no con `score_threshold`, para poder testearlo. Devuelve payload + `score`; el endpoint nunca devuelve más que `answer`.
+- **`DEFAULT_MIN_SCORE = 0.38`**, afinado con datos reales: el chunk correcto peor puntuado da 0.423 y la mejor pregunta fuera de tema 0.336. Con 0.5 el Recall@3 bajaba al 93 %. Si cambian los documentos o el modelo de embeddings, se vuelve a evaluar antes de tocarlo. Resultado: Recall@3 del 100 % (objetivo 80 %), las 14 preguntas en 1.ª posición.
+- **Sin contexto también responde el modelo** (marcador `NO_CONTEXT_MARKER`), porque el ticket exige que la respuesta la genere siempre un modelo. El prompt le obliga a decir que no hay información suficiente.
+- **Las reglas de negocio apuntan al contexto, no copian cifras**: seguro no listado → facturación; separar EE. UU. y R. U. si no se especifica; moneda del país; nunca un cargo por no-show a Medicare/Medicaid; los 11 días de referencia no son un compromiso. `test_system_prompt_carries_the_context_business_rules` las fija.
+- **La pregunta nunca va a los logs** (podría llevar datos de un paciente). Solo documento, `chunk_index` y score.
+- **Modelos del proxy de 4Geeks** (LiteLLM en `llm.4geeks.ai`, SDK `openai`): embeddings `madrid-spain/openrouter/perplexity/pplx-embed-v1-0.6b` (1024 dimensiones, el único de embeddings que ofrece) y generación `madrid-spain/openai/gpt-5.6-luna`. `get_embedding_model`/`get_generation_model` rechazan que sean el mismo ID.
+
+Gotchas reales:
+- **El modelo responde en Markdown** (`**50 USD**`) y la pantalla lo mostraba con asteriscos. Lo detectó el recorrido en Chrome, no los tests (usaban respuestas en texto plano). El prompt pide texto plano y `toPlainText` limpia `**`/`__`/`#` de forma defensiva.
+- **Una respuesta tardó 71 s** (lo normal es 1,4-6 s): encaja con el timeout de 30 s + reintento del SDK (`max_retries=2`). Sin corregir; ver el diseño.
+- **Clave del proxy caducada**: LiteLLM responde 401 "Invalid proxy server token" aunque el formato sea correcto (`sk-` + 22). Se arregla regenerándola en la plataforma, no en el código.
+- **Verificación sin datos reales**: API con `SUPPLIERS_DB_PATH` temporal y `DATABASE_URL=` vacío (el arranque solo avisa), y token con `create_access_token` + `hash_password` (no `get_password_hash`, que no existe).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

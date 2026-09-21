@@ -1,0 +1,84 @@
+{
+  "description": "Preguntas de prueba de la base de conocimiento RAG de HealthCore (Hito 7). Cada pregunta indica el chunk correcto (source_document + chunk_index, con su section como referencia legible). Redactadas como las haría un coordinador, sin copiar el texto del documento. Las preguntas out_of_scope no cuentan para Recall@3: sirven para afinar min_score (no deberían superarlo). Uso: services/api/.venv/bin/python scripts/evaluate_rag_retrieval.py",
+  "collection": "healthcore_knowledge",
+  "recall_at": 3,
+  "recall_target": 0.8,
+  "queries": [
+    {
+      "id": "ins-1",
+      "question": "¿Qué aseguradoras comerciales aceptan en las clínicas de Texas?",
+      "expected": {"source_document": "insurance-coverage", "chunk_index": 0, "section": "Estados Unidos (Texas, Florida, Georgia)"}
+    },
+    {
+      "id": "ins-2",
+      "question": "Un paciente de Manchester quiere venir por el NHS, ¿se puede?",
+      "expected": {"source_document": "insurance-coverage", "chunk_index": 1, "section": "Reino Unido (Londres y Manchester)"}
+    },
+    {
+      "id": "ins-3",
+      "question": "Me preguntan si cubrimos un seguro que no conozco, ¿se lo confirmo?",
+      "expected": {"source_document": "insurance-coverage", "chunk_index": 2, "section": "Cobertura de Seguros Aceptados"}
+    },
+    {
+      "id": "apt-1",
+      "question": "¿Cuántos días hay que esperar normalmente para una consulta de rutina?",
+      "expected": {"source_document": "appointment-policy", "chunk_index": 0, "section": "Reserva de citas"}
+    },
+    {
+      "id": "apt-2",
+      "question": "¿Cobran cargo por cancelación con 12 horas de anticipación?",
+      "expected": {"source_document": "appointment-policy", "chunk_index": 1, "section": "Política de cancelación"}
+    },
+    {
+      "id": "apt-3",
+      "question": "¿Hasta cuándo puede el paciente cambiar la hora de su cita él mismo?",
+      "expected": {"source_document": "appointment-policy", "chunk_index": 2, "section": "Recordatorios automáticos"}
+    },
+    {
+      "id": "apt-4",
+      "question": "Un paciente ha faltado varias veces sin avisar, ¿le puedo dar otra cita normal?",
+      "expected": {"source_document": "appointment-policy", "chunk_index": 3, "section": "Política de Citas y Cancelaciones"}
+    },
+    {
+      "id": "ref-1",
+      "question": "¿Qué pasos sigue una derivación al especialista dentro de la red?",
+      "expected": {"source_document": "referral-process", "chunk_index": 0, "section": "Cuando un médico de atención primaria refiere a un paciente a un especialista dentro de la red HealthCore, el proceso estándar es"}
+    },
+    {
+      "id": "ref-2",
+      "question": "¿Cuánto tarda de media una referencia hasta tener la cita confirmada?",
+      "expected": {"source_document": "referral-process", "chunk_index": 1, "section": "Tiempo objetivo de referencia completada"}
+    },
+    {
+      "id": "ref-3",
+      "question": "Hace una semana que derivaron a un paciente y no le han ofrecido cita, ¿a quién aviso?",
+      "expected": {"source_document": "referral-process", "chunk_index": 2, "section": "Proceso de Referencia Interna"}
+    },
+    {
+      "id": "ref-4",
+      "question": "Si el especialista es de fuera de HealthCore, ¿la derivación también es automática?",
+      "expected": {"source_document": "referral-process", "chunk_index": 3, "section": "Proceso de Referencia Interna"}
+    },
+    {
+      "id": "npc-1",
+      "question": "¿Qué trámites tiene que completar un paciente antes de su primera visita?",
+      "expected": {"source_document": "new-patient-checklist", "chunk_index": 0, "section": "Todo paciente nuevo debe completar antes de su primera cita"}
+    },
+    {
+      "id": "npc-2",
+      "question": "¿Qué debo traer a mi primera cita?",
+      "expected": {"source_document": "new-patient-checklist", "chunk_index": 1, "section": "Documentos que el paciente debe traer el día de la cita"}
+    },
+    {
+      "id": "npc-3",
+      "question": "Si el paciente nuevo no rellenó el historial médico, ¿lo pueden atender igual?",
+      "expected": {"source_document": "new-patient-checklist", "chunk_index": 2, "section": "Checklist para Pacientes Nuevos"}
+    }
+  ],
+  "out_of_scope": [
+    {"id": "oos-1", "question": "¿Cuál es el horario de la cafetería del hospital?"},
+    {"id": "oos-2", "question": "¿Cómo cambio el tóner de la impresora de recepción?"},
+    {"id": "oos-3", "question": "¿Qué tiempo va a hacer mañana en Londres?"},
+    {"id": "oos-4", "question": "¿Cuál es la contraseña del wifi de la clínica?"}
+  ]
+}

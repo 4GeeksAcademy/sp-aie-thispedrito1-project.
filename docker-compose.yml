@@ -9,6 +9,8 @@ services:
       # Productor de la cola (Ticket #DEV-55): mismo Redis que el worker, por
       # nombre de servicio Docker. Gana sobre el valor de .env.
       - REDIS_URL=redis://redis:6379/0
+      # Base de conocimiento RAG (Hito 7): Qdrant por nombre de servicio.
+      - QDRANT_URL=http://qdrant:6333
     ports:
       - "8000:8000"
     volumes:
@@ -159,8 +161,23 @@ services:
     networks:
       - healthcore-net
 
+  # Base vectorial de la base de conocimiento RAG (Hito 7). Como redis, se
+  # levanta por nombre y no lleva restart:, para no dejar nada corriendo:
+  #   docker compose up -d qdrant
+  #   docker compose stop qdrant
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    ports:
+      # Solo desde este Mac: Qdrant no tiene API key en desarrollo.
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - healthcore-net
+
 volumes:
   redis-data:
+  qdrant-data:
 
 networks:
   healthcore-net:

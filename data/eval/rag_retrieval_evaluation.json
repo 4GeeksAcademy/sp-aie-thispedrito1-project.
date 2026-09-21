@@ -1,0 +1,218 @@
+{
+  "collection": "healthcore_knowledge",
+  "min_score": 0.38,
+  "recall_at": 3,
+  "recall_target": 0.8,
+  "questions": 14,
+  "recall_without_threshold": 1.0,
+  "recall_with_threshold": 1.0,
+  "lowest_correct_chunk_score": 0.4228,
+  "highest_out_of_scope_score": 0.3359,
+  "out_of_scope_passing_threshold": 0,
+  "queries": [
+    {
+      "id": "ins-1",
+      "expected": "insurance-coverage#0",
+      "rank": 1,
+      "expected_score": 0.642,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "insurance-coverage#0:0.642",
+        "insurance-coverage#1:0.389",
+        "new-patient-checklist#0:0.324"
+      ]
+    },
+    {
+      "id": "ins-2",
+      "expected": "insurance-coverage#1",
+      "rank": 1,
+      "expected_score": 0.5888,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "insurance-coverage#1:0.589",
+        "referral-process#0:0.308",
+        "appointment-policy#1:0.306"
+      ]
+    },
+    {
+      "id": "ins-3",
+      "expected": "insurance-coverage#2",
+      "rank": 1,
+      "expected_score": 0.5397,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "insurance-coverage#2:0.540",
+        "new-patient-checklist#0:0.403",
+        "new-patient-checklist#2:0.350"
+      ]
+    },
+    {
+      "id": "apt-1",
+      "expected": "appointment-policy#0",
+      "rank": 1,
+      "expected_score": 0.5481,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "appointment-policy#0:0.548",
+        "appointment-policy#3:0.417",
+        "referral-process#1:0.410"
+      ]
+    },
+    {
+      "id": "apt-2",
+      "expected": "appointment-policy#1",
+      "rank": 1,
+      "expected_score": 0.6138,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "appointment-policy#1:0.614",
+        "appointment-policy#2:0.399",
+        "appointment-policy#3:0.369"
+      ]
+    },
+    {
+      "id": "apt-3",
+      "expected": "appointment-policy#2",
+      "rank": 1,
+      "expected_score": 0.5569,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "appointment-policy#2:0.557",
+        "appointment-policy#3:0.491",
+        "appointment-policy#1:0.456"
+      ]
+    },
+    {
+      "id": "apt-4",
+      "expected": "appointment-policy#3",
+      "rank": 1,
+      "expected_score": 0.568,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "appointment-policy#3:0.568",
+        "appointment-policy#2:0.491",
+        "appointment-policy#0:0.465"
+      ]
+    },
+    {
+      "id": "ref-1",
+      "expected": "referral-process#0",
+      "rank": 1,
+      "expected_score": 0.4228,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "referral-process#0:0.423",
+        "referral-process#3:0.398",
+        "referral-process#2:0.257"
+      ]
+    },
+    {
+      "id": "ref-2",
+      "expected": "referral-process#1",
+      "rank": 1,
+      "expected_score": 0.7044,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "referral-process#1:0.704",
+        "referral-process#2:0.584",
+        "appointment-policy#0:0.509"
+      ]
+    },
+    {
+      "id": "ref-3",
+      "expected": "referral-process#2",
+      "rank": 1,
+      "expected_score": 0.537,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "referral-process#2:0.537",
+        "appointment-policy#3:0.529",
+        "appointment-policy#0:0.490"
+      ]
+    },
+    {
+      "id": "ref-4",
+      "expected": "referral-process#3",
+      "rank": 1,
+      "expected_score": 0.5922,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "referral-process#3:0.592",
+        "referral-process#0:0.535",
+        "insurance-coverage#1:0.393"
+      ]
+    },
+    {
+      "id": "npc-1",
+      "expected": "new-patient-checklist#0",
+      "rank": 1,
+      "expected_score": 0.6983,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "new-patient-checklist#0:0.698",
+        "new-patient-checklist#2:0.562",
+        "new-patient-checklist#1:0.547"
+      ]
+    },
+    {
+      "id": "npc-2",
+      "expected": "new-patient-checklist#1",
+      "rank": 1,
+      "expected_score": 0.5667,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "new-patient-checklist#1:0.567",
+        "new-patient-checklist#0:0.526",
+        "new-patient-checklist#2:0.366"
+      ]
+    },
+    {
+      "id": "npc-3",
+      "expected": "new-patient-checklist#2",
+      "rank": 1,
+      "expected_score": 0.7526,
+      "hit_without_threshold": true,
+      "hit_with_threshold": true,
+      "top": [
+        "new-patient-checklist#2:0.753",
+        "new-patient-checklist#0:0.611",
+        "new-patient-checklist#1:0.438"
+      ]
+    }
+  ],
+  "out_of_scope": [
+    {
+      "id": "oos-1",
+      "top_score": 0.3359,
+      "passes_threshold": false
+    },
+    {
+      "id": "oos-2",
+      "top_score": 0.1868,
+      "passes_threshold": false
+    },
+    {
+      "id": "oos-3",
+      "top_score": 0.3149,
+      "passes_threshold": false
+    },
+    {
+      "id": "oos-4",
+      "top_score": 0.3223,
+      "passes_threshold": false
+    }
+  ]
+}
