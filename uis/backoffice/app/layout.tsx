@@ -63,6 +63,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                 <Link href="/inventory/orders" className="nav-link">
                   Historial de órdenes
                 </Link>
+                <Link href="/reporting" className="nav-link">
+                  Informe mensual
+                </Link>
                 <Link href="/telemetry" className="nav-link">
                   Telemetría
                 </Link>

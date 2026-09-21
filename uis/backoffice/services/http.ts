@@ -25,6 +25,23 @@ export class ApiFieldError extends Error {
   }
 }
 
+/**
+ * Error de una respuesta HTTP no satisfactoria. El mensaje sigue siendo el
+ * legible para el usuario (como con el Error generico de antes, asi que las
+ * pantallas existentes no cambian); `status` permite a un llamante tratar un
+ * caso concreto sin parsear textos, p. ej. un 404 que en /reporting significa
+ * "ese mes no tiene informe calculado", no un fallo.
+ */
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
 function extractFieldErrors(payload: unknown): FieldError[] | null {
   if (!isObjectRecord(payload)) return null;
 
@@ -113,7 +130,7 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
     if (fieldErrors) {
       throw new ApiFieldError(fieldErrors);
     }
-    throw new Error(extractErrorMessage(response.status, errorPayload));
+    throw new ApiRequestError(extractErrorMessage(response.status, errorPayload), response.status);
   }
 
   if (response.status === 204) {

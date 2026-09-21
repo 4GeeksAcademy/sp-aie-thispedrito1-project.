@@ -3,6 +3,7 @@
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
 import { AsyncSection } from "../../components/AsyncSection";
+import { BarList } from "../../components/BarList";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { getTelemetryReport } from "../../services/telemetryReportApi";
 import {
@@ -15,60 +16,6 @@ import {
   type DateRange,
   type TelemetryReport,
 } from "../../types/telemetryReport";
-
-type BarItem = {
-  label: string;
-  value: number;
-  /** Texto a la derecha de la barra (el numero ya formateado). */
-  display: string;
-};
-
-type BarListProps = {
-  items: BarItem[];
-  /** Valor que ocupa el 100% del ancho. Para tasas es 1; para conteos, el mayor. */
-  max: number;
-  tone: "brand" | "critical";
-};
-
-/**
- * Barras horizontales solo con CSS: sin libreria de graficos y con los
- * tokens del tema, asi que funcionan igual en modo oscuro y claro. Son
- * decorativas (aria-hidden): los valores exactos viven en la tabla de cada
- * panel, que es lo que lee un lector de pantalla.
- */
-function BarList({ items, max, tone }: BarListProps) {
-  const color = tone === "critical" ? "var(--critical)" : "var(--brand)";
-
-  return (
-    <div aria-hidden="true" style={{ display: "grid", gap: 8, marginBottom: 14 }}>
-      {items.map((item) => {
-        const width = max > 0 ? Math.min(100, (item.value / max) * 100) : 0;
-        return (
-          <div
-            key={item.label}
-            style={{ display: "grid", gridTemplateColumns: "minmax(90px, 30%) 1fr auto", gap: 10, alignItems: "center" }}
-          >
-            {/* title: los event_type largos (web_vital_recorded...) se cortan con
-                ellipsis en esta columna; al pasar el raton se ve el nombre entero. */}
-            <span
-              className="mono"
-              title={item.label}
-              style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            >
-              {item.label}
-            </span>
-            <span style={{ background: "var(--line)", borderRadius: 2, height: 10, overflow: "hidden" }}>
-              <span style={{ display: "block", width: `${width}%`, height: "100%", background: color }} />
-            </span>
-            <span className="mono" style={{ fontSize: 12, color: "var(--muted)" }}>
-              {item.display}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 type MetricPanelProps = {
   title: string;

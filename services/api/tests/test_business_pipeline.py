@@ -434,7 +434,13 @@ def test_latest_run_endpoint_exposes_run_metadata(client: TestClient, auth_heade
     _load(inventory_engine, [_raw("2026-08-03T10:00:00", "stock_threshold_triggered", clinic_id=1, country="US")])
     with Session(inventory_engine) as session:
         run = run_log.get_latest_run(session)
-        run_log.update_run(session, run.run_id, started_at=datetime.now(timezone.utc), rows_extracted=1)
+        run_log.update_run(
+            session,
+            run.run_id,
+            started_at=datetime.now(timezone.utc),
+            rows_extracted=1,
+            quality_checks={"warnings": [], "inbound_events_missing_cost": {"10": 1, "3": 2}},
+        )
 
     body = client.get("/reporting/pipeline-runs/latest", headers=auth_headers).json()
 
@@ -444,6 +450,8 @@ def test_latest_run_endpoint_exposes_run_metadata(client: TestClient, auth_heade
     assert body["started_at"] and body["finished_at"]
     assert "triggered_by" not in body
     assert isinstance(body["is_stale"], bool)
+    # Compras sin coste: el dashboard no debe presentar ese 0 como gasto real.
+    assert body["clinics_with_unrecorded_cost"] == ["3", "10"]
 
 
 def test_manual_trigger_requires_admin_and_valid_closed_month(client: TestClient, auth_headers, admin_headers, monkeypatch):
@@ -485,3 +493,41 @@ def test_manual_trigger_runs_the_real_flow_in_background(client: TestClient, adm
     assert latest["status"] == "completed"
     kpis = client.get("/reporting/monthly-clinic-supply-performance", headers=admin_headers).json()
     assert [clinic["clinic_id"] for clinic in kpis["clinics"]] == ["12", "1"]
+
+
+# --- Parte 3: subflows ejecutables por separado -----------------------------
+
+
+def test_kpi_subflow_runs_standalone_with_in_memory_events_and_no_database():
+    events = [
+        _raw("2026-08-03T10:00:00", "inbound_order_created", clinic_id=7, country="US", quantity=120, unit_cost=0.35, delivery_id=1),
+        _raw("2026-08-05T10:00:00", "stock_threshold_triggered", clinic_id=7, country="US"),
+    ]
+
+    result = pipeline.compute_monthly_clinic_supply_kpis(events, AUGUST)
+
+    assert result["rows"] == [
+        {
+            "clinic_id": "7",
+            "country": "US",
+            "month_start": AUGUST,
+            "total_supply_cost": Decimal("42.00"),
+            "supply_consumption_count": 0,
+            "critical_stockout_count": 1,
+            "expiry_risk_count": 0,
+            "currency": "USD",
+        }
+    ]
+    assert result["validation"]["warnings"] == ["coverage_unavailable"]  # sin actividad de dominio
+
+
+def test_extraction_subflow_runs_standalone_and_minimizes_tags(pipeline_engine):
+    _store(pipeline_engine, "2026-08-03T10:00:00", "outbound_order_created", clinic_id=1, country="US", quantity=2, consumption_id=9, userId="user-uuid-1", requestId="req-1")
+
+    extracted = pipeline.extract_clinic_supply_activity(AUGUST)  # sin run_id: sin checkpoint
+
+    assert len(extracted["events"]) == 1
+    tags = extracted["events"][0]["tags"]
+    assert "userId" not in tags and "requestId" not in tags
+    assert tags["clinic_id"] == 1
+    assert extracted["domain_activity"] == {"deliveries": {}, "consumptions": {}}

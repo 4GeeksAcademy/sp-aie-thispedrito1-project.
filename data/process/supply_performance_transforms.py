@@ -44,9 +44,11 @@ KPI_FIELDS = (
 )
 
 # Unicas propiedades de `tags` que salen de la extraccion. userId/requestId y
-# el resto del payload se descartan aqui mismo (minimizacion, seccion 7 del
-# diseno); sessionId se queda solo para contar sesiones activas.
-_KEPT_TAGS = (
+# el resto del payload se descartan (minimizacion, seccion 7 del diseno);
+# sessionId se queda solo para contar sesiones activas. storage.py ya filtra
+# con esta misma lista al leer de telemetry_events: los eventos viajan como
+# parametro del subflow de KPIs y Prefect guarda esos parametros en su base.
+EXTRACTED_TAG_KEYS = _KEPT_TAGS = (
     "eventId",
     "sessionId",
     "clinic_id",
@@ -107,8 +109,13 @@ def events_to_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     agrupacion, igual que services/telemetry/analysis.py."""
     records = []
     for row in rows:
-        tags = row.get("tags") or {}
-        record = {"id": row["id"], "timestamp": row["timestamp"], "event_type": row["event_type"]}
+        # Defensivo: `tags` es JSONB y en teoria siempre un objeto, pero una
+        # fila corrupta (null, lista, texto) no debe tumbar la corrida: se
+        # queda sin propiedades y la validacion la descarta como invalida.
+        tags = row.get("tags")
+        if not isinstance(tags, dict):
+            tags = {}
+        record = {"id": row.get("id"), "timestamp": row.get("timestamp"), "event_type": row.get("event_type")}
         for key in _KEPT_TAGS:
             record[key] = tags.get(key)
         records.append(record)
@@ -124,7 +131,9 @@ def events_to_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     # "10:00:00" y "10:00:00.519000". Sin esto Pandas 2 infiere el formato de
     # la primera fila y revienta con las demas. Bug real: lo encontro la
     # primera ejecucion contra Supabase, no los tests con horas "limpias".
-    frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601")
+    # errors="coerce": un timestamp ilegible queda como NaT y prepare_supply_events
+    # lo cuenta como fila invalida, en vez de que una sola fila rompa el mes.
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True, format="ISO8601", errors="coerce")
     return frame
 
 
@@ -203,67 +212,159 @@ def _money(value: Decimal) -> Decimal:
     return value.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
-def aggregate_monthly_clinic_metrics(frame: pd.DataFrame, month_start: date) -> dict[str, Any]:
-    """Una fila por clinic_id con los 4 KPIs + currency.
+def _clinic_key(value: Any) -> Optional[str]:
+    """clinic_id valido (entero 1-12) -> clave de texto de la tabla ("7").
+    Cualquier otra cosa (None, "7", 7.0, 99, True) -> None. Cada funcion de
+    KPI la usa para ignorar filas malformadas aunque se la llame sin pasar
+    por validate_events."""
+    if _is_int(value) and CLINIC_ID_MIN <= value <= CLINIC_ID_MAX:
+        return str(value)
+    return None
 
-    - Coste en Decimal (nunca float al sumar dinero), redondeado a centimos.
-      Entradas sin unit_cost se excluyen de la suma y se cuentan aparte:
-      coste desconocido no es coste cero.
-    - Solo clinicas con al menos un evento generan fila: sin catalogo no se
-      conoce el pais (ni la moneda) de una clinica sin actividad capturada.
-    - Una clinica con eventos de mas de un pais en el mes se rechaza entera:
-      nunca se mezclan USD y GBP en una fila."""
-    rows: list[dict[str, Any]] = []
+
+def _count_events_by_clinic(frame: pd.DataFrame, event_type: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    if frame.empty:
+        return counts
+    for clinic_id in frame.loc[frame["event_type"] == event_type, "clinic_id"]:
+        key = _clinic_key(clinic_id)
+        if key is not None:
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def total_supply_cost_by_clinic(frame: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    """KPI "Costo de insumos por clinica" (CONTEXT): suma de los costos de
+    inbound_order_created del mes = SUM(quantity * unit_cost) por clinica.
+
+    - Decimal, nunca float al sumar dinero; redondeado a centimos.
+    - Una entrada sin unit_cost utilizable (ausente, negativa, no numerica)
+      se excluye de la suma y se cuenta en `missing_cost`: coste desconocido
+      no es coste cero.
+    - Filas con clinic_id o quantity invalidos se ignoran."""
+    totals: dict[str, Decimal] = {}
+    missing_cost: dict[str, int] = {}
+    if not frame.empty:
+        inbound = frame[frame["event_type"] == INBOUND]
+        for clinic_id, quantity, unit_cost in zip(inbound["clinic_id"], inbound["quantity"], inbound["unit_cost"]):
+            key = _clinic_key(clinic_id)
+            if key is None or not _is_int(quantity) or quantity <= 0:
+                continue
+            totals.setdefault(key, Decimal("0"))
+            if not _is_number(unit_cost) or unit_cost < 0:
+                missing_cost[key] = missing_cost.get(key, 0) + 1
+                continue
+            totals[key] += Decimal(quantity) * Decimal(str(unit_cost))
+    return {
+        "total_supply_cost": {key: _money(value) for key, value in sorted(totals.items(), key=lambda item: int(item[0]))},
+        "missing_cost": missing_cost,
+    }
+
+
+def supply_consumption_count_by_clinic(frame: pd.DataFrame) -> dict[str, int]:
+    """KPI "Volumen de consumo de insumos" (CONTEXT): conteo de
+    outbound_order_created del mes por clinica (ambos consumption_type)."""
+    return _count_events_by_clinic(frame, OUTBOUND)
+
+
+def critical_stockout_count_by_clinic(frame: pd.DataFrame) -> dict[str, int]:
+    """KPI "Frecuencia de quiebre critico" (CONTEXT): conteo de
+    stock_threshold_triggered del mes por clinica. Cuenta eventos tal cual:
+    que cada evento sea una caida bajo minimo lo garantiza la captura
+    (routes/inventory.py::_check_stock_threshold solo emite al cruzar)."""
+    return _count_events_by_clinic(frame, STOCKOUT)
+
+
+def expiry_risk_count_by_clinic(frame: pd.DataFrame) -> dict[str, int]:
+    """KPI "Conteo de riesgo de vencimiento" (CONTEXT): conteo de
+    supply_expiry_flagged del mes por clinica. Un evento = un lote marcado
+    (inventory_alerts.py emite una sola vez por lote y clinica)."""
+    return _count_events_by_clinic(frame, EXPIRY)
+
+
+def resolve_clinic_countries(frame: pd.DataFrame) -> dict[str, Any]:
+    """Pais (y por tanto moneda) de cada clinica con actividad en el mes.
+
+    Una clinica con eventos de mas de un pais se rechaza entera: nunca se
+    mezclan USD y GBP en una fila. Solo clinicas con al menos un evento
+    tienen pais: sin catalogo no se conoce el de una clinica sin actividad.
+    `partition_event_counts` guarda el conteo por tipo para la auditoria."""
+    countries: dict[str, str] = {}
     rejected: list[dict[str, Any]] = []
     partition_event_counts: dict[str, dict[str, int]] = {}
-    missing_cost_by_clinic: dict[str, int] = {}
-
     if not frame.empty:
-        for clinic_id, clinic_events in frame.groupby("clinic_id", sort=True):
-            clinic_key = str(int(clinic_id))
-            counts = {event_type: int((clinic_events["event_type"] == event_type).sum()) for event_type in SOURCE_EVENT_TYPES}
-            partition_event_counts[clinic_key] = counts
-
-            countries = sorted(set(clinic_events["country"]))
-            if len(countries) != 1:
-                rejected.append({"clinic_id": clinic_key, "reason": "mixed_country", "countries": countries})
+        seen: dict[str, set[str]] = {}
+        for clinic_id, country, event_type in zip(frame["clinic_id"], frame["country"], frame["event_type"]):
+            key = _clinic_key(clinic_id)
+            if key is None or country not in CURRENCY_BY_COUNTRY or event_type not in SOURCE_EVENT_TYPES:
                 continue
-            country = countries[0]
+            seen.setdefault(key, set()).add(country)
+            counts = partition_event_counts.setdefault(key, {t: 0 for t in SOURCE_EVENT_TYPES})
+            counts[event_type] += 1
+        for key in sorted(seen, key=int):
+            if len(seen[key]) == 1:
+                countries[key] = next(iter(seen[key]))
+            else:
+                rejected.append({"clinic_id": key, "reason": "mixed_country", "countries": sorted(seen[key])})
+    return {"countries": countries, "rejected": rejected, "partition_event_counts": partition_event_counts}
 
-            inbound = clinic_events[clinic_events["event_type"] == INBOUND]
-            with_cost = inbound[inbound["unit_cost"].notna()]
-            total_cost = sum(
-                (Decimal(int(q)) * Decimal(str(c)) for q, c in zip(with_cost["quantity"], with_cost["unit_cost"])),
-                Decimal("0"),
-            )
-            missing = len(inbound) - len(with_cost)
-            if missing:
-                missing_cost_by_clinic[clinic_key] = missing
 
-            rows.append(
-                {
-                    "clinic_id": clinic_key,
-                    "country": country,
-                    "month_start": month_start,
-                    "total_supply_cost": _money(total_cost),
-                    "supply_consumption_count": counts[OUTBOUND],
-                    "critical_stockout_count": counts[STOCKOUT],
-                    "expiry_risk_count": counts[EXPIRY],
-                    "currency": CURRENCY_BY_COUNTRY[country],
-                }
-            )
-
+def assemble_monthly_clinic_rows(
+    month_start: date,
+    countries: dict[str, str],
+    total_supply_cost: dict[str, Decimal],
+    supply_consumption_count: dict[str, int],
+    critical_stockout_count: dict[str, int],
+    expiry_risk_count: dict[str, int],
+) -> list[dict[str, Any]]:
+    """Una fila por clinica aceptada con los 4 KPIs + currency, con la forma
+    exacta de reporting.monthly_clinic_supply_performance. Una clinica con
+    actividad pero sin eventos de un KPI tiene 0 real en ese KPI."""
+    rows = [
+        {
+            "clinic_id": clinic_id,
+            "country": country,
+            "month_start": month_start,
+            "total_supply_cost": total_supply_cost.get(clinic_id, Decimal("0.00")),
+            "supply_consumption_count": supply_consumption_count.get(clinic_id, 0),
+            "critical_stockout_count": critical_stockout_count.get(clinic_id, 0),
+            "expiry_risk_count": expiry_risk_count.get(clinic_id, 0),
+            "currency": CURRENCY_BY_COUNTRY[country],
+        }
+        for clinic_id, country in countries.items()
+    ]
     rows.sort(key=lambda row: int(row["clinic_id"]))
+    return rows
+
+
+def aggregate_monthly_clinic_metrics(frame: pd.DataFrame, month_start: date) -> dict[str, Any]:
+    """Los 4 KPIs + currency por clinica, componiendo las funciones de arriba.
+    El pipeline llama a cada una desde su propia task (data/pipelines/
+    pipeline.py); esta composicion es el mismo calculo en una sola llamada."""
+    clinics = resolve_clinic_countries(frame)
+    cost = total_supply_cost_by_clinic(frame)
+    rows = assemble_monthly_clinic_rows(
+        month_start,
+        clinics["countries"],
+        cost["total_supply_cost"],
+        supply_consumption_count_by_clinic(frame),
+        critical_stockout_count_by_clinic(frame),
+        expiry_risk_count_by_clinic(frame),
+    )
     return {
         "rows": rows,
-        "rejected": rejected,
-        "partition_event_counts": partition_event_counts,
-        "quality": {
-            "inbound_events_missing_cost": missing_cost_by_clinic,
-            "events_per_day": events_per_day(frame),
-            "active_sessions": int(frame["sessionId"].nunique()) if not frame.empty else 0,
-            "reporting_clinics": len(partition_event_counts),
-        },
+        "rejected": clinics["rejected"],
+        "partition_event_counts": clinics["partition_event_counts"],
+        "quality": build_quality_summary(frame, cost["missing_cost"], len(clinics["partition_event_counts"])),
+    }
+
+
+def build_quality_summary(frame: pd.DataFrame, missing_cost: dict[str, int], reporting_clinics: int) -> dict[str, Any]:
+    return {
+        "inbound_events_missing_cost": missing_cost,
+        "events_per_day": events_per_day(frame),
+        "active_sessions": int(frame["sessionId"].nunique()) if not frame.empty else 0,
+        "reporting_clinics": reporting_clinics,
     }
 
 
@@ -279,9 +380,13 @@ def events_per_day(frame: pd.DataFrame) -> dict[str, dict[str, int]]:
     return dict(sorted(result.items()))
 
 
-def transform_supply_events(rows: list[dict[str, Any]], month_start: date) -> dict[str, Any]:
-    """Pasos 1-4 encadenados. Es lo que ejecuta la task de transformacion."""
+def prepare_supply_events(rows: list[dict[str, Any]], month_start: date) -> dict[str, Any]:
+    """Pasos 1-3: aplanar, recortar a la ventana del mes, validar y
+    deduplicar. Devuelve el DataFrame listo para las funciones de KPI y los
+    contadores del log de ejecucion. Es el paso "costoso" que el pipeline
+    cachea (task prepare_clinic_supply_events)."""
     frame = events_to_frame(rows)
+    unreadable_timestamps = int(frame["timestamp"].isna().sum())
     window_start, window_end = month_window(month_start)
     in_window = (frame["timestamp"] >= pd.Timestamp(window_start, tz=timezone.utc)) & (
         frame["timestamp"] < pd.Timestamp(window_end, tz=timezone.utc)
@@ -290,18 +395,33 @@ def transform_supply_events(rows: list[dict[str, Any]], month_start: date) -> di
 
     valid, rows_invalid = validate_events(frame)
     deduplicated, duplicates_dropped = deduplicate_events(valid)
-    result = aggregate_monthly_clinic_metrics(deduplicated, month_start)
 
     timestamps = deduplicated["timestamp"] if not deduplicated.empty else pd.Series([], dtype="datetime64[ns, UTC]")
-    result["counts"] = {
-        "rows_extracted": len(rows),
-        "rows_invalid": rows_invalid,
-        "duplicates_dropped": duplicates_dropped,
-        "rows_after_dedup": len(deduplicated),
-        "events_by_type": {t: int((deduplicated["event_type"] == t).sum()) if not deduplicated.empty else 0 for t in SOURCE_EVENT_TYPES},
+    return {
+        "events": deduplicated,
+        "counts": {
+            "rows_extracted": len(rows),
+            "rows_invalid": rows_invalid + unreadable_timestamps,
+            "duplicates_dropped": duplicates_dropped,
+            "rows_after_dedup": len(deduplicated),
+            "events_by_type": {
+                t: int((deduplicated["event_type"] == t).sum()) if not deduplicated.empty else 0 for t in SOURCE_EVENT_TYPES
+            },
+        },
+        "source_min_event_timestamp": timestamps.min().to_pydatetime() if len(timestamps) else None,
+        "source_max_event_timestamp": timestamps.max().to_pydatetime() if len(timestamps) else None,
     }
-    result["source_min_event_timestamp"] = timestamps.min().to_pydatetime() if len(timestamps) else None
-    result["source_max_event_timestamp"] = timestamps.max().to_pydatetime() if len(timestamps) else None
+
+
+def transform_supply_events(rows: list[dict[str, Any]], month_start: date) -> dict[str, Any]:
+    """Pasos 1-4 en una sola llamada (preparar + los 4 KPIs). El pipeline
+    ejecuta las mismas funciones repartidas en tasks; esta version sirve
+    para backfills y tests que no necesitan Prefect."""
+    prepared = prepare_supply_events(rows, month_start)
+    result = aggregate_monthly_clinic_metrics(prepared["events"], month_start)
+    result["counts"] = prepared["counts"]
+    result["source_min_event_timestamp"] = prepared["source_min_event_timestamp"]
+    result["source_max_event_timestamp"] = prepared["source_max_event_timestamp"]
     return result
 
 
