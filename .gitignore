@@ -31,3 +31,8 @@ coverage/
 # Salidas de validacion del pipeline de negocio (data/pipelines/pipeline.py):
 # agregados de negocio por corrida, se regeneran en cada ejecucion.
 data/eval/monthly_clinic_supply_performance/
+
+# Backups nocturnos de telemetry_events (scripts/nightly_export.py): llevan
+# userId seudonimizados y datos operativos. Nunca al repo (HIPAA / UK GDPR).
+data/raw/telemetry_*.csv
+data/raw/.telemetry_*.csv.tmp

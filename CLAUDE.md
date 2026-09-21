@@ -76,9 +76,22 @@ services/api/.venv/bin/python data/pipelines/pipeline.py --month-start 2026-08-0
 
 Desde la raíz del repo y con el venv de la API (Prefect `>=3.4,<4` está en `services/api/requirements.txt`; lee `DATABASE_URL` de `services/api/.env`). No hace falta servidor de Prefect: usa su API efímera en el propio proceso. Escribe en `reporting.*` de Supabase y deja un resumen de calidad en `data/eval/monthly_clinic_supply_performance/` (en `.gitignore`). Detalle en la sección de arquitectura y en `data/pipelines/PIPELINE_DESIGN.md`.
 
+### Job nocturno de telemetría (Ticket #DEV-53)
+
+```bash
+services/api/.venv/bin/python scripts/nightly_export.py                         # ayer (UTC)
+TARGET_DATE=2026-08-21 services/api/.venv/bin/python scripts/nightly_export.py  # un día concreto
+docker compose up -d --build scheduler                                          # disparo automático 02:15 UTC
+```
+
+Desde la raíz. Exporta `telemetry_events` del día a `data/raw/telemetry_YYYY-MM-DD.csv` (si no existe), lanza el pipeline de negocio como subproceso y registra la ejecución en `job_runs`. Detalle, logs reales y cuerpo del PR en `docs/nightly-export.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
+# Tests del job nocturno (33, SQLite, sin FastAPI; incluye dos procesos reales a la vez): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/jobs
+
 # Tests unitarios del pipeline de negocio (10 tests, sin base de datos): desde la RAÍZ del repo
 services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py
 
@@ -232,6 +245,32 @@ Gotchas reales encontrados:
 - **`components/BarList.tsx`**: barras CSS extraídas de `/telemetry`, compartidas con `/reporting`.
 - **Coste desconocido ≠ 0 también en la UI:** un `total_supply_cost` de `0` puede ser "compras sin `unit_cost`" (todo agosto de 2026, anterior al campo del formulario). `GET /reporting/pipeline-runs/latest` expone `clinics_with_unrecorded_cost` y el dashboard marca esas filas como "Incompleto" y añade un aviso. Lo detectó el recorrido en Chrome con datos reales, no los tests. Solo aplica si la última corrida es del mes mostrado.
 - **Gotcha de React:** el efecto que rellena el `<input type="month">` con el mes cargado depende solo de `data`. Si dependiera también del valor del campo, borrarlo lo volvería a rellenar al instante. Lo detectó el test de la pantalla.
+
+### Job nocturno de telemetría — `docs/nightly-export.md`
+
+Ticket #DEV-53 (Procesos en Segundo Plano), rama `feat/nightly-telemetry-export` apilada sobre `feat/pipeline-subflows-dashboard`, 2026-09-13.
+
+Mapa del código:
+- **`scripts/nightly_export.py`**: script CLI. Resuelve `target_date` (`TARGET_DATE` o ayer en UTC), exporta el CSV, lanza `data/pipelines/pipeline.py` sin argumentos (último mes cerrado) y hace las transiciones de estado.
+- **`services/job_runner/`**: lógica de estado. `models.py` (tabla `job_runs`), `repository.py` (`create_run`, `mark_processing`, `finish_run`, `cancel_run`, `has_processing_lock`, `has_completed_for_date`, `recover_stale_runs`) y `migrations/001_create_job_runs.sql`, que el script ejecuta en Postgres al arrancar.
+- **Disparador:** servicio `scheduler` en `docker-compose.yml` (`services/scheduler/Dockerfile` + `crontab`), con supercronic y `15 2 * * *` en UTC. No lleva `depends_on: api`.
+- **Tests:** `tests/jobs/` en la raíz y no en `services/api/tests`, porque aquel `conftest` importa FastAPI y el job debe ser independiente de la API. Un test lo comprueba explícitamente (`fastapi`/`prefect` no aparecen en `sys.modules` al importar el script).
+
+Decisiones que conviene no romper:
+
+- **El lock es el estado `processing`**, pero hecho atómico con un índice único parcial (`uq_job_runs_single_processing`). Una consulta previa sola no basta: con dos procesos reales ambos vieron "libre" en el mismo segundo. Lo demostraron el test de dos procesos y la prueba contra Supabase.
+- **El estado final empieza en `failed`** y solo la última línea del `try` lo cambia a `completed`. El `finally` lo escribe con una sesión nueva (`_finish_safely`). SIGTERM se convierte en `JobTerminatedError`, así que `docker stop` también termina en `failed`.
+- **Fila perdedora de la carrera → `failed` con prefijo `Cancelada (sin trabajo):`** (`CANCELLED_PREFIX`), no borrada: queda rastro auditable y se puede filtrar de las alarmas. Si ya hay un `processing` antes de crear fila, no se crea ninguna.
+- **Idempotencia por `(job_name, target_date)`**, comprobada otra vez ya con el lock tomado. `TARGET_DATE` debe ser un día cerrado: marcar `completed` un día a medias bloquearía para siempre su export completo.
+- **Zombis:** `recover_stale_runs` pasa a `failed` las filas `pending`/`processing` de más de 3 h (`STALE_AFTER`, muy por encima del timeout de 30 min del subproceso). No es un segundo lock.
+- **`job_runs` ≠ `reporting.pipeline_runs`:** cada una con su lock (por job y por mes). Si el pipeline encuentra su mes bloqueado, sale con 1 y el job queda `failed`.
+- **El CSV es backup, no input.** Se escribe en `.tmp` y se renombra al final; `data/raw/telemetry_*.csv` está en `.gitignore` (lleva `userId` seudonimizados).
+
+Gotchas reales:
+
+- **El `.env` de la raíz (el que usa `docker compose`) apuntaba al proyecto antiguo de Supabase `eu-central-1`**, no a la base buena de `services/api/.env`. Como `load_dotenv` no sobreescribe variables ya presentes, los contenedores usaban la base equivocada. Corregido el 2026-09-13 con autorización del usuario. Si se rehace algún `.env`, comprobar que los dos apuntan al mismo proyecto (`eu-west-1`).
+- **Build con contexto en la raíz del repo:** `services/scheduler/Dockerfile.dockerignore` (BuildKit lo prioriza sobre un `.dockerignore` de la raíz) limita el contexto a `requirements.txt` y al crontab. Sin él, Docker enviaría `node_modules`, `.venv` y `.git`.
+- **Test de dos procesos:** las tablas se crean antes de lanzarlos, porque `create(checkfirst=True)` no es atómico y uno moría con "table already exists". Era un fallo del test, no del script.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

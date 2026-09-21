@@ -1,0 +1,5 @@
+# El build del scheduler usa la raíz del repo como contexto; sin esto Docker
+# enviaría también node_modules, .venv y .git. Solo hacen falta dos archivos.
+*
+!services/api/requirements.txt
+!services/scheduler/crontab
