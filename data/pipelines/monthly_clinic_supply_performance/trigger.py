@@ -2,38 +2,41 @@
 
 Dos pasos separados a proposito:
 
-1. `trigger_monthly_run` (sincrono, dentro de la peticion): valida el mes y
-   crea la fila `queued` que actua de lock. Asi la API puede responder 400
-   (mes invalido) o 409 (ya hay una corrida activa) antes de lanzar nada.
-2. `launch_manual_run` (en segundo plano, tras responder 202): ejecuta el
-   flow real importado de data/pipelines/pipeline.py, sin servidor ni worker
-   de Prefect (Prefect arranca su API efimera en el propio proceso).
+1. `reserve_monthly_run` (sincrono, dentro de la peticion): valida el mes,
+   comprueba con UNA lectura que no haya otra corrida viva y reserva el
+   run_id. Asi la API puede responder 400 (mes invalido) o 409 (mes ocupado)
+   antes de encolar nada. No escribe: crear el lock en Supabase costaba
+   ~500 ms y el Ticket #DEV-55 exige el 202 en menos de 200 ms.
+2. La ejecucion, tras responder 202: el router encola la tarea de Celery
+   `services/tasks/pipeline_tasks.py` y el worker crea la fila `queued` con
+   el run_id reservado (start_pipeline_run). El lock sigue siendo el indice
+   unico parcial de reporting.pipeline_runs; si dos peticiones pasan la
+   comprobacion en el mismo instante, la segunda tarea termina `cancelled`.
+   Este modulo no importa la tarea: data/pipelines no depende de services/.
 """
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlmodel import Session
 
 from data.pipelines.monthly_clinic_supply_performance import run_log
-from data.pipelines.monthly_clinic_supply_performance.models import PipelineRun
 from data.process.supply_performance_transforms import resolve_month_start
 
 
-def trigger_monthly_run(
-    session: Session, month_start: Optional[date], triggered_by: str, today: Optional[date] = None
-) -> PipelineRun:
-    """Lanza ValueError si el mes no es valido y run_log.WindowLockedError si
-    ese mes ya tiene una corrida activa."""
+def reserve_monthly_run(
+    session: Session, month_start: Optional[date], today: Optional[date] = None
+) -> Tuple[date, uuid.UUID]:
+    """Devuelve (mes resuelto, run_id reservado). Lanza ValueError si el mes
+    no es valido y run_log.WindowLockedError si ya hay una corrida viva."""
     target = resolve_month_start(month_start, today or datetime.now(timezone.utc).date())
-    return run_log.create_queued_run(session, month_start=target, trigger_type="manual", triggered_by=triggered_by)
-
-
-def launch_manual_run(run_id: str, month_start: date, triggered_by: Optional[str]) -> None:
-    # Import diferido: Prefect tarda en importarse y solo hace falta cuando
-    # alguien pulsa el boton, no en cada arranque de la API.
-    from data.pipelines.pipeline import run_manual_flow
-
-    run_manual_flow(run_id, month_start, triggered_by)
+    # Una lectura suelta no necesita transaccion. Sin AUTOCOMMIT, psycopg2
+    # envia BEGIN como viaje aparte a Supabase: medido, ~170 ms -> ~113 ms.
+    session.connection(execution_options={"isolation_level": "AUTOCOMMIT"})
+    blocking = run_log.find_blocking_run(session, target)
+    if blocking is not None:
+        raise run_log.WindowLockedError(blocking.run_id)
+    return target, uuid.uuid4()

@@ -559,14 +559,14 @@ data/
   pipelines/
     __init__.py                                 # añade services/api a sys.path
     PIPELINE_DESIGN.md                          # este documento
-    pipeline.py                                 # flow principal + 4 subflows + 13 @task + CLI (__main__) + run_manual_flow
+    pipeline.py                                 # flow principal + 4 subflows + 13 @task + CLI (__main__)
     monthly_clinic_supply_performance/
       __init__.py
       models.py      # SQLModel de las 3 tablas reporting.* + ensure_reporting_schema (DDL literal del CONTEXT)
       storage.py     # fetch_supply_events, fetch_domain_activity (solo lectura), load_monthly_rows (upsert)
-      run_log.py     # create_queued_run (lock), mark_running, update_run, finish_run, mark_run_failed, get_latest_run
+      run_log.py     # create_queued_run (lock), find_blocking_run (solo lectura), mark_running, update_run, finish_run, mark_run_failed, get_latest_run
       queries.py     # get_monthly_clinic_supply_performance, get_latest_run_status (lecturas de la API)
-      trigger.py     # trigger_monthly_run (valida + lock), launch_manual_run (flow en segundo plano)
+      trigger.py     # reserve_monthly_run (valida + comprueba el lock + reserva run_id; #DEV-55)
   process/
     __init__.py
     supply_performance_transforms.py            # funciones puras de Pandas (§2.4)
@@ -600,7 +600,9 @@ Las dependencias van en un solo sentido: `services/reporting/` importa de `data/
 | --- | --- | --- | --- | --- |
 | `GET /reporting/monthly-clinic-supply-performance?month_start=2026-08-01` | **Consulta de KPIs**: feed del dashboard de la Parte 3 | `get_current_user` | `monthly_clinic_supply_performance.queries.get_monthly_clinic_supply_performance(session, month_start)`. Si `month_start` es `None`, devuelve el mes más reciente presente en la tabla | `200` con el contrato exacto del CONTEXT; `400` si `month_start` no es día 1; `422` si no es una fecha (validación estándar de FastAPI, como el resto de la API); `404` si ese mes no está calculado |
 | `GET /reporting/pipeline-runs/latest` | **Consulta de estado** | `get_current_user` | `monthly_clinic_supply_performance.queries.get_latest_run_status(session)` (sobre `run_log.get_latest_run`) | `200` con `run_id`, `status`, `phase`, `month_start`, `started_at`, `finished_at`, `duration_seconds`, `records_processed`, contadores de particiones, `warnings`, `error_type`/`error_message` e `is_stale` (sin `triggered_by`); `404` si nunca ha corrido |
-| `POST /reporting/pipeline-runs` `{"month_start": "2026-08-01"}` (cuerpo opcional) | **Disparo manual** | `require_admin` (recalcular el paquete de la junta no es una acción de cualquier usuario) | `monthly_clinic_supply_performance.trigger.trigger_monthly_run(...)` (valida y toma el lock con `run_log.create_queued_run`). Después, en `BackgroundTasks`, `trigger.launch_manual_run(...)` → `pipeline.run_manual_flow` → el flow real | `202 {run_id, status: "queued", month_start}`; `400` si el mes no es día 1 o no ha cerrado; `409 {detail: {message, run_id}}` si ya hay una corrida activa para ese mes |
+| `POST /reporting/pipeline-runs` `{"month_start": "2026-08-01"}` (cuerpo opcional) | **Disparo manual** | `require_admin` (recalcular el paquete de la junta no es una acción de cualquier usuario) | Desde el Ticket #DEV-55: `trigger.reserve_monthly_run(...)` (valida, comprueba el lock con una lectura y reserva el `run_id`) y encola la tarea de Celery `services/tasks/pipeline_tasks.py`; el worker crea la fila con el lock y ejecuta el flow real (ver `docs/async-tasks.md`) | `202 {task_id, run_id, status: "queued", month_start}`; `503` si Redis no responde; `400` si el mes no es día 1 o no ha cerrado; `409 {detail: {message, run_id}}` si ya hay una corrida activa para ese mes |
+
+**Superado por el Ticket #DEV-55 (`docs/async-tasks.md`):** el flow ya no corre en el proceso de la API sino en un worker de Celery, y el lock lo toma el worker. Se conserva el párrafo original como historia de la decisión.
 
 **Cambio sobre el diseño (decisión del usuario en la Parte 2):** el disparo manual no usa `run_deployment` contra un servidor y un worker de Prefect. La API ejecuta el flow en segundo plano dentro de su propio proceso, con la API efímera de Prefect. Funciona sin arrancar nada más. El precio es que una corrida manual consume CPU del proceso de la API y se pierde si la API se reinicia a mitad. En ese caso la corrida queda `running`, el heartbeat la marca `crashed` en la siguiente y el lock se libera. Para un pipeline mensual de miles de eventos es aceptable. Con volumen real, volver a `run_deployment`.
 

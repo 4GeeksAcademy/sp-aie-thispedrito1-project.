@@ -56,7 +56,7 @@ from prefect.states import Cancelled  # noqa: E402
 from sqlmodel import Session  # noqa: E402
 
 from data.pipelines.monthly_clinic_supply_performance import run_log, storage  # noqa: E402
-from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
+from data.pipelines.monthly_clinic_supply_performance.models import PipelineRun, ensure_reporting_schema  # noqa: E402
 from data.process.supply_performance_transforms import (  # noqa: E402
     assemble_monthly_clinic_rows,
     build_quality_summary,
@@ -153,9 +153,16 @@ def start_pipeline_run(
     engine = _engine()
     ensure_reporting_schema(engine)
     with Session(engine) as session:
-        if run_id is None:
+        # run_id reservado por POST /reporting/pipeline-runs (Ticket #DEV-55):
+        # la API solo comprueba el lock y el worker crea aquí la fila con ese
+        # mismo id. Si el mes ya está ocupado, WindowLockedError -> Cancelled.
+        if run_id is None or session.get(PipelineRun, _uuid(run_id)) is None:
             run = run_log.create_queued_run(
-                session, month_start=month_start, trigger_type=trigger_type, triggered_by=triggered_by
+                session,
+                month_start=month_start,
+                trigger_type=trigger_type,
+                triggered_by=triggered_by,
+                run_id=_uuid(run_id) if run_id else None,
             )
             run_id = str(run.run_id)
         flow_run_id = prefect_flow_run.get_id()
@@ -578,18 +585,6 @@ def monthly_clinic_supply_performance_flow(
         "load": load_counts,
         "warnings": warnings,
     }
-
-
-def run_manual_flow(run_id: str, month_start: date, triggered_by: Optional[str]) -> None:
-    """Punto de entrada del disparo manual (POST /reporting/pipeline-runs),
-    que ya creó la fila `queued` con el lock. Corre en segundo plano: el
-    resultado queda en reporting.pipeline_runs, nunca se propaga a nadie."""
-    try:
-        monthly_clinic_supply_performance_flow(
-            month_start=month_start, trigger_type="manual", triggered_by=triggered_by, run_id=run_id
-        )
-    except Exception as error:  # noqa: BLE001 — ya registrado en pipeline_runs por el flow
-        print(f"[pipeline] manual run {run_id} failed: {type(error).__name__}", file=sys.stderr)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

@@ -62,6 +62,8 @@ class PipelineRunTriggerRequest(BaseModel):
 
 
 class PipelineRunQueued(BaseModel):
+    # Id de la tarea de Celery, para GET /tasks/{task_id} (Ticket #DEV-55).
+    task_id: str
     run_id: UUID
     status: Literal["queued"]
     month_start: date

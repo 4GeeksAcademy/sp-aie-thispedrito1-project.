@@ -86,6 +86,17 @@ docker compose up -d --build scheduler                                          
 
 Desde la raíz. Exporta `telemetry_events` del día a `data/raw/telemetry_YYYY-MM-DD.csv` (si no existe), lanza el pipeline de negocio como subproceso y registra la ejecución en `job_runs`. Detalle, logs reales y cuerpo del PR en `docs/nightly-export.md`.
 
+### Cola de tareas asíncronas (Ticket #DEV-55)
+
+```bash
+docker compose up -d --build redis worker flower                                              # broker + worker + Flower (localhost:5555)
+docker compose stop worker flower redis                                                       # parar (warm shutdown)
+services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --concurrency=1  # worker nativo, desde la RAÍZ
+services/api/.venv/bin/celery -A services.celery_app flower --port=5555                       # Flower nativo, desde la RAÍZ
+```
+
+`POST /reporting/pipeline-runs` encola y responde 202 con `task_id`; el estado se consulta en `GET /tasks/{task_id}` (solo admin). `REDIS_URL` por defecto `redis://localhost:6379/0` en nativo; en Docker lo fija el compose. Detalle, mediciones y demo de la DLQ en `docs/async-tasks.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -95,7 +106,7 @@ services/api/.venv/bin/python -m pytest tests/jobs
 # Tests unitarios del pipeline de negocio (10 tests, sin base de datos): desde la RAÍZ del repo
 services/api/.venv/bin/python -m pytest tests/pipelines/test_pipeline.py
 
-# Backend (136 tests): desde services/api, con el venv activado
+# Backend (167 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -112,7 +123,7 @@ cp .env.example .env   # o copia tus valores reales de services/api/.env + añad
 docker compose up --build
 ```
 
-Levanta dos servicios en la red `healthcore-net`: `api` (FastAPI, puerto 8000) y `uis` (un solo contenedor Node que arranca `website` en 3000 y `backoffice` en 3001 vía `uis/start.sh`). `uis/backoffice` habla con `api` por nombre de servicio Docker (`BACKEND_API_URL=http://api:8000`, consumido por el rewrite proxy de `next.config.ts`), nunca por `localhost`. Los `Dockerfile` viven en `uis/` y `services/api/` (no en `services/` — ahí solo hay un CSV); `docker-compose.yml` va en la raíz.
+Levanta dos servicios en la red `healthcore-net`: `api` (FastAPI, puerto 8000) y `uis` (un solo contenedor Node que arranca `website` en 3000 y `backoffice` en 3001 vía `uis/start.sh`). Además, en la misma red: `scheduler` (job nocturno, #DEV-53) y `redis` + `worker` + `flower` (cola de tareas, #DEV-55); estos cuatro se levantan por nombre y no llevan `restart:`. `uis/backoffice` habla con `api` por nombre de servicio Docker (`BACKEND_API_URL=http://api:8000`, consumido por el rewrite proxy de `next.config.ts`), nunca por `localhost`. Los `Dockerfile` viven en `uis/` y `services/api/` (no en `services/` — ahí solo hay un CSV); `docker-compose.yml` va en la raíz.
 
 Montajes en tiempo de ejecución más allá de la carpeta propia de cada servicio, porque el código ya alcanzaba fuera de su carpeta desde antes de dockerizar: `packages/` (contiene tanto `packages/shared/incidents_validation` que `services/api/main.py` importa vía un `sys.path` insert a la raíz del repo, como `packages/shared/business-logic` que `uis/backoffice` importa por ruta relativa) y `uis/web/` (página estática legacy que `main.py` sirve en `GET /`). Sin estos montajes esas rutas concretas fallan aunque el resto de la plataforma funcione.
 
@@ -201,7 +212,7 @@ Hito de Data Pipelines. **Parte 1 (diseño)** en `feat/business-pipeline-design`
 Pipeline `monthly_clinic_supply_performance`: el "Reporte Mensual de Desempeño de Insumos por Clínica" para la CEO y la CCO. Calcula 4 KPIs (`total_supply_cost`, `supply_consumption_count`, `critical_stockout_count`, `expiry_risk_count`) por `clinic_id` × `month_start` (UTC) y los escribe en `reporting.monthly_clinic_supply_performance`, creada en Supabase con el DDL **literal** del CONTEXT. Lee `telemetry_events` **en solo lectura** y **no** toca `services/telemetry/analysis.py` ni `GET /telemetry/report`.
 
 Mapa del código:
-- **`data/pipelines/pipeline.py`**: flow `monthly_clinic_supply_performance_flow` + 8 tasks + CLI + `run_manual_flow`.
+- **`data/pipelines/pipeline.py`**: flow `monthly_clinic_supply_performance_flow` + 8 tasks + CLI.
 - **`data/pipelines/monthly_clinic_supply_performance/`**: `models.py` (3 tablas `reporting.*` y `ensure_reporting_schema`), `storage.py` (extracción y carga idempotente), `run_log.py` (log de corridas y lock), `queries.py` y `trigger.py` (lo que usa la API).
 - **`data/process/supply_performance_transforms.py`**: Pandas puro.
 - **`services/reporting/`**: `router.py` + `schemas.py`, con `GET /reporting/monthly-clinic-supply-performance` (KPIs), `GET /reporting/pipeline-runs/latest` (estado) y `POST /reporting/pipeline-runs` (solo admin, 202, 409 si el mes está bloqueado). `services/reporting/` importa de `data/pipelines/`, nunca al revés.
@@ -221,7 +232,7 @@ Decisiones que conviene no romper:
 - **Caché de la transformación: clave = huella del contenido** (mes + `TRANSFORM_VERSION` + `(id, timestamp)` de cada evento) y `cache_expiration` de 1 hora. Nunca una clave solo por mes: un evento tardío tiene que invalidarla. **Si cambias una regla de `supply_performance_transforms.py`, sube `TRANSFORM_VERSION`**, o durante una hora saldrá el resultado viejo de caché. Extracción y carga llevan `cache_policy=NONE`.
 - **Tolerancia a fallos parciales:** `extract_domain_activity` y `export_eval_snapshot` se llaman con `return_state=True`; si fallan, la corrida termina `completed_with_warnings`. Las críticas propagan: el `try/except` del flow registra `failed` en `pipeline_runs` y relanza. `start_pipeline_run` usa `retry_condition_fn` para no reintentar un `WindowLockedError`.
 - **`supply_deliveries`/`supply_consumptions` solo auditan la captura** (`capture_ratio`, aviso por debajo de 0.95). Cero eventos con filas de dominio en la ventana → `CaptureGapError`, `failed` y nada publicado.
-- **Disparo manual dentro de la API** (`BackgroundTasks` → `trigger.launch_manual_run`, que importa Prefect de forma diferida), sin servidor ni worker, por decisión del usuario. Si la API se reinicia a mitad de corrida, la corrida queda `running` hasta que el heartbeat (30 min) la marca `crashed` y libera el lock del mes. **Sin `TTLCache` en `/reporting`**: quien escribe no puede invalidar la caché del proceso de la API.
+- **Disparo manual por Celery** desde el Ticket #DEV-55 (antes `BackgroundTasks` dentro del proceso de la API): la API solo comprueba el lock y reserva el `run_id` (`trigger.reserve_monthly_run`); el worker crea la fila y ejecuta el flow. Sin servidor ni worker **de Prefect** (su API efímera corre dentro del worker de Celery). Si el worker muere a mitad, la corrida queda `running` hasta que el heartbeat (30 min) la marca `crashed` y libera el lock del mes. **Sin `TTLCache` en `/reporting`**: quien escribe no puede invalidar la caché del proceso de la API.
 - **Blocks de Prefect no implementados**: sin servidor persistente no hay dónde registrarlos. `DATABASE_URL` sale de `services/api/.env` a través de `database.get_inventory_engine()`.
 
 Gotchas reales encontrados:
@@ -271,6 +282,28 @@ Gotchas reales:
 - **El `.env` de la raíz (el que usa `docker compose`) apuntaba al proyecto antiguo de Supabase `eu-central-1`**, no a la base buena de `services/api/.env`. Como `load_dotenv` no sobreescribe variables ya presentes, los contenedores usaban la base equivocada. Corregido el 2026-09-13 con autorización del usuario. Si se rehace algún `.env`, comprobar que los dos apuntan al mismo proyecto (`eu-west-1`).
 - **Build con contexto en la raíz del repo:** `services/scheduler/Dockerfile.dockerignore` (BuildKit lo prioriza sobre un `.dockerignore` de la raíz) limita el contexto a `requirements.txt` y al crontab. Sin él, Docker enviaría `node_modules`, `.venv` y `.git`.
 - **Test de dos procesos:** las tablas se crean antes de lanzarlos, porque `create(checkfirst=True)` no es atómico y uno moría con "table already exists". Era un fallo del test, no del script.
+
+### Cola de tareas asíncronas — `docs/async-tasks.md`
+
+Ticket #DEV-55, rama `feat/async-task-queue` apilada sobre `feat/nightly-telemetry-export`, 2026-09-13. Endpoint convertido, elegido por el usuario: `POST /reporting/pipeline-runs` (recálculo del informe mensual, 3-11 s contra Supabase), que antes corría con `BackgroundTasks` dentro de FastAPI.
+
+Mapa del código:
+- **`services/celery_app.py`**: instancia compartida por API y worker (`REDIS_URL` como broker y backend, solo JSON, `acks_late`, `track_started`, `prefetch=1`, límites 15/20 min, `visibility_timeout` 2 h, eventos para Flower). Añade la raíz y `services/api` a `sys.path` y carga `services/api/.env`.
+- **`services/tasks/`**: `pipeline_tasks.py` (`ObservableTask`, la tarea `reporting.run_monthly_clinic_supply_performance` y `enqueue_monthly_pipeline_run`), `dead_letters.py` (tabla `task_dead_letters`), `status.py` + `router.py` + `schemas.py` (`GET /tasks/{task_id}`) y `redaction.py`.
+- **Docker:** `redis` (7.4, `noeviction` con `maxmemory 256mb`, `appendonly`, puertos solo en `127.0.0.1`), `worker` y `flower` (misma imagen `services/worker/Dockerfile`, contexto en la raíz). Ninguno lleva `restart:`. **`api` monta ahora `./services` y `./data` completos**: antes solo montaba `services/api`, así que `/reporting` ni se podía importar dentro del contenedor (roto desde la Parte 2 del pipeline sin que nadie lo notara, porque tests y dev nativo ven el repo entero).
+- **Tests:** `services/api/tests/test_async_tasks.py` (tarea con `apply()`, el modo síncrono de Celery que sí ejecuta los reintentos, con el flow sustituido) y los del disparo en `test_business_pipeline.py`.
+
+Decisiones que conviene no romper:
+- **`max_retries=3` literal** (decisión del usuario): 4 ejecuciones antes de la DLQ, `attempt=4`. Backoff `retry_backoff=10` → 10/20/40 s con **`retry_jitter=False`**. El jitter por defecto de Celery sortea entre 0 y el tope y podía reintentar al instante.
+- **La API comprueba, el worker bloquea** (decisión del usuario tras medir). Crear el lock en la petición costaba ~520 ms y publicar en Redis 2-4 ms. `reserve_monthly_run` hace una sola lectura (`run_log.find_blocking_run`, que ignora corridas caducadas con `run_log.is_stale`) con `AUTOCOMMIT` (psycopg2 manda `BEGIN` como viaje aparte: ~170 → ~113 ms). Después reserva un `uuid4` y encola. `start_pipeline_run` crea la fila con ese id si no existe. Resultado: 202 en ~120 ms en caliente. El índice único parcial sigue siendo el lock, así que si dos peticiones pasan a la vez la segunda tarea termina `cancelled`.
+- **Cada intento tiene su propia fila en `pipeline_runs`:** el primero usa el `run_id` reservado y los reintentos pasan `run_id=None`. La fila fallida ya soltó el lock y otra corrida pudo tomarlo durante la espera. `_release_run_if_still_active` marca `failed` una fila que quedó `queued`/`running` si el flow murió antes de registrar su fallo.
+- **Gotcha real de Prefect 3: `return Cancelled(...)` en un flow NO se devuelve, se lanza como `CancelledRun`** al llamar al flow directamente. El `if not isinstance(result, dict)` del CLI de `pipeline.py` nunca se ejecuta. La tarea captura `CancelledRun` y devuelve `success` con `{"status": "cancelled"}`. Sin eso, autoretry reintentaba 3 veces "mes ocupado" y lo mandaba a la DLQ. Lo detectó `test_task_is_cancelled_when_the_month_was_taken_after_the_api_check`.
+- **`SoftTimeLimitExceeded` no se reintenta** (`dont_autoretry_for`) y va directo a la DLQ con `attempt=1`. El límite duro no llama a `on_failure`, así que no llegaría a la DLQ; el blando salta antes.
+- **Mapeo de estados** (`status.py`): `RECEIVED`→`pending`; `RETRY`→`started` con el error del intento anterior en `error`; `REVOKED`/`REJECTED`/`IGNORED`→`failure`; desconocido→`pending`. Un `task_id` inexistente o con el resultado caducado (24 h) también da `pending`.
+- **Gotcha real de privacidad: el logger interno `celery.app.trace` repite el error crudo** en "Retry in 20s: RuntimeError('… ana@x.com')" y en el traceback. `redaction.RedactingFilter` enmascara el mensaje y precalcula `record.exc_text` con el traceback ya limpio (`logging.Formatter` lo reutiliza). Hay test que lo fija.
+- **`pipeline_tasks.py` no importa Prefect a nivel de módulo** (lo importa la API para encolar). `celery_app.py` sube `httpx` a WARNING, como `main.py`: sin eso, ~40 líneas `HTTP Request` por corrida en el log del worker.
+- **Gotcha de verificación:** la TinyDB real no tiene ningún admin. Se verificó con un admin en una TinyDB temporal (`SUPPLIERS_DB_PATH`) y un token generado con `create_access_token`, sin login, para no escribir `login_succeeded` en Supabase. Para reproducir la DLQ sin tocar datos ni código: worker con `PREFECT_API_URL=http://127.0.0.1:9/api PREFECT_CLIENT_MAX_RETRIES=0`.
+- **No verificado:** el build de `services/worker/Dockerfile` y `worker`/`flower` dentro de Docker (quedaban 2,8 GB de disco). `docker compose config` sí resuelve. Todo lo demás se verificó contra Supabase real: API/worker/Flower nativos + Redis en Docker, ciclo `started→success`, 409, API apagada con mensaje en cola, DLQ tras 4 intentos y capturas de Flower en `docs/async-tasks/`.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
