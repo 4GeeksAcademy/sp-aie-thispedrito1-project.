@@ -23,3 +23,7 @@ flower==2.0.1
 qdrant-client==1.16.1
 openai==2.48.0
 eval-type-backport==0.2.2; python_version < "3.10"
+# Agente LangGraph (Parte 1): el flujo del RAG como grafo con estado,
+# checkpointing y trace. 0.6.11 es la última versión compatible con Python 3.9
+# (langgraph 1.x exige 3.10).
+langgraph==0.6.11

@@ -100,6 +100,12 @@
   - **Encontrado en Chrome, no en tests:** el modelo respondia en Markdown y la pantalla mostraba los asteriscos. Corregido en el prompt y con `toPlainText`.
   - **Tests:** `tests/pipelines/test_rag.py` 21, `services/api/tests/test_knowledge.py` 5 y `__tests__/knowledgeAssistant.test.tsx` 9. Sin el filtro de `min_score` fallan los 2 tests del umbral (comprobado). Sin regresiones: API 172, raiz (pipelines + jobs) 100, Jest 94, `next build` correcto.
 
+- Agente de soporte con LangGraph, Parte 1 (rama `feature/langgraph-agent-base`, apilada sobre `feature/rag-knowledge-base` porque el PR del Hito 7 espera aprobacion, 2026-09-24). Diseno en `docs/agent/agent-design.md`.
+  - **Que hace:** el RAG del Hito 7 como grafo LangGraph de 5 nodos (`receive_question`, `reject_question`, `retrieve`, `no_information`, `generate`) con dos aristas condicionales (pregunta vacia; sin contexto sobre el umbral), compilado y validado al arrancar la API, con checkpoint por transicion y trace JSON por corrida. Expuesto en `POST /agent/query` (convive con `/knowledge/query`).
+  - **Decisiones del usuario:** trace en JSON propio (no LangSmith); la pregunta solo como huella SHA-256 + longitud; endpoint nuevo sin tocar la UI. Delegada ("hazlo tu"): `route_after_retrieve` no vuelve a mirar puntuaciones, el umbral vive solo en `retrieve()`.
+  - **Resultado real:** 5 corridas reales grabadas, 26/26 evals (anclaje: "50 USD", Medicare sin cargo + historial, facturacion/Tom Callahan; fuera de tema sin llamar al modelo). El trace atribuyo 62,5 de 66 s a `generate`: la latencia rara del Hito 7 es del proveedor.
+  - **Tests:** grafo 17, evals 26, endpoint 6. Sin regresiones: raiz (pipelines + jobs) 143, API 178. Sin cambios de frontend. Qdrant reindexado para grabar y retirado despues (contenedor, volumen e imagen).
+
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
 - Mejora de robustez de tipos en frontend.

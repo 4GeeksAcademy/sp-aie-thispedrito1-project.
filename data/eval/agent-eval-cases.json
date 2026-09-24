@@ -1,0 +1,64 @@
+{
+  "description": "Casos de evaluación del agente LangGraph (Agente de Soporte, Parte 1). Cada caso se ejecuta UNA vez contra Qdrant y el modelo reales con scripts/record_agent_traces.py, que guarda su trace en data/eval/agent-traces/<id>.json; tests/pipelines/test_agent_evals.py evalúa esos traces sin volver a llamar al modelo. Criterios: node_sequence (recorrido exacto), must_run_before (orden entre nodos), must_not_run, outcome, retrieved_documents_include (anclaje de la recuperación) y answer_contains_all / answer_contains_any (anclaje de la respuesta, comparados en minúsculas y con espacios colapsados). Los datos esperados salen literalmente de docs/company-knowledge-base/.",
+  "trace_dir": "data/eval/agent-traces",
+  "cases": [
+    {
+      "id": "no-show-private-us",
+      "question": "Un paciente de pago privado en Texas no se presentó a su cita, ¿cuánto se le cobra?",
+      "why": "Anclaje: el importe del no-show en EE. UU. es 50 USD (appointment-policy, Política de cancelación).",
+      "expect": {
+        "node_sequence": ["receive_question", "retrieve", "generate"],
+        "must_run_before": [["retrieve", "generate"]],
+        "outcome": "answered",
+        "retrieved_documents_include": ["appointment-policy"],
+        "answer_contains_all": ["50 usd"]
+      }
+    },
+    {
+      "id": "no-show-medicare",
+      "question": "Una paciente con Medicare faltó a su cita sin avisar, ¿le aplico el cargo por no-show?",
+      "why": "Anclaje + regla de negocio: a Medicare/Medicaid no se le cobra el no-show, pero se registra en su historial.",
+      "expect": {
+        "node_sequence": ["receive_question", "retrieve", "generate"],
+        "must_run_before": [["retrieve", "generate"]],
+        "outcome": "answered",
+        "retrieved_documents_include": ["appointment-policy"],
+        "answer_contains_all": ["historial"],
+        "answer_contains_any": ["no se le cobra", "no se les cobra", "no se cobra", "no aplica", "no le aplica", "sin cargo", "no tiene cargo", "no corresponde"]
+      }
+    },
+    {
+      "id": "unlisted-insurance",
+      "question": "Un paciente dice que tiene seguro Oscar Health, ¿le confirmo que lo cubrimos?",
+      "why": "Regla de negocio: un seguro no listado se verifica con facturación (Tom Callahan) antes de confirmar nada.",
+      "expect": {
+        "node_sequence": ["receive_question", "retrieve", "generate"],
+        "must_run_before": [["retrieve", "generate"]],
+        "outcome": "answered",
+        "retrieved_documents_include": ["insurance-coverage"],
+        "answer_contains_all": ["facturación", "callahan"]
+      }
+    },
+    {
+      "id": "off-topic",
+      "question": "¿Cuál es la receta tradicional de la paella valenciana?",
+      "why": "Arista condicional: sin contexto sobre el umbral, responde con honestidad y NO llama al modelo de generación.",
+      "expect": {
+        "node_sequence": ["receive_question", "retrieve", "no_information"],
+        "must_not_run": ["generate"],
+        "outcome": "no_information",
+        "answer_contains_all": ["no tengo información suficiente"]
+      }
+    },
+    {
+      "id": "blank-question",
+      "question": "   ",
+      "why": "Arista condicional: una pregunta vacía se corta antes de recuperar.",
+      "expect": {
+        "node_sequence": ["receive_question", "reject_question"],
+        "must_not_run": ["retrieve", "generate"],
+        "outcome": "invalid_question"
+      }
+    }
+  ]
+}
