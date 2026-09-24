@@ -1,10 +1,10 @@
 {
   "trace_id": "eval-no-show-private-us",
-  "schema_version": 1,
+  "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T15:38:47.276137+00:00",
-  "finished_at": "2026-09-24T15:39:53.355994+00:00",
-  "duration_ms": 66082.19,
+  "started_at": "2026-09-24T16:48:19.548047+00:00",
+  "finished_at": "2026-09-24T16:49:25.974332+00:00",
+  "duration_ms": 66428.31,
   "status": "completed",
   "input": {
     "question": {
@@ -16,12 +16,14 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 1.58,
+      "duration_ms": 0.99,
       "output": {
         "question": {
           "sha256": "dfc9fd75c9cb4fc4b2a23ff790df878290867c10ab4648de421da49e551d8080",
           "length": 83
         },
+        "plan": [],
+        "plan_status": null,
         "context": [],
         "answer": null,
         "outcome": null
@@ -29,8 +31,22 @@
     },
     {
       "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 3051.97,
+      "output": {
+        "plan": [
+          {
+            "source": "knowledge_base",
+            "args": {}
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
       "node": "retrieve",
-      "duration_ms": 3534.29,
+      "duration_ms": 61723.94,
       "output": {
         "context": [
           {
@@ -51,27 +67,41 @@
             "chunk_index": 0,
             "score": 0.42388332
           }
+        ],
+        "completed_sources": [
+          "knowledge_base"
         ]
       }
     },
     {
-      "index": 3,
+      "index": 4,
       "node": "generate",
-      "duration_ms": 62543.27,
+      "duration_ms": 1650.26,
       "output": {
-        "answer": "A un paciente de pago privado en Texas que no se presentó a su cita se le cobra 50 USD.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
+        "answer": "Al paciente de pago privado en Texas se le cobra un cargo de 50 USD por no presentarse a la cita.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
         "outcome": "answered"
       }
     }
   ],
   "node_sequence": [
     "receive_question",
+    "plan_sources",
     "retrieve",
     "generate"
   ],
+  "plan": [
+    {
+      "source": "knowledge_base",
+      "args": {}
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "knowledge_base"
+  ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b82e0-8518-6ca4-bfff-9754db8df198",
+      "checkpoint_id": "1f1b837b-f2fb-660e-bfff-7e812157b048",
       "step": -1,
       "source": "input",
       "next": [
@@ -79,7 +109,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e0-851a-6dc4-8000-0629470a6056",
+      "checkpoint_id": "1f1b837b-f2fc-6130-8000-7ba1706ca9dc",
       "step": 0,
       "source": "loop",
       "next": [
@@ -87,29 +117,37 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e0-851b-6b98-8001-c61b32f6ec12",
+      "checkpoint_id": "1f1b837b-f2fd-6008-8001-0e9583172b91",
       "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b837c-1016-6f5e-8002-49555270797c",
+      "step": 2,
       "source": "loop",
       "next": [
         "retrieve"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e0-a6cf-69b0-8002-dc42599b1529",
-      "step": 2,
+      "checkpoint_id": "1f1b837e-5cb4-6b52-8003-f7ca9a9fa41f",
+      "step": 3,
       "source": "loop",
       "next": [
         "generate"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e2-fb37-6c76-8003-42fe94bf58b5",
-      "step": 3,
+      "checkpoint_id": "1f1b837e-6c74-6a24-8004-61f480d61136",
+      "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "A un paciente de pago privado en Texas que no se presentó a su cita se le cobra 50 USD.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
+  "answer": "Al paciente de pago privado en Texas se le cobra un cargo de 50 USD por no presentarse a la cita.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
   "error": null
 }

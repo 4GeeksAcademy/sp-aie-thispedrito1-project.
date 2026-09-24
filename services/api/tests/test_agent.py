@@ -1,9 +1,11 @@
-"""POST /agent/query (Agente de Soporte, Parte 1).
+"""POST /agent/query (Agente de Soporte, Partes 1 y 2).
 
-Recuperación y generación se sustituyen con monkeypatch sobre
-data/pipelines/rag.py, así que el grafo real (el que compila el router al
-importarse) se ejecuta de verdad sin tocar Qdrant ni el modelo. Fijan el
-contrato HTTP: respuesta + trace_id, autenticación y errores limpios."""
+Recuperación, generación y planificador se sustituyen con monkeypatch
+(data/pipelines/rag.py y services/agent/planner.py), así que el grafo real
+(el que compila el router al importarse) se ejecuta de verdad sin tocar
+Qdrant ni el modelo. La tool de incidencias NO se sustituye: lee de la TinyDB
+temporal de los tests con el IncidentRepository real. Fijan el contrato HTTP:
+respuesta + trace_id, autenticación y errores limpios."""
 
 from __future__ import annotations
 
@@ -14,6 +16,8 @@ from fastapi.testclient import TestClient
 
 from data.pipelines import rag
 from data.process.rag import RagConfigError
+from services.agent import planner
+from services.agent.planner import Plan, PlannedCall
 
 CHUNK = {
     "source_document": "appointment-policy",
@@ -28,7 +32,12 @@ CHUNK = {
 def trace_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_TRACE_DIR", str(tmp_path))
     monkeypatch.setattr(rag, "get_min_score", lambda: 0.38)
+    use_plan(monkeypatch, PlannedCall(source="knowledge_base"))
     return tmp_path
+
+
+def use_plan(monkeypatch, *calls: PlannedCall) -> None:
+    monkeypatch.setattr(planner, "plan_sources", lambda question: Plan(calls=list(calls), status="model"))
 
 
 def test_agent_answers_through_the_graph_and_leaves_a_trace(client: TestClient, auth_headers, monkeypatch, trace_dir) -> None:
@@ -48,7 +57,8 @@ def test_agent_answers_through_the_graph_and_leaves_a_trace(client: TestClient, 
     assert "score" not in response.text and CHUNK["text"] not in response.text
 
     trace = json.loads((trace_dir / f"{body['trace_id']}.json").read_text(encoding="utf-8"))
-    assert trace["node_sequence"] == ["receive_question", "retrieve", "generate"]
+    assert trace["node_sequence"] == ["receive_question", "plan_sources", "retrieve", "generate"]
+    assert trace["sources_used"] == ["knowledge_base"]
     assert "30 horas" not in json.dumps(trace, ensure_ascii=False)
 
 
@@ -92,3 +102,45 @@ def test_agent_misconfiguration_is_a_clean_503(client: TestClient, auth_headers,
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Support agent is not configured."}
+
+
+def test_agent_reads_the_live_incident_manager(client: TestClient, auth_headers, monkeypatch, trace_dir) -> None:
+    created = client.post(
+        "/api/incidents",
+        json={
+            "title": "Cobro duplicado",
+            "description": "Texto libre que nunca debe llegar al modelo",
+            "category": "billing_error",
+            "status": "open",
+            "origin": "customer",
+            "branch": "central",
+        },
+        headers=auth_headers,
+    ).json()
+    client.patch(f"/api/incidents/{created['id']}/status", json={"status": "in_progress"}, headers=auth_headers)
+
+    seen = {}
+    monkeypatch.setattr(rag, "retrieve", lambda *a, **k: pytest.fail("una pregunta de ticket no debe ir al RAG"))
+    monkeypatch.setattr(rag, "generate_answer", lambda q, c: seen.setdefault("context", c) and "En curso.")
+    use_plan(monkeypatch, PlannedCall(source="incidents", args={"ticket_id": created["id"]}))
+
+    response = client.post("/agent/query", json={"question": f"¿Estado del ticket {created['id']}?"}, headers=auth_headers)
+
+    assert response.status_code == 200
+    evidence = seen["context"][0]["text"]
+    # El estado actual (tras el PATCH), no el de creación: dato en vivo.
+    assert "estado in_progress (en curso)" in evidence
+    assert "Texto libre" not in evidence and "Cobro duplicado" not in evidence
+    trace = json.loads((trace_dir / f"{response.json()['trace_id']}.json").read_text(encoding="utf-8"))
+    assert trace["sources_used"] == ["incidents"]
+
+
+def test_agent_unknown_ticket_is_an_honest_answer_not_an_error(client: TestClient, auth_headers, monkeypatch) -> None:
+    monkeypatch.setattr(rag, "generate_answer", lambda q, c: pytest.fail("no debe generar sin el dato"))
+    use_plan(monkeypatch, PlannedCall(source="incidents", args={"ticket_id": 99999}))
+
+    response = client.post("/agent/query", json={"question": "¿Estado del ticket 99999?"}, headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "tool_fallback"
+    assert "No encuentro la incidencia #99999" in response.json()["answer"]

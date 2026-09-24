@@ -1,0 +1,150 @@
+{
+  "trace_id": "eval-inventory-not-found",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T17:39:44.918723+00:00",
+  "finished_at": "2026-09-24T17:39:47.099776+00:00",
+  "duration_ms": 2181.08,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "c78a3b669a0e33001a049743c35a404c696a882e2343c01aef88d34ae2773de7",
+      "length": 43
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 2.47,
+      "output": {
+        "question": {
+          "sha256": "c78a3b669a0e33001a049743c35a404c696a882e2343c01aef88d34ae2773de7",
+          "length": 43
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 2039.73,
+      "output": {
+        "plan": [
+          {
+            "source": "inventory",
+            "args": {
+              "product": "respiradores N95"
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "check_inventory_stock",
+      "duration_ms": 134.33,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "check_inventory_stock",
+            "status": "not_found",
+            "args": {
+              "product": "respiradores N95"
+            },
+            "data": null,
+            "error_type": "ToolNotFound",
+            "timeout_s": 5.0,
+            "duration_ms": 131.54
+          }
+        ],
+        "completed_sources": [
+          "inventory"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "tool_fallback",
+      "duration_ms": 1.87,
+      "output": {
+        "answer": "No encuentro ningún insumo que coincida con «respiradores N95» en el inventario. Revisa el nombre o el SKU antes de confirmar disponibilidad.",
+        "outcome": "tool_fallback"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "check_inventory_stock",
+    "tool_fallback"
+  ],
+  "plan": [
+    {
+      "source": "inventory",
+      "args": {
+        "product": "respiradores N95"
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "inventory"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b83ee-e35f-6808-bfff-e81a0a61c4ee",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-e361-6324-8000-81e734638118",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-e363-696c-8001-f17f7618fcf5",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-f6d7-6624-8002-b4e4683c768e",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "check_inventory_stock"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-f81d-6cc2-8003-c526d2b1c696",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "tool_fallback"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-f822-6c4a-8004-396a16427d2f",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "tool_fallback",
+  "answer": "No encuentro ningún insumo que coincida con «respiradores N95» en el inventario. Revisa el nombre o el SKU antes de confirmar disponibilidad.",
+  "error": null
+}

@@ -1,0 +1,178 @@
+{
+  "trace_id": "eval-ticket-search",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T16:52:18.974486+00:00",
+  "finished_at": "2026-09-24T16:52:21.823402+00:00",
+  "duration_ms": 2848.99,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "d0e8961094d9c89adcc3de07f9dbee641f2b0872a105802416be3385d6d569eb",
+      "length": 72
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 2.81,
+      "output": {
+        "question": {
+          "sha256": "d0e8961094d9c89adcc3de07f9dbee641f2b0872a105802416be3385d6d569eb",
+          "length": 72
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 1461.0,
+      "output": {
+        "plan": [
+          {
+            "source": "incidents",
+            "args": {
+              "status": "open",
+              "branch": "manchester_central"
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "lookup_incident",
+      "duration_ms": 3.84,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "lookup_incident",
+            "status": "ok",
+            "args": {
+              "status": "open",
+              "branch": "manchester_central"
+            },
+            "data": {
+              "mode": "search",
+              "total": 2,
+              "incidents": [
+                {
+                  "id": 22,
+                  "status": "open",
+                  "status_label_es": "abierta",
+                  "category": "billing_error",
+                  "origin": "customer",
+                  "branch": "manchester_central",
+                  "created_at": "2024-01-18T00:00:00Z",
+                  "updated_at": "2024-01-18T00:00:00Z"
+                },
+                {
+                  "id": 92,
+                  "status": "open",
+                  "status_label_es": "abierta",
+                  "category": "patient_experience",
+                  "origin": "customer",
+                  "branch": "manchester_central",
+                  "created_at": "2024-01-18T00:00:00Z",
+                  "updated_at": "2024-01-18T00:00:00Z"
+                }
+              ]
+            },
+            "error_type": null,
+            "timeout_s": 3.0,
+            "duration_ms": 2.76
+          }
+        ],
+        "completed_sources": [
+          "incidents"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "generate",
+      "duration_ms": 1379.4,
+      "output": {
+        "answer": "Ahora mismo tenemos 2 incidencias abiertas en Manchester Central.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Búsqueda (branch=manchester_central, status=open)",
+        "outcome": "answered"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "lookup_incident",
+    "generate"
+  ],
+  "plan": [
+    {
+      "source": "incidents",
+      "args": {
+        "status": "open",
+        "branch": "manchester_central"
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "incidents"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b8384-de55-6fac-bfff-a794949dc4ed",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-de57-6dde-8000-3e20d09b936f",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-de5a-65b6-8001-111740a80b52",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-ec48-686c-8002-3c64153ee418",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "lookup_incident"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-ec52-66be-8003-51d42f045885",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "generate"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-f978-6c44-8004-5eb7ce79e808",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "answered",
+  "answer": "Ahora mismo tenemos 2 incidencias abiertas en Manchester Central.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Búsqueda (branch=manchester_central, status=open)",
+  "error": null
+}

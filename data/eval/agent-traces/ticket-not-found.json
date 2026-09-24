@@ -1,0 +1,150 @@
+{
+  "trace_id": "eval-ticket-not-found",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T16:52:21.825594+00:00",
+  "finished_at": "2026-09-24T16:52:23.576203+00:00",
+  "duration_ms": 1750.65,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "84e743b9bb970c507009859050b3b24a2fa34b661588871f495e74808467359b",
+      "length": 40
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 2.52,
+      "output": {
+        "question": {
+          "sha256": "84e743b9bb970c507009859050b3b24a2fa34b661588871f495e74808467359b",
+          "length": 40
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 1742.63,
+      "output": {
+        "plan": [
+          {
+            "source": "incidents",
+            "args": {
+              "ticket_id": 4821
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "lookup_incident",
+      "duration_ms": 2.8,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "lookup_incident",
+            "status": "not_found",
+            "args": {
+              "ticket_id": 4821
+            },
+            "data": null,
+            "error_type": "ToolNotFound",
+            "timeout_s": 3.0,
+            "duration_ms": 1.82
+          }
+        ],
+        "completed_sources": [
+          "incidents"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "tool_fallback",
+      "duration_ms": 1.09,
+      "output": {
+        "answer": "No encuentro la incidencia #4821 en el gestor de incidencias. Revisa el número: no des ningún estado al paciente sin confirmarlo.",
+        "outcome": "tool_fallback"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "lookup_incident",
+    "tool_fallback"
+  ],
+  "plan": [
+    {
+      "source": "incidents",
+      "args": {
+        "ticket_id": 4821
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "incidents"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b8384-f986-62fe-bfff-de408a6a43e0",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-f987-6f46-8000-edc4a361ec60",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-f98a-6520-8001-9d77ff46e728",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-0a28-6102-8002-9ec941ea4dd1",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "lookup_incident"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-0a2f-670e-8003-a011aab3e90d",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "tool_fallback"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-0a31-6914-8004-2a84d4c26408",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "tool_fallback",
+  "answer": "No encuentro la incidencia #4821 en el gestor de incidencias. Revisa el número: no des ningún estado al paciente sin confirmarlo.",
+  "error": null
+}

@@ -1,0 +1,165 @@
+{
+  "trace_id": "eval-ticket-status",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T16:52:15.646966+00:00",
+  "finished_at": "2026-09-24T16:52:18.972289+00:00",
+  "duration_ms": 3325.45,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
+      "length": 33
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 0.93,
+      "output": {
+        "question": {
+          "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
+          "length": 33
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 2102.13,
+      "output": {
+        "plan": [
+          {
+            "source": "incidents",
+            "args": {
+              "ticket_id": 12
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "lookup_incident",
+      "duration_ms": 2.41,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "lookup_incident",
+            "status": "ok",
+            "args": {
+              "ticket_id": 12
+            },
+            "data": {
+              "mode": "by_id",
+              "total": 1,
+              "incidents": [
+                {
+                  "id": 12,
+                  "status": "resolved",
+                  "status_label_es": "resuelta",
+                  "category": "patient_experience",
+                  "origin": "customer",
+                  "branch": "tampa_bay",
+                  "created_at": "2024-01-18T00:00:00Z",
+                  "updated_at": "2024-01-18T00:00:00Z"
+                }
+              ]
+            },
+            "error_type": null,
+            "timeout_s": 3.0,
+            "duration_ms": 1.68
+          }
+        ],
+        "completed_sources": [
+          "incidents"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "generate",
+      "duration_ms": 1217.26,
+      "output": {
+        "answer": "El ticket 12 está resuelto.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Incidencia #12",
+        "outcome": "answered"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "lookup_incident",
+    "generate"
+  ],
+  "plan": [
+    {
+      "source": "incidents",
+      "args": {
+        "ticket_id": 12
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "incidents"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b8384-be98-6b88-bfff-e3a7ba7875de",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-be99-6600-8000-10eb2b1fbb89",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-be9a-63c0-8001-b6161b8d5357",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-d2a5-654a-8002-cca502b1376c",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "lookup_incident"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-d2ab-6c6a-8003-e3ebcc2bbecb",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "generate"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8384-de45-6f8a-8004-6f10b7cc8b43",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "answered",
+  "answer": "El ticket 12 está resuelto.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Incidencia #12",
+  "error": null
+}
