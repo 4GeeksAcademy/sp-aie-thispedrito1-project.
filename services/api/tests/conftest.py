@@ -146,3 +146,20 @@ def admin_headers(client: TestClient) -> dict[str, str]:
     )
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest.fixture()
+def service_account(client: TestClient) -> None:
+    """Cuenta de servicio del servidor MCP (mcps/healthcore): rol `user`, nunca
+    admin, creada por el repositorio como la aprovisionaría un admin."""
+    from auth_repository import AuthRepository
+    from models import UserRole
+    from security import hash_password
+    from mcp_harness import SERVICE_EMAIL, SERVICE_PASSWORD
+
+    AuthRepository().create_user(
+        email=SERVICE_EMAIL,
+        hashed_password=hash_password(SERVICE_PASSWORD),
+        role=UserRole.user,
+        profile_data={"name": "Servidor MCP"},
+    )

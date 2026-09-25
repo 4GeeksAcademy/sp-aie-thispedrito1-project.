@@ -1,4 +1,5 @@
-fastapi==0.115.6
+# 0.115.14: primera de la serie 0.115 que admite la starlette>=0.46.2 de mcpauth.
+fastapi==0.115.14
 uvicorn[standard]==0.32.1
 python-multipart==0.0.17
 tinydb==4.8.2
@@ -24,6 +25,16 @@ qdrant-client==1.16.1
 openai==2.48.0
 eval-type-backport==0.2.2; python_version < "3.10"
 # Agente LangGraph (Parte 1): el flujo del RAG como grafo con estado,
-# checkpointing y trace. 0.6.11 es la última versión compatible con Python 3.9
-# (langgraph 1.x exige 3.10).
+# checkpointing y trace. Se mantiene 0.6.11 tras pasar el venv a Python 3.12:
+# acepta el langchain-core 1.x que exige langchain-mcp-adapters.
 langgraph==0.6.11
+# Servidor MCP con OAuth (mcps/healthcore): SDK oficial de MCP (trae FastMCP en
+# mcp.server.fastmcp y el transporte Streamable HTTP), MCP Auth como resource
+# server OAuth 2.1 y el adaptador con el que el agente LangGraph consume el
+# servidor como cliente. mcpauth 0.2.0b1 (beta) a propósito: la 0.1.1 no
+# tiene modo resource server ni Protected Resource Metadata. mcp<2 lo exige
+# langchain-mcp-adapters; por eso no se
+# instala el paquete `fastmcp` aparte (sus versiones nuevas usan mcp 2.x).
+mcp>=1.24,<2
+mcpauth==0.2.0b1
+langchain-mcp-adapters==0.3.2

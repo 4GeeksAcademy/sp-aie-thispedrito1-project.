@@ -3,9 +3,10 @@
     services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_tools.py
 
 Sin red. La tool de inventario se prueba con el repositorio real
-(`inventory_repository`) sobre una SQLite en memoria; la de incidencias con
-repositorios dobles que imitan a `IncidentRepository` (su integración real con
-TinyDB está en services/api/tests/test_agent.py). El modelo del planificador
+(`inventory_repository`) sobre una SQLite en memoria; la de incidencias con un
+doble del servidor MCP (`FakeMcpServer`): desde el ticket del servidor MCP el
+agente solo llega a las incidencias por MCP. La cadena real agente → MCP →
+Incidents Manager está en services/api/tests/test_mcp_server.py. El modelo del planificador
 es un doble que devuelve las tool calls indicadas.
 """
 
@@ -61,34 +62,41 @@ INCIDENT = {
 CHUNK = {"source_document": "appointment-policy", "section": "Política de cancelación", "chunk_index": 1, "text": "50 USD", "score": 0.7}
 
 
-class ReadOnlyRepository:
-    """Doble de IncidentRepository: cualquier método que no sea de lectura revienta."""
+class FakeMcpServer:
+    """Doble del servidor MCP de HealthCore tal como lo ve el agente: recibe
+    (tool, args) y devuelve la salida estructurada. Cualquier tool que no sea
+    de lectura revienta: el agente solo consulta. Devuelve a propósito
+    también `title`/`description` para comprobar que el agente los descarta
+    aunque un servidor se los diera."""
 
-    READ_METHODS = {"get_by_id", "list"}
+    READ_TOOLS = {"incidents_get", "incidents_search"}
 
     def __init__(self, incidents: List[Dict[str, Any]]) -> None:
         self._incidents = incidents
         self.calls: List[str] = []
 
-    def get_by_id(self, incident_id: int):
-        self.calls.append("get_by_id")
-        return next((dict(item) for item in self._incidents if item["id"] == incident_id), None)
+    def __call__(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        from services.agent.mcp_client import McpToolCallError
 
-    def list(self, status=None, origin=None, branch=None, category=None):
-        self.calls.append("list")
-        wanted = {"status": status, "origin": origin, "branch": branch, "category": category}
-        return [dict(i) for i in self._incidents if all(v is None or i[k] == v for k, v in wanted.items())]
+        if name not in self.READ_TOOLS:
+            raise AssertionError(f"El agente no debe llamar a la tool MCP {name} (solo lectura)")
+        self.calls.append(name)
+        if name == "incidents_get":
+            found = next((dict(i) for i in self._incidents if i["id"] == args["incident_id"]), None)
+            if found is None:
+                raise McpToolCallError(name, "not_found", "El recurso solicitado no existe.")
+            return found
+        wanted = {k: v for k, v in args.items() if k != "limit"}
+        matches = [dict(i) for i in self._incidents if all(i[k] == v for k, v in wanted.items())]
+        return {"total": len(matches), "returned": min(len(matches), args["limit"]), "incidents": matches[: args["limit"]]}
 
-    def __getattr__(self, name):
-        raise AssertionError(f"La tool no debe llamar a IncidentRepository.{name} (solo lectura)")
 
-
-def slow(seconds: float, value: Any):
-    def factory():
+def slow(seconds: float, server: Any):
+    def call(name, args):
         time.sleep(seconds)
-        return value
+        return server(name, args)
 
-    return factory
+    return call
 
 
 # --- Tool de incidencias ----------------------------------------------------
@@ -105,8 +113,8 @@ def test_incident_input_contract_rejects_invalid_payloads(payload):
 
 
 def test_incident_by_id_returns_operational_fields_without_free_text():
-    repo = ReadOnlyRepository([INCIDENT])
-    result = lookup_incident(IncidentLookupInput(ticket_id=12), repository_factory=lambda: repo)
+    server = FakeMcpServer([INCIDENT])
+    result = lookup_incident(IncidentLookupInput(ticket_id=12), mcp_call=server)
 
     assert result.status == "ok"
     assert result.data["mode"] == "by_id"
@@ -115,28 +123,29 @@ def test_incident_by_id_returns_operational_fields_without_free_text():
     assert set(record) == {"id", "status", "status_label_es", "category", "origin", "branch", "created_at", "updated_at"}
     dumped = json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
     assert "Ana Pérez" not in dumped and "12345678" not in dumped
-    assert repo.calls == ["get_by_id"]
+    assert server.calls == ["incidents_get"]
+    assert result.via == "mcp"
 
 
 def test_unknown_ticket_is_not_found():
-    result = lookup_incident(IncidentLookupInput(ticket_id=482), repository_factory=lambda: ReadOnlyRepository([INCIDENT]))
+    result = lookup_incident(IncidentLookupInput(ticket_id=482), mcp_call=FakeMcpServer([INCIDENT]))
     assert result.status == "not_found"
     assert result.data is None
 
 
 def test_incident_search_counts_all_matches_and_caps_the_list():
     many = [{**INCIDENT, "id": n, "status": "open"} for n in range(1, 16)]
-    repo = ReadOnlyRepository(many)
-    result = lookup_incident(IncidentLookupInput(status="open"), repository_factory=lambda: repo)
+    server = FakeMcpServer(many)
+    result = lookup_incident(IncidentLookupInput(status="open"), mcp_call=server)
 
     assert result.data["mode"] == "search"
     assert result.data["total"] == 15
     assert len(result.data["incidents"]) == incidents.MAX_RESULTS
-    assert repo.calls == ["list"]
+    assert server.calls == ["incidents_search"]
 
 
 def test_tools_declare_explicit_numeric_timeouts():
-    assert incidents.TIMEOUT_S == 3.0
+    assert incidents.TIMEOUT_S == 5.0
     assert inventory.TIMEOUT_S == 5.0
 
 
@@ -144,7 +153,7 @@ def test_slow_incident_manager_times_out_as_unavailable():
     started = time.perf_counter()
     result = lookup_incident(
         IncidentLookupInput(ticket_id=12),
-        repository_factory=slow(1.0, ReadOnlyRepository([INCIDENT])),
+        mcp_call=slow(1.0, FakeMcpServer([INCIDENT])),
         timeout_s=0.1,
     )
     assert result.status == "unavailable"
@@ -154,10 +163,10 @@ def test_slow_incident_manager_times_out_as_unavailable():
 
 
 def test_crashing_incident_manager_is_unavailable_without_its_message():
-    def broken():
-        raise OSError("disk /srv/tinydb full for ana@example.com")
+    def broken(name, args):
+        raise OSError("connection to mcp for ana@example.com refused")
 
-    result = lookup_incident(IncidentLookupInput(ticket_id=12), repository_factory=broken)
+    result = lookup_incident(IncidentLookupInput(ticket_id=12), mcp_call=broken)
     assert result.status == "unavailable"
     assert result.error_type == "OSError"
     assert "ana@example.com" not in json.dumps(result.model_dump(mode="json"))
@@ -337,7 +346,7 @@ def failed_result(tool: str, args: Dict[str, Any], status: str) -> Dict[str, Any
     return ToolResult(tool=tool, status=status, args=args, error_type="X", timeout_s=3.0, duration_ms=1.0).model_dump(mode="json")
 
 
-INCIDENT_DATA = lookup_incident(IncidentLookupInput(ticket_id=12), repository_factory=lambda: ReadOnlyRepository([INCIDENT])).data
+INCIDENT_DATA = lookup_incident(IncidentLookupInput(ticket_id=12), mcp_call=FakeMcpServer([INCIDENT])).data
 BOTH_PLAN = [{"source": "incidents", "args": {"ticket_id": 12}}, {"source": "knowledge_base", "args": {}}]
 
 
@@ -387,7 +396,7 @@ class Harness:
     def incident_tool(self, payload):
         self.calls.append("incidents")
         if self.incident_status == "ok":
-            return lookup_incident(payload, repository_factory=lambda: ReadOnlyRepository([INCIDENT]))
+            return lookup_incident(payload, mcp_call=FakeMcpServer([INCIDENT]))
         return ToolResult(**failed_result("lookup_incident", payload.model_dump(exclude_none=True), self.incident_status))
 
     def inventory_tool(self, payload):
@@ -487,7 +496,7 @@ def test_fallback_messages_never_state_a_status_or_stock():
 
 def test_search_evidence_reports_the_total_and_what_is_shown():
     many = [{**INCIDENT, "id": n, "status": "open"} for n in range(1, 16)]
-    result = lookup_incident(IncidentLookupInput(status="open", branch="central"), repository_factory=lambda: ReadOnlyRepository(many))
+    result = lookup_incident(IncidentLookupInput(status="open", branch="central"), mcp_call=FakeMcpServer(many))
     evidence = tool_evidence([result.model_dump(mode="json")])[0]
 
     assert evidence["section"] == "Búsqueda (branch=central, status=open)"

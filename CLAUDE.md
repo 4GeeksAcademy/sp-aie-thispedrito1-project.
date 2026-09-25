@@ -116,6 +116,16 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_evals.py -v  
 
 Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `services/api/requirements.txt`. Los casos de inventario necesitan Supabase despierto. Detalle en `docs/agent/agent-design.md` (Parte 1) y `docs/agent/agent-tools.md` (Parte 2).
 
+### Servidor MCP con OAuth (`mcps/healthcore`)
+
+```bash
+cp mcps/healthcore/.env.example mcps/healthcore/.env                 # emisor Logto, audiencia, cuenta de servicio
+services/api/.venv/bin/python scripts/create_mcp_service_account.py  # una vez: usuario rol `user` en la TinyDB
+services/api/.venv/bin/python -m mcps.healthcore                     # puerto 8765, necesita la API en 8000
+```
+
+Desde la raíz. El agente lo consume con `MCP_SERVER_URL`, `MCP_OAUTH_TOKEN_ENDPOINT`, `MCP_AUDIENCE`, `MCP_AGENT_CLIENT_ID/SECRET` en `services/api/.env`. Configuración de Logto y guía de Codespaces + MCP Playground en `docs/mcp/mcp-server.md`.
+
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
 ```bash
@@ -152,13 +162,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + evals (86, 12 casos sobre traces grabados): desde la RAÍZ
-services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_evals.py
+# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py
 
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (180 tests): desde services/api, con el venv activado
+# Backend (224 tests, 44 del servidor MCP): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -451,7 +461,7 @@ Gotchas reales de LangGraph 0.6.11 (comprobados, no supuestos):
 - **`compile()` no detecta nodos huérfanos ni callejones sin salida**, y descarta en silencio las claves que no están en el estado. Por eso existen `validate_structure()` y el envoltorio `_checked`.
 - **`get_graph()` inventa una arista a END** en cualquier nodo sin salida: la validación se hace sobre `builder.edges` + `builder.branches`, no sobre el dibujo.
 - **Si falla una arista condicional, `get_state().next` queda vacío.** El nodo culpable (el anterior a la arista) aparece en `tasks[].error`; `_failed_node` mira ahí primero.
-- **LangGraph 1.x exige Python 3.10**: el venv es 3.9, así que 0.6.11.
+- **LangGraph 1.x exige Python 3.10**: el venv era 3.9, así que 0.6.11. Desde el ticket del servidor MCP el venv es 3.12, pero se mantiene 0.6.11 (sin motivo para subirlo).
 - **El trace confirmó la latencia del Hito 7:** en una corrida de 66 s, 62,5 s fueron de `generate` (timeout + reintento del proveedor) y 3,5 s de `retrieve`.
 
 ### Agente de soporte con LangGraph (Parte 2: tools en vivo) — `docs/agent/agent-tools.md`
@@ -484,6 +494,40 @@ Gotchas reales:
 - Se hizo en una sola transacción, con el esquema creado por el propio código de la API (DDL literal de `reporting`, migración de `job_runs`, `create_all`), primero en ensayo con ROLLBACK. Verificado: filas por tabla y stock por producto idénticos al backup de eu-west-1.
 - Las tablas de EduTrack (`courses`, `enrollments`, `students`) solo existen en el backup y en el proyecto pausado: no son de HealthCore (decisión del usuario).
 - Los backups de un proyecto pausado se descargan como `db_cluster-….backup.gz`: un volcado SQL en texto plano, legible sin `pg_dump` (que no está instalado en el Mac).
+
+### Servidor MCP con OAuth — `docs/mcp/mcp-server.md`
+
+Ticket "RFP — Servidor MCP para herramientas de la compañía", rama `feature/mcp-oauth-tools` sobre `main`, 2026-09-25.
+
+**Venv de la API pasado a Python 3.12** (antes 3.9; `pyproject.toml` y Docker ya decían 3.12): `mcp`, `mcpauth` y `langchain-mcp-adapters` exigen ≥ 3.10. `fastapi` 0.115.6 → 0.115.14 (la primera 0.115.x que acepta la `starlette>=0.46.2` de mcpauth). `langgraph` se queda en 0.6.11 (acepta el `langchain-core` 1.x del adaptador). Tras el cambio pasaban las mismas 180 + 242 pruebas antes de tocar código.
+
+Mapa del código:
+- **`mcps/healthcore/`**: `config.py` (variables, `.env` propio), `server.py` (Starlette: Protected Resource Metadata + MCP Auth + FastMCP), `tools.py` (5 tools + log de auditoría), `scopes.py` (`TOOL_SCOPES`), `errors.py` (códigos), `api_client.py` (cliente HTTP a la API con cuenta de servicio + `InventoryReader` solo GET). Arranque: `python -m mcps.healthcore`.
+- **`services/agent/mcp_client.py`**: el agente como cliente MCP (`MultiServerMCPClient`, `ClientCredentialsAuth` como `httpx.Auth` contra Logto). `services/agent/tools/incidents.py` llama a `incidents_get`/`incidents_search` por MCP.
+- **Tests**: `services/api/tests/test_mcp_server.py` (44), `tests/pipelines/test_agent_mcp_client.py` (5, flujo OAuth del agente contra Logto simulado) + `tests/mcp_harness.py` (emisor OAuth falso con clave RSA local, cadena en memoria cliente → MCP → API FastAPI con `httpx.ASGITransport`). Fixture `service_account` en `conftest.py`.
+
+Decisiones que conviene no romper:
+- **Streamable HTTP, sin estado y con respuestas JSON**: varios clientes remotos, un token por petición. stdio no tiene dónde llevar un Bearer.
+- **SDK oficial `mcp` (su `FastMCP`), no el paquete `fastmcp`**: sus versiones nuevas usan `mcp` 2.x y `langchain-mcp-adapters` exige `mcp<2`. Nunca la auth integrada de FastMCP.
+- **`mcpauth==0.2.0b1` (beta) a propósito**: la 0.1.1 no tiene modo resource server ni Protected Resource Metadata. `build_jwt_verifier` reutiliza su `create_verify_jwt` con un `PyJWKClient` cacheado, porque el modo `"jwt"` de la librería descarga la JWKS en cada petición.
+- **Scopes (decisión delegada al asistente):** `incidents:read` (get/search), `incidents:write` (create/update_status), `inventory:read` (inventory_query), uno por tool y sin exigir lectura para escribir. `TOOL_SCOPES` falla cerrado. No existe scope de escritura de inventario. El agente solo tiene `incidents:read`.
+- **Inventario solo lectura en tres capas:** sin scope de escritura; `inventory_query` rechaza las acciones de escritura con `read_only_resource` (no "no implementado"); `InventoryReader` solo permite GET bajo `/inventory/`.
+- **El MCP llama a la API por HTTP con una cuenta de servicio rol `user`**, nunca a la base de datos. Estados siempre por `PATCH /api/incidents/{id}/status` (hay test espía).
+- **Sin `title`/`description` en salidas ni en logs** (posibles datos de pacientes). Log `healthcore.mcp.audit`: una línea JSON por llamada con tool, `client_id`, `subject` y `outcome`.
+- **Migración del agente sin tocar el enrutamiento:** mismo nodo `lookup_incident`, mismos contratos, traces y evals intactos. El acceso en proceso se eliminó; un test con `ast` impide reintroducirlo. `ToolResult.via = "mcp"` queda en el trace. Timeout de 3 → 5 s.
+
+Gotchas reales:
+- **El FastMCP del SDK antepone siempre `Error executing tool <tool>: `** al texto de un `ToolError` (mcp 1.30, `tools/base.py`). `errors.parse_tool_error` lee el JSON desde la primera `{`.
+- **FastMCP activa la protección DNS-rebinding** con host localhost: la URL de Codespaces daría 421 sin añadirla a `allowed_hosts` (lo hace `config.load_settings` con el host de `MCP_RESOURCE_URL`). Un cliente en navegador (MCP Playground) daría además 403 por `Origin` y 401 en el preflight CORS: `MCP_ALLOWED_ORIGINS` activa un `CORSMiddleware` externo y añade el origen a la lista del SDK. Vacía = sin CORS.
+- **MCP Playground envía `""` en los campos opcionales vacíos** en vez de omitirlos: `tools._blank_to_none` los trata como "sin filtro" (antes la API los rechazaba como categoría/origen no válidos).
+- **`mcpauth` debe estar fijado a 0.2.0b1 en `requirements.txt` y `pyproject.toml`**: en local se instaló a mano y los archivos seguían con 0.1.1; lo detectó la instalación limpia en Codespaces.
+- **Una app Starlette montada no ejecuta su lifespan**: el `session_manager.run()` de MCP se arranca en el lifespan de la app exterior. Además solo se puede arrancar una vez por instancia, así que los tests crean una app por llamada.
+- **En tests, el grupo de tareas del servidor MCP en memoria envuelve el error del cliente en un `ExceptionGroup`**; `mcp_harness.agent_mcp_call` lo desempaqueta. En producción el servidor es otro proceso y no ocurre.
+- **`services/api/tests` no es un paquete** y en la raíz hay otra carpeta `tests/`: importar `mcp_harness` directamente, nunca `from tests import …`.
+- **Bug que solo salió contra Logto real:** `httpx.Request` no acepta `auth=` (solo el cliente). `ClientCredentialsAuth` pone la cabecera Basic a mano. Los tests con token inyectado no pasaban por esa clase; ahora la cubre `test_agent_mcp_client.py`.
+- **Logto:** tenant `eb77o9` (emisor `https://eb77o9.logto.app/oidc`), API `http://localhost:8765/mcp`, roles M2M `mcp-agent-reader` (solo `incidents:read`) y `mcp-full-tester`, apps `healthcore-agent` y `mcp-playground-tester`. Un rol creado como "User" no se puede cambiar a M2M: hay que borrarlo y recrearlo. Logto recorta los scopes al rol aunque el cliente pida más.
+- **Prueba real hecha el 2026-09-25** (tablas en la §9 del documento), incluidas 4 preguntas reales por `/agent/query` con `via=mcp` (antes hubo que regenerar la `LLM_API_KEY` del proxy de 4Geeks, caducada). Pedirle al agente "cierra el ticket 22" no cambia nada: solo tiene `incidents:read`.
+- **MCP Playground hecho** desde el Codespace `mcp-oauth-playground` (detenido, no borrado), con las 6 herramientas probadas y la escritura de inventario rechazada; capturas en `docs/mcp/playground/`. Gotcha: Playground llama desde SUS servidores (IP de AWS en el log), no desde el navegador, y envía `""` en los campos vacíos. Gotcha de Codespaces por `gh`: sin editor conectado el puerto no existe hasta abrir un `gh codespace ports forward`; y `pkill -f <texto>` dentro de `gh codespace ssh -- '...'` mata la propia sesión si el texto aparece en el comando.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
