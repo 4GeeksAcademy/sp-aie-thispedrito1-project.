@@ -1,9 +1,11 @@
-"""Tests de estructura del agente LangGraph (Parte 1): nodos, aristas,
-compilación, checkpointing y trace.
+"""Tests de estructura del agente LangGraph: nodos, aristas, compilación,
+checkpointing y trace, por el camino del RAG (Parte 1). Las tools y el
+enrutamiento entre fuentes (Parte 2) están en test_agent_tools.py.
 
     services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py
 
-Sin red: `retrieve` y la generación son dobles que registran sus llamadas.
+Sin red: `retrieve`, la generación y el planificador son dobles que
+registran sus llamadas (el planificador elige siempre la base de conocimiento).
 Los evals sobre corridas reales están en test_agent_evals.py.
 """
 
@@ -18,8 +20,13 @@ from langgraph.graph import END, START
 
 from data.pipelines import rag
 from services.agent import graph as agent_graph
+from services.agent import planner
 from services.agent.graph import (
+    CHECK_INVENTORY_STOCK,
     GENERATE,
+    LOOKUP_INCIDENT,
+    PLAN_SOURCES,
+    TOOL_FALLBACK,
     NO_INFORMATION,
     NO_INFORMATION_ANSWER,
     RECEIVE_QUESTION,
@@ -30,8 +37,9 @@ from services.agent.graph import (
     AgentStateError,
     build_agent_graph,
     compile_agent_graph,
-    route_after_retrieve,
+    route_next_source,
 )
+from services.agent.planner import Plan, PlannedCall
 from services.agent.tracing import AgentRunError, fingerprint, run_agent
 
 QUESTION = "¿Cuánto se cobra por un no-show a un paciente de pago privado en Texas?"
@@ -63,8 +71,17 @@ class Doubles:
         self.generate_calls.append({"question": question, "context": context})
         return self.answer
 
+    def plan(self, question: str) -> Plan:
+        return Plan(calls=[PlannedCall(source="knowledge_base")], status="model")
+
     def nodes(self) -> AgentNodes:
-        return AgentNodes(retrieve_fn=self.retrieve, generate_fn=self.generate, min_score_fn=lambda: 0.38, k=5)
+        return AgentNodes(
+            retrieve_fn=self.retrieve,
+            generate_fn=self.generate,
+            min_score_fn=lambda: 0.38,
+            k=5,
+            planner_fn=self.plan,
+        )
 
 
 @pytest.fixture()
@@ -88,15 +105,28 @@ def read_trace(result) -> Dict[str, Any]:
 # --- Compilación ------------------------------------------------------------
 
 
-def test_graph_compiles_with_conditional_edges_after_receive_and_retrieve():
+def test_graph_compiles_with_conditional_edges_after_every_decision():
     compiled = compiled_with(Doubles([CHUNK]))
     drawable = compiled.get_graph()
 
-    assert set(drawable.nodes) == {START, END, RECEIVE_QUESTION, REJECT_QUESTION, RETRIEVE, NO_INFORMATION, GENERATE}
+    assert set(drawable.nodes) == {
+        START, END, RECEIVE_QUESTION, REJECT_QUESTION, PLAN_SOURCES, LOOKUP_INCIDENT,
+        CHECK_INVENTORY_STOCK, RETRIEVE, TOOL_FALLBACK, NO_INFORMATION, GENERATE,
+    }
     conditional = {(e.source, e.target) for e in drawable.edges if e.conditional}
     assert conditional == {
-        (RECEIVE_QUESTION, RETRIEVE),
+        (RECEIVE_QUESTION, PLAN_SOURCES),
         (RECEIVE_QUESTION, REJECT_QUESTION),
+        (PLAN_SOURCES, LOOKUP_INCIDENT),
+        (PLAN_SOURCES, CHECK_INVENTORY_STOCK),
+        (PLAN_SOURCES, RETRIEVE),
+        (LOOKUP_INCIDENT, CHECK_INVENTORY_STOCK),
+        (LOOKUP_INCIDENT, RETRIEVE),
+        (LOOKUP_INCIDENT, TOOL_FALLBACK),
+        (LOOKUP_INCIDENT, GENERATE),
+        (CHECK_INVENTORY_STOCK, RETRIEVE),
+        (CHECK_INVENTORY_STOCK, TOOL_FALLBACK),
+        (CHECK_INVENTORY_STOCK, GENERATE),
         (RETRIEVE, GENERATE),
         (RETRIEVE, NO_INFORMATION),
     }
@@ -132,13 +162,17 @@ def test_compile_fails_clearly_on_a_node_that_never_reaches_end():
 # --- Aristas condicionales --------------------------------------------------
 
 
-def test_route_after_retrieve_generates_only_with_context():
-    assert route_after_retrieve({"question": QUESTION, "context": [CHUNK]}) == GENERATE
-    assert route_after_retrieve({"question": QUESTION, "context": []}) == NO_INFORMATION
+KB_PLAN = [{"source": "knowledge_base", "args": {}}]
 
 
-def test_route_after_retrieve_treats_missing_context_as_no_information():
-    assert route_after_retrieve({"question": QUESTION}) == NO_INFORMATION
+def test_after_retrieval_generates_only_with_context():
+    done = {"question": QUESTION, "plan": KB_PLAN, "completed_sources": ["knowledge_base"]}
+    assert route_next_source({**done, "context": [CHUNK]}) == GENERATE
+    assert route_next_source({**done, "context": []}) == NO_INFORMATION
+
+
+def test_after_retrieval_treats_missing_context_as_no_information():
+    assert route_next_source({"question": QUESTION, "plan": KB_PLAN, "completed_sources": ["knowledge_base"]}) == NO_INFORMATION
 
 
 # --- Recorridos completos ---------------------------------------------------
@@ -150,7 +184,8 @@ def test_answered_path_retrieves_once_and_generates_from_that_context(tmp_path, 
 
     assert result.outcome == "answered"
     assert result.answer == "Se cobra un cargo de 50 USD."
-    assert result.trace["node_sequence"] == [RECEIVE_QUESTION, RETRIEVE, GENERATE]
+    assert result.trace["node_sequence"] == [RECEIVE_QUESTION, PLAN_SOURCES, RETRIEVE, GENERATE]
+    assert result.trace["sources_used"] == ["knowledge_base"]
     # Una sola recuperación, con la pregunta normalizada y el umbral afinado.
     assert doubles.retrieve_calls == [{"question": QUESTION, "k": 5, "min_score": 0.38}]
     # La generación recibe exactamente lo que recuperó el nodo retrieve.
@@ -164,6 +199,7 @@ def test_blank_question_is_rejected_before_retrieval(tmp_path, no_monolithic_que
     assert result.outcome == "invalid_question"
     assert result.answer is None
     assert result.trace["node_sequence"] == [RECEIVE_QUESTION, REJECT_QUESTION]
+    assert result.trace["sources_used"] == []
     assert doubles.retrieve_calls == []
     assert doubles.generate_calls == []
 
@@ -174,7 +210,7 @@ def test_empty_retrieval_answers_honestly_without_calling_the_model(tmp_path, no
 
     assert result.outcome == "no_information"
     assert result.answer == NO_INFORMATION_ANSWER
-    assert result.trace["node_sequence"] == [RECEIVE_QUESTION, RETRIEVE, NO_INFORMATION]
+    assert result.trace["node_sequence"] == [RECEIVE_QUESTION, PLAN_SOURCES, RETRIEVE, NO_INFORMATION]
     assert doubles.generate_calls == []
 
 
@@ -184,7 +220,9 @@ def test_a_node_writing_outside_the_state_fails_with_its_name(tmp_path):
             return {"context": [], "patient_name": "no debería existir"}
 
     doubles = Doubles([])
-    leaky = LeakyNodes(retrieve_fn=doubles.retrieve, generate_fn=doubles.generate, min_score_fn=lambda: 0.38, k=5)
+    leaky = LeakyNodes(
+        retrieve_fn=doubles.retrieve, generate_fn=doubles.generate, min_score_fn=lambda: 0.38, k=5, planner_fn=doubles.plan
+    )
 
     with pytest.raises(AgentRunError) as excinfo:
         run_agent(compile_agent_graph(build_agent_graph(leaky)), QUESTION, trace_dir=tmp_path)
@@ -247,10 +285,11 @@ def test_trace_is_persisted_with_node_outputs_and_without_the_question_text(tmp_
 
     assert result.trace_path == tmp_path / f"{result.trace_id}.json"
     assert trace["status"] == "completed"
-    assert [step["node"] for step in trace["steps"]] == [RECEIVE_QUESTION, RETRIEVE, GENERATE]
-    assert [step["index"] for step in trace["steps"]] == [1, 2, 3]
+    assert [step["node"] for step in trace["steps"]] == [RECEIVE_QUESTION, PLAN_SOURCES, RETRIEVE, GENERATE]
+    assert [step["index"] for step in trace["steps"]] == [1, 2, 3, 4]
     assert trace["input"]["question"] == fingerprint(QUESTION)
-    assert trace["steps"][1]["output"]["context"] == [
+    assert trace["plan"] == KB_PLAN and trace["plan_status"] == "model"
+    assert trace["steps"][2]["output"]["context"] == [
         {"source_document": "appointment-policy", "section": "Política de cancelación", "chunk_index": 1, "score": 0.71}
     ]
     assert trace["answer"] == "Se cobra un cargo de 50 USD."
@@ -273,7 +312,7 @@ def test_a_failing_node_still_leaves_a_failed_trace_without_the_raw_error(tmp_pa
     trace = json.loads(raw)
     assert trace["status"] == "failed"
     assert trace["error"] == {"node": GENERATE, "type": "RuntimeError"}
-    assert trace["node_sequence"] == [RECEIVE_QUESTION, RETRIEVE]
+    assert trace["node_sequence"] == [RECEIVE_QUESTION, PLAN_SOURCES, RETRIEVE]
     assert "ana@example.com" not in raw
 
 
@@ -292,6 +331,7 @@ def test_default_nodes_delegate_to_the_rag_pipeline(monkeypatch, tmp_path, no_mo
     monkeypatch.setattr(rag, "retrieve", lambda q, *, k, min_score: calls.append("retrieve") or [CHUNK])
     monkeypatch.setattr(rag, "generate_answer", lambda q, c: calls.append("generate_answer") or "ok")
     monkeypatch.setattr(rag, "get_min_score", lambda: 0.38)
+    monkeypatch.setattr(planner, "plan_sources", lambda q: Plan(calls=[PlannedCall(source="knowledge_base")], status="model"))
 
     result = run_agent(compile_agent_graph(), QUESTION, trace_dir=tmp_path)
 

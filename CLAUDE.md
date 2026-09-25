@@ -104,15 +104,17 @@ docker compose stop qdrant
 
 Desde la raíz. Necesita `LLM_BASE_URL`, `LLM_API_KEY`, `EMBEDDING_MODEL` y `GENERATION_MODEL` en `services/api/.env` (IDs en `.env.example`). `qdrant-client` y `openai` están en `services/api/requirements.txt`. Detalle en `docs/rag/rag-design.md`.
 
-### Agente LangGraph (Parte 1)
+### Agente LangGraph (Partes 1 y 2)
 
 ```bash
 docker compose up -d qdrant && services/api/.venv/bin/python scripts/index_knowledge_base.py   # si la colección no existe
-services/api/.venv/bin/python scripts/record_agent_traces.py                                   # 1 corrida real por caso → data/eval/agent-traces/
+cp services/api/data/suppliers.db.json /tmp/agent-eval.db.json                                 # copia: la TinyDB versionada no tiene incidencias
+SUPPLIERS_DB_PATH=/tmp/agent-eval.db.json services/api/.venv/bin/python scripts/seed_incidents.py
+SUPPLIERS_DB_PATH=/tmp/agent-eval.db.json services/api/.venv/bin/python scripts/record_agent_traces.py [caso ...]  # 1 corrida real por caso
 services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_evals.py -v                 # evals sobre los traces grabados (sin red)
 ```
 
-Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `services/api/requirements.txt`. Detalle en `docs/agent/agent-design.md`.
+Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `services/api/requirements.txt`. Los casos de inventario necesitan Supabase despierto. Detalle en `docs/agent/agent-design.md` (Parte 1) y `docs/agent/agent-tools.md` (Parte 2).
 
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
@@ -150,13 +152,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Tests del agente LangGraph (17: rutas, compilación, checkpoints, trace; con dobles) + evals (26, sobre traces grabados): desde la RAÍZ
-services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_evals.py
+# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + evals (86, 12 casos sobre traces grabados): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_evals.py
 
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (178 tests): desde services/api, con el venv activado
+# Backend (180 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -329,7 +331,7 @@ Decisiones que conviene no romper:
 
 Gotchas reales:
 
-- **El `.env` de la raíz (el que usa `docker compose`) apuntaba al proyecto antiguo de Supabase `eu-central-1`**, no a la base buena de `services/api/.env`. Como `load_dotenv` no sobreescribe variables ya presentes, los contenedores usaban la base equivocada. Corregido el 2026-09-13 con autorización del usuario. Si se rehace algún `.env`, comprobar que los dos apuntan al mismo proyecto (`eu-west-1`).
+- **Dos `.env` con `DATABASE_URL`** (el de la raíz, que usa `docker compose`, y `services/api/.env`). Como `load_dotenv` no sobreescribe variables ya presentes, si divergen los contenedores usan el suyo. Desde el 2026-09-24 los dos deben apuntar al proyecto unificado `healthcore-data` (eu-central-1, ver "Supabase unificado").
 - **Build con contexto en la raíz del repo:** `services/scheduler/Dockerfile.dockerignore` (BuildKit lo prioriza sobre un `.dockerignore` de la raíz) limita el contexto a `requirements.txt` y al crontab. Sin él, Docker enviaría `node_modules`, `.venv` y `.git`.
 - **Test de dos procesos:** las tablas se crean antes de lanzarlos, porque `create(checkfirst=True)` no es atómico y uno moría con "table already exists". Era un fallo del test, no del script.
 
@@ -451,6 +453,37 @@ Gotchas reales de LangGraph 0.6.11 (comprobados, no supuestos):
 - **Si falla una arista condicional, `get_state().next` queda vacío.** El nodo culpable (el anterior a la arista) aparece en `tasks[].error`; `_failed_node` mira ahí primero.
 - **LangGraph 1.x exige Python 3.10**: el venv es 3.9, así que 0.6.11.
 - **El trace confirmó la latencia del Hito 7:** en una corrida de 66 s, 62,5 s fueron de `generate` (timeout + reintento del proveedor) y 3,5 s de `retrieve`.
+
+### Agente de soporte con LangGraph (Parte 2: tools en vivo) — `docs/agent/agent-tools.md`
+
+Rama `feature/langgraph-external-tools` apilada sobre `feature/langgraph-agent-base`, 2026-09-24. Dos tools de datos operativos en vivo y enrutamiento automático entre RAG y tools.
+
+Mapa del código:
+- **`services/agent/planner.py`**: nodo `plan_sources`. *Function calling* con `GENERATION_MODEL` (timeout 10 s, sin reintentos); argumentos validados contra los contratos de las tools; ante cualquier fallo, plan = solo RAG.
+- **`services/agent/tools/`**: `base.py` (`ToolResult` + `run_tool` con timeout por `future.result`), `incidents.py` (`lookup_incident`, 3 s) e `inventory.py` (`check_inventory_stock`, 5 s). En proceso sobre `IncidentRepository` e `inventory_repository`, solo lectura.
+- **`services/agent/evidence.py`**: datos en vivo → contexto con forma de chunk para `rag.generate_answer()` (sin tocar `rag.py`) y mensajes fijos de fallback.
+- **`graph.py`**: nodos `plan_sources`, `lookup_incident`, `check_inventory_stock` y `tool_fallback`; una sola arista `route_next_source` para todas las fuentes. `tracing.py`: trace v2 con `plan`, `plan_status` y `sources_used`.
+- Tests: `tests/pipelines/test_agent_tools.py` (39) e integración con la TinyDB de tests en `services/api/tests/test_agent.py`.
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** el modelo elige las fuentes (no reglas); tools en proceso (no HTTP, sin token de servicio); inventario incluido; evals grabados sobre una TinyDB temporal sembrada con el seed oficial.
+- **Incidencias como DOS funciones para el modelo** (`get_incident`, `search_incidents` con filtros obligatorios que admiten `null`). Con una sola función de campos opcionales, el modelo real los rellenaba todos con valores inventados y el contrato rechazaba la llamada. Lo detectó la grabación real, no los tests. No volver a juntarlas.
+- **Orden fijo**: tools en vivo → RAG. **Cortocircuito**: si una tool falla, `tool_fallback` sin consultar el resto.
+- **Sin `title`/`description`** en la salida de incidencias (posibles datos de pacientes).
+- **Una tool nunca lanza**: todo desenlace es un `ToolResult.status` (`ok`/`not_found`/`unavailable`), y el fallback es una ruta del grafo.
+- **El stock es el total de la red**, como `/inventory/products`.
+- Los evals aceptan el estado en masculino o femenino (`resuelt[ao]`): "el ticket está resuelto" es correcto.
+
+Gotchas reales:
+- **Fixture de SQLite en tests de la raíz: `create_all(tables=[...])`**, nunca el metadata entero. Si otro test registró las tablas `reporting.*`, SQLite falla con "unknown database reporting" (solo en la batería completa).
+- **Docker Desktop puede quedar a medias**: `docker info` responde pero `docker ps` da 500. Esperar con `docker ps`. Si un contenedor queda con "RWLayer … unexpectedly nil", `docker compose rm -sf <servicio>` y recrearlo.
+- **La TinyDB versionada no tiene incidencias** (el seed nunca se ejecutó sobre ella).
+
+**Supabase unificado (2026-09-24, fuera del PR de la clase, a petición del usuario).** Había dos proyectos de HealthCore y el plan gratuito solo deja un hueco libre (el otro lo ocupa una app en producción del usuario, que no se toca). Ahora todo vive en **`healthcore-inventory` → renombrado `healthcore-data`** (eu-central-1, ref `klaxalwsyrucwszvdkhu`). El antiguo `database-auditory` (eu-west-1, ref `eizprmptspxhxvaqvqdz`) queda **pausado** y ya no es la base del proyecto.
+- **eu-west-1 era la fuente de verdad** y se copió entera: inventario, telemetría (85), `reporting.*`, `job_runs` y `task_dead_letters`, con sus ids y secuencias ajustadas. Las tablas antiguas de eu-central-1 no se sumaron: eran el mismo seed del Hito 5 (el stock habría salido duplicado) más los 12 eventos de prueba del 12-sep. Están **archivadas en el esquema `archive_hito5`** de la misma base, sin borrar.
+- Se hizo en una sola transacción, con el esquema creado por el propio código de la API (DDL literal de `reporting`, migración de `job_runs`, `create_all`), primero en ensayo con ROLLBACK. Verificado: filas por tabla y stock por producto idénticos al backup de eu-west-1.
+- Las tablas de EduTrack (`courses`, `enrollments`, `students`) solo existen en el backup y en el proyecto pausado: no son de HealthCore (decisión del usuario).
+- Los backups de un proyecto pausado se descargan como `db_cluster-….backup.gz`: un volcado SQL en texto plano, legible sin `pg_dump` (que no está instalado en el Mac).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

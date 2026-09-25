@@ -1,17 +1,21 @@
-"""Grafo LangGraph del asistente de políticas (Agente de Soporte, Parte 1).
+"""Grafo LangGraph del asistente de soporte (Agente de Soporte, Partes 1 y 2).
 
-El mismo comportamiento que `data/pipelines/rag.py::query()`, pero con cada
-paso como un nodo de responsabilidad única y las decisiones como aristas
-condicionales explícitas:
+Parte 1: el RAG del Hito 7 con cada paso como nodo de responsabilidad única.
+Parte 2: tools de datos operativos en vivo (incidencias, inventario) y un
+nodo `plan_sources` en el que el modelo decide qué fuentes necesita la
+pregunta, sin que el usuario lo diga:
 
-    START → receive_question ─┬─ (pregunta vacía) ──────────→ reject_question → END
-                              └─ retrieve ─┬─ (sin contexto) → no_information → END
-                                           └─ generate ─────────────────────→ END
+    START → receive_question ─┬─ (vacía) → reject_question → END
+                              └─ plan_sources
+                                   │  route_next_source, tras cada fuente:
+                                   ├→ lookup_incident ────────┐  siguiente fuente del plan,
+                                   ├→ check_inventory_stock ──┤  o tool_fallback si una tool falló,
+                                   └→ retrieve ───────────────┘  o generate / no_information al acabar
+                     tool_fallback → END · no_information → END · generate → END
 
-Contrato de nodos: `retrieve` llama SOLO a `rag.retrieve()` y `generate`
-llama SOLO a `rag.generate_answer()` con el contexto que dejó `retrieve` en el
-estado. Ningún nodo llama a `rag.query()`: eso recuperaría dos veces y
-escondería el paso que este grafo existe para hacer visible.
+Contrato de nodos: `retrieve` llama SOLO a `rag.retrieve()`, `generate` SOLO
+a `rag.generate_answer()` (con los chunks del RAG y/o los datos en vivo como
+contexto), y cada tool solo a su gestor. Ningún nodo llama a `rag.query()`.
 
 El grafo se compila (y se valida su estructura) antes de cualquier ejecución:
 `compile_agent_graph()` falla con `AgentGraphError` si hay un nodo sin
@@ -24,32 +28,50 @@ en cadenas (mismo criterio que `data/pipelines/pipeline.py` con Prefect).
 """
 
 import logging
+import operator
 from collections import deque
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypedDict
+from typing import Annotated, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypedDict
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+
+from services.agent.evidence import fallback_message, tool_evidence
+from services.agent.planner import SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_KNOWLEDGE_BASE, Plan
+from services.agent.tools.base import ToolResult
+from services.agent.tools.incidents import IncidentLookupInput
+from services.agent.tools.inventory import InventoryLookupInput
 
 logger = logging.getLogger(__name__)
 
 GRAPH_NAME = "healthcore_support_agent"
 
 # Nombres de nodo: son también los valores que devuelven las funciones de
-# enrutamiento y los que aparecen en el trace. Constantes para no repetir
-# cadenas sueltas entre el grafo, las aristas y los evals.
+# enrutamiento y los que aparecen en el trace.
 RECEIVE_QUESTION = "receive_question"
 REJECT_QUESTION = "reject_question"
+PLAN_SOURCES = "plan_sources"
+LOOKUP_INCIDENT = "lookup_incident"
+CHECK_INVENTORY_STOCK = "check_inventory_stock"
 RETRIEVE = "retrieve"
+TOOL_FALLBACK = "tool_fallback"
 NO_INFORMATION = "no_information"
 GENERATE = "generate"
+
+# Qué nodo consulta cada fuente del plan (y, al revés, qué fuente usó cada nodo).
+SOURCE_NODES = {
+    SOURCE_INCIDENTS: LOOKUP_INCIDENT,
+    SOURCE_INVENTORY: CHECK_INVENTORY_STOCK,
+    SOURCE_KNOWLEDGE_BASE: RETRIEVE,
+}
+NODE_SOURCES = {node: source for source, node in SOURCE_NODES.items()}
 
 OUTCOME_ANSWERED = "answered"
 OUTCOME_NO_INFORMATION = "no_information"
 OUTCOME_INVALID_QUESTION = "invalid_question"
+OUTCOME_TOOL_FALLBACK = "tool_fallback"
 
-# Respuesta honesta cuando nada supera el umbral. Texto fijo a propósito: el
-# ticket pide no forzar la generación sobre contexto vacío, y así la ruta es
-# determinista, no gasta una llamada al modelo y no puede inventar nada.
+# Respuesta honesta cuando la base de conocimiento no tiene nada sobre el
+# umbral. Texto fijo a propósito: sin llamada al modelo, no puede inventar.
 # (POST /knowledge/query conserva su comportamiento: allí responde el modelo.)
 NO_INFORMATION_ANSWER = (
     "No tengo información suficiente en la base de conocimiento para responder a eso. "
@@ -63,12 +85,18 @@ class AgentState(TypedDict, total=False):
     Sin historial de conversación: cada consulta del coordinador es
     independiente (la pantalla "Asistente" no tiene hilo) y arrastrarlo solo
     ampliaría lo que se guarda en cada checkpoint, incluidos posibles datos
-    de pacientes."""
+    de pacientes. `completed_sources` y `tool_results` acumulan (reducer
+    `operator.add`): cada nodo aporta solo lo suyo, y el trace muestra
+    exactamente qué produjo cada paso."""
 
     question: str  # pregunta ya normalizada por receive_question
+    plan: List[Dict[str, Any]]  # [{"source", "args"}] en orden de ejecución
+    plan_status: Optional[str]  # model | fallback (el modelo no pudo decidir → solo RAG)
+    completed_sources: Annotated[List[str], operator.add]
+    tool_results: Annotated[List[Dict[str, Any]], operator.add]  # ToolResult serializados
     context: List[Dict[str, Any]]  # chunks de retrieve() que superaron min_score
-    answer: Optional[str]  # respuesta final (modelo o texto honesto fijo)
-    outcome: Optional[str]  # answered | no_information | invalid_question
+    answer: Optional[str]
+    outcome: Optional[str]  # answered | no_information | invalid_question | tool_fallback
 
 
 STATE_KEYS = frozenset(AgentState.__annotations__)
@@ -84,6 +112,13 @@ class AgentStateError(RuntimeError):
 
 RetrieveFn = Callable[..., List[Dict[str, Any]]]
 GenerateFn = Callable[[str, List[Dict[str, Any]]], str]
+PlannerFn = Callable[[str], Plan]
+IncidentToolFn = Callable[[IncidentLookupInput], ToolResult]
+InventoryToolFn = Callable[[InventoryLookupInput], ToolResult]
+
+
+# Dependencias por defecto: se resuelven en cada llamada (no al importar) para
+# que los tests puedan sustituir la función del módulo con monkeypatch.
 
 
 def _default_retrieve(question: str, *, k: int, min_score: float) -> List[Dict[str, Any]]:
@@ -110,10 +145,35 @@ def _default_k() -> int:
     return rag.DEFAULT_K
 
 
+def _default_planner(question: str) -> Plan:
+    from services.agent import planner
+
+    return planner.plan_sources(question)
+
+
+def _default_incident_tool(payload: IncidentLookupInput) -> ToolResult:
+    from services.agent.tools import incidents
+
+    return incidents.lookup_incident(payload)
+
+
+def _default_inventory_tool(payload: InventoryLookupInput) -> ToolResult:
+    from services.agent.tools import inventory
+
+    return inventory.check_inventory_stock(payload)
+
+
+def _planned_args(state: AgentState, source: str) -> Dict[str, Any]:
+    for call in state.get("plan") or []:
+        if call["source"] == source:
+            return call["args"]
+    raise AgentStateError(f"El plan no incluye la fuente '{source}'")
+
+
 class AgentNodes:
     """Los nodos del grafo. Cada método recibe el estado y devuelve SOLO las
-    claves que cambia. Las dependencias (retrieve, generación, umbral) se
-    inyectan para poder probar cada nodo por separado sin red."""
+    claves que cambia. Las dependencias se inyectan para poder probar cada
+    nodo por separado sin red."""
 
     def __init__(
         self,
@@ -122,33 +182,63 @@ class AgentNodes:
         generate_fn: Optional[GenerateFn] = None,
         min_score_fn: Optional[Callable[[], float]] = None,
         k: Optional[int] = None,
+        planner_fn: Optional[PlannerFn] = None,
+        incident_tool_fn: Optional[IncidentToolFn] = None,
+        inventory_tool_fn: Optional[InventoryToolFn] = None,
     ) -> None:
         self.retrieve_fn = retrieve_fn or _default_retrieve
         self.generate_fn = generate_fn or _default_generate
         self.min_score_fn = min_score_fn or _default_min_score
         self.k = k if k is not None else _default_k()
+        self.planner_fn = planner_fn or _default_planner
+        self.incident_tool_fn = incident_tool_fn or _default_incident_tool
+        self.inventory_tool_fn = inventory_tool_fn or _default_inventory_tool
 
     def receive_question(self, state: AgentState) -> Dict[str, Any]:
         """Normaliza la pregunta y deja el resto del estado limpio."""
         question = (state.get("question") or "").strip()
-        return {"question": question, "context": [], "answer": None, "outcome": None}
+        return {"question": question, "plan": [], "plan_status": None, "context": [], "answer": None, "outcome": None}
 
     def reject_question(self, state: AgentState) -> Dict[str, Any]:
-        """Pregunta vacía: se corta aquí, sin recuperar ni generar."""
+        """Pregunta vacía: se corta aquí, sin planificar, consultar ni generar."""
         return {"answer": None, "outcome": OUTCOME_INVALID_QUESTION}
+
+    def plan_sources(self, state: AgentState) -> Dict[str, Any]:
+        """El modelo elige las fuentes (ver planner.py). Nunca falla: ante un
+        problema del modelo, el plan es solo la base de conocimiento."""
+        plan = self.planner_fn(state["question"])
+        return {"plan": [call.model_dump() for call in plan.calls], "plan_status": plan.status}
+
+    def lookup_incident(self, state: AgentState) -> Dict[str, Any]:
+        """Solo la tool de incidencias, con los argumentos ya validados del plan."""
+        payload = IncidentLookupInput.model_validate(_planned_args(state, SOURCE_INCIDENTS))
+        result = self.incident_tool_fn(payload)
+        return {"tool_results": [result.model_dump(mode="json")], "completed_sources": [SOURCE_INCIDENTS]}
+
+    def check_inventory_stock(self, state: AgentState) -> Dict[str, Any]:
+        """Solo la tool de inventario, con los argumentos ya validados del plan."""
+        payload = InventoryLookupInput.model_validate(_planned_args(state, SOURCE_INVENTORY))
+        result = self.inventory_tool_fn(payload)
+        return {"tool_results": [result.model_dump(mode="json")], "completed_sources": [SOURCE_INVENTORY]}
 
     def retrieve(self, state: AgentState) -> Dict[str, Any]:
         """Solo recuperación: `rag.retrieve()` con el umbral afinado del Hito 7."""
         chunks = self.retrieve_fn(state["question"], k=self.k, min_score=self.min_score_fn())
-        return {"context": list(chunks)}
+        return {"context": list(chunks), "completed_sources": [SOURCE_KNOWLEDGE_BASE]}
+
+    def tool_fallback(self, state: AgentState) -> Dict[str, Any]:
+        """Una tool no pudo dar el dato: respuesta honesta fija, sin modelo."""
+        failed = next(result for result in state.get("tool_results") or [] if result["status"] != "ok")
+        return {"answer": fallback_message(failed), "outcome": OUTCOME_TOOL_FALLBACK}
 
     def no_information(self, state: AgentState) -> Dict[str, Any]:
-        """Ningún chunk superó el umbral: respuesta honesta, sin llamar al modelo."""
+        """Ninguna fuente aportó nada: respuesta honesta, sin llamar al modelo."""
         return {"answer": NO_INFORMATION_ANSWER, "outcome": OUTCOME_NO_INFORMATION}
 
     def generate(self, state: AgentState) -> Dict[str, Any]:
-        """Solo generación, sobre el contexto que ya dejó `retrieve` en el estado."""
-        answer = self.generate_fn(state["question"], state["context"])
+        """Solo generación, sobre los datos en vivo y los chunks ya recuperados."""
+        evidence = tool_evidence(state.get("tool_results") or []) + list(state.get("context") or [])
+        answer = self.generate_fn(state["question"], evidence)
         return {"answer": answer, "outcome": OUTCOME_ANSWERED}
 
 
@@ -156,20 +246,30 @@ class AgentNodes:
 
 
 def route_after_receive(state: AgentState) -> str:
-    """Pregunta vacía → error claro; cualquier otra → recuperación."""
-    return RETRIEVE if state.get("question") else REJECT_QUESTION
+    """Pregunta vacía → error claro; cualquier otra → planificar fuentes."""
+    return PLAN_SOURCES if state.get("question") else REJECT_QUESTION
 
 
-def route_after_retrieve(state: AgentState) -> str:
-    """Decide si hay base para generar o si hay que responder con honestidad.
+def pending_sources(state: AgentState) -> List[str]:
+    done = set(state.get("completed_sources") or [])
+    return [call["source"] for call in state.get("plan") or [] if call["source"] not in done]
 
-    Devuelve GENERATE o NO_INFORMATION (los dos destinos declarados en
-    `build_agent_graph`; cualquier otro valor hace fallar la corrida).
 
-    No vuelve a mirar las puntuaciones: `retrieve()` ya descartó lo que no
-    llega a `min_score`, y repetir el umbral aquí haría que cambiarlo
-    exigiera tocar dos sitios."""
-    return GENERATE if state.get("context") else NO_INFORMATION
+def route_next_source(state: AgentState) -> str:
+    """Tras planificar y tras cada fuente: ¿a qué nodo se va ahora?
+
+    Devuelve el nodo de la siguiente fuente pendiente del plan, o uno de los
+    tres finales: TOOL_FALLBACK, NO_INFORMATION o GENERATE."""
+    tool_results = state.get("tool_results") or []
+    has_evidence = bool(state.get("context")) or any(result["status"] == "ok" for result in tool_results)
+    # Cortocircuito: si una tool no pudo dar su dato, la respuesta será el
+    # fallback honesto pase lo que pase; consultar el resto sería trabajo tirado.
+    if any(result["status"] != "ok" for result in tool_results):
+        return TOOL_FALLBACK
+    pending = pending_sources(state)
+    if pending:
+        return SOURCE_NODES[pending[0]]
+    return GENERATE if has_evidence else NO_INFORMATION
 
 
 # --- Construcción, validación y compilación ----------------------------------
@@ -196,20 +296,33 @@ def build_agent_graph(nodes: Optional[AgentNodes] = None) -> StateGraph:
     nodes = nodes or AgentNodes()
     builder = StateGraph(AgentState)
 
-    builder.add_node(RECEIVE_QUESTION, _checked(RECEIVE_QUESTION, nodes.receive_question))
-    builder.add_node(REJECT_QUESTION, _checked(REJECT_QUESTION, nodes.reject_question))
-    builder.add_node(RETRIEVE, _checked(RETRIEVE, nodes.retrieve))
-    builder.add_node(NO_INFORMATION, _checked(NO_INFORMATION, nodes.no_information))
-    builder.add_node(GENERATE, _checked(GENERATE, nodes.generate))
+    for name in (
+        RECEIVE_QUESTION,
+        REJECT_QUESTION,
+        PLAN_SOURCES,
+        LOOKUP_INCIDENT,
+        CHECK_INVENTORY_STOCK,
+        RETRIEVE,
+        TOOL_FALLBACK,
+        NO_INFORMATION,
+        GENERATE,
+    ):
+        builder.add_node(name, _checked(name, getattr(nodes, name)))
 
     builder.add_edge(START, RECEIVE_QUESTION)
-    # path_map explícito: declara los destinos posibles de cada decisión, así
-    # compile() puede comprobar que existen y get_graph() los dibuja.
-    builder.add_conditional_edges(RECEIVE_QUESTION, route_after_receive, [RETRIEVE, REJECT_QUESTION])
-    builder.add_conditional_edges(RETRIEVE, route_after_retrieve, [GENERATE, NO_INFORMATION])
-    builder.add_edge(REJECT_QUESTION, END)
-    builder.add_edge(NO_INFORMATION, END)
-    builder.add_edge(GENERATE, END)
+    builder.add_conditional_edges(RECEIVE_QUESTION, route_after_receive, [PLAN_SOURCES, REJECT_QUESTION])
+    # Una sola función de enrutamiento para todas las fuentes; el path_map de
+    # cada nodo declara solo los destinos posibles desde ahí (el plan siempre
+    # sigue el orden incidencias → inventario → RAG), así el dibujo del grafo
+    # es fiel y un destino imposible haría fallar la corrida.
+    builder.add_conditional_edges(PLAN_SOURCES, route_next_source, [LOOKUP_INCIDENT, CHECK_INVENTORY_STOCK, RETRIEVE])
+    builder.add_conditional_edges(
+        LOOKUP_INCIDENT, route_next_source, [CHECK_INVENTORY_STOCK, RETRIEVE, TOOL_FALLBACK, GENERATE]
+    )
+    builder.add_conditional_edges(CHECK_INVENTORY_STOCK, route_next_source, [RETRIEVE, TOOL_FALLBACK, GENERATE])
+    builder.add_conditional_edges(RETRIEVE, route_next_source, [NO_INFORMATION, GENERATE])
+    for final in (REJECT_QUESTION, TOOL_FALLBACK, NO_INFORMATION, GENERATE):
+        builder.add_edge(final, END)
     return builder
 
 

@@ -1,10 +1,10 @@
 {
   "trace_id": "eval-off-topic",
-  "schema_version": 1,
+  "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T15:39:59.895621+00:00",
-  "finished_at": "2026-09-24T15:40:00.531233+00:00",
-  "duration_ms": 635.58,
+  "started_at": "2026-09-24T16:49:33.385162+00:00",
+  "finished_at": "2026-09-24T16:49:35.423534+00:00",
+  "duration_ms": 2038.4,
   "status": "completed",
   "input": {
     "question": {
@@ -16,12 +16,14 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.82,
+      "duration_ms": 2.7,
       "output": {
         "question": {
           "sha256": "d699d9a1b64615367ab2c61da82c578ee1502cb4c3f50df082abbb37ee9ae301",
           "length": 55
         },
+        "plan": [],
+        "plan_status": null,
         "context": [],
         "answer": null,
         "outcome": null
@@ -29,14 +31,31 @@
     },
     {
       "index": 2,
-      "node": "retrieve",
-      "duration_ms": 630.45,
+      "node": "plan_sources",
+      "duration_ms": 1652.96,
       "output": {
-        "context": []
+        "plan": [
+          {
+            "source": "knowledge_base",
+            "args": {}
+          }
+        ],
+        "plan_status": "model"
       }
     },
     {
       "index": 3,
+      "node": "retrieve",
+      "duration_ms": 380.0,
+      "output": {
+        "context": [],
+        "completed_sources": [
+          "knowledge_base"
+        ]
+      }
+    },
+    {
+      "index": 4,
       "node": "no_information",
       "duration_ms": 1.16,
       "output": {
@@ -47,12 +66,23 @@
   ],
   "node_sequence": [
     "receive_question",
+    "plan_sources",
     "retrieve",
     "no_information"
   ],
+  "plan": [
+    {
+      "source": "knowledge_base",
+      "args": {}
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "knowledge_base"
+  ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b82e3-39a7-6f4c-bfff-a04a8c19d669",
+      "checkpoint_id": "1f1b837e-b327-62be-bfff-1ca56541a28b",
       "step": -1,
       "source": "input",
       "next": [
@@ -60,7 +90,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-39a9-6ce8-8000-24c695976557",
+      "checkpoint_id": "1f1b837e-b328-6c72-8000-5073e5e695d7",
       "step": 0,
       "source": "loop",
       "next": [
@@ -68,24 +98,32 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-39ac-62f4-8001-f9f6e9e7b2da",
+      "checkpoint_id": "1f1b837e-b32b-6396-8001-5540af85f5ab",
       "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b837e-c2ee-601c-8002-1cfc175b9232",
+      "step": 2,
       "source": "loop",
       "next": [
         "retrieve"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-3faf-6246-8002-c3068bd45c21",
-      "step": 2,
+      "checkpoint_id": "1f1b837e-c68e-6168-8003-06a82c9beae5",
+      "step": 3,
       "source": "loop",
       "next": [
         "no_information"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-3fb1-6636-8003-4d2b7bf85b9b",
-      "step": 3,
+      "checkpoint_id": "1f1b837e-c690-692c-8004-a2121cc39880",
+      "step": 4,
       "source": "loop",
       "next": []
     }

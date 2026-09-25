@@ -1,0 +1,150 @@
+{
+  "trace_id": "eval-incidents-outage",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T16:52:30.034145+00:00",
+  "finished_at": "2026-09-24T16:52:34.048382+00:00",
+  "duration_ms": 4014.36,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
+      "length": 33
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 2.49,
+      "output": {
+        "question": {
+          "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
+          "length": 33
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 1003.46,
+      "output": {
+        "plan": [
+          {
+            "source": "incidents",
+            "args": {
+              "ticket_id": 12
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "lookup_incident",
+      "duration_ms": 3005.67,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "lookup_incident",
+            "status": "unavailable",
+            "args": {
+              "ticket_id": 12
+            },
+            "data": null,
+            "error_type": "TimeoutError",
+            "timeout_s": 3.0,
+            "duration_ms": 3004.51
+          }
+        ],
+        "completed_sources": [
+          "incidents"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "tool_fallback",
+      "duration_ms": 1.12,
+      "output": {
+        "answer": "No pude confirmar el estado de la incidencia #12 ahora mismo: el gestor de incidencias no respondió. Inténtalo de nuevo en unos minutos y no des un estado sin confirmarlo.",
+        "outcome": "tool_fallback"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "lookup_incident",
+    "tool_fallback"
+  ],
+  "plan": [
+    {
+      "source": "incidents",
+      "args": {
+        "ticket_id": 12
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "incidents"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b8385-47ce-6808-bfff-d05c8047b012",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-47d0-6284-8000-e530d7b69bfb",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-47d2-6ac0-8001-a03c08dfa5ca",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-5164-6390-8002-00d8bf6d9b85",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "lookup_incident"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-6e0e-60ea-8003-262cdfe54f59",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "tool_fallback"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b8385-6e10-6746-8004-04c938403334",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "tool_fallback",
+  "answer": "No pude confirmar el estado de la incidencia #12 ahora mismo: el gestor de incidencias no respondió. Inténtalo de nuevo en unos minutos y no des un estado sin confirmarlo.",
+  "error": null
+}

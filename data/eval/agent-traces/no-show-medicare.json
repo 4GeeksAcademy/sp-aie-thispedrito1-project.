@@ -1,10 +1,10 @@
 {
   "trace_id": "eval-no-show-medicare",
-  "schema_version": 1,
+  "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T15:39:53.359121+00:00",
-  "finished_at": "2026-09-24T15:39:55.818260+00:00",
-  "duration_ms": 2458.57,
+  "started_at": "2026-09-24T16:49:25.976275+00:00",
+  "finished_at": "2026-09-24T16:49:29.505334+00:00",
+  "duration_ms": 3529.11,
   "status": "completed",
   "input": {
     "question": {
@@ -16,12 +16,14 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 3.4,
+      "duration_ms": 2.36,
       "output": {
         "question": {
           "sha256": "9a210e1fcf8f40c80dc4f6afe3397ce9b5047b2d2981acd3680e923933b99966",
           "length": 86
         },
+        "plan": [],
+        "plan_status": null,
         "context": [],
         "answer": null,
         "outcome": null
@@ -29,8 +31,22 @@
     },
     {
       "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 1558.79,
+      "output": {
+        "plan": [
+          {
+            "source": "knowledge_base",
+            "args": {}
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
       "node": "retrieve",
-      "duration_ms": 251.08,
+      "duration_ms": 368.69,
       "output": {
         "context": [
           {
@@ -57,27 +73,41 @@
             "chunk_index": 2,
             "score": 0.3894002
           }
+        ],
+        "completed_sources": [
+          "knowledge_base"
         ]
       }
     },
     {
-      "index": 3,
+      "index": 4,
       "node": "generate",
-      "duration_ms": 2202.86,
+      "duration_ms": 1597.45,
       "output": {
-        "answer": "No. A las pacientes con Medicare no se les cobra cargo por no-show, pero el incidente debe registrarse en su historial.\n\nFuente: appointment-policy · Sección: Política de cancelación",
+        "answer": "No. A los pacientes con Medicare no se les cobra cargo por no-show. Debes registrar el incidente en su historial.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
         "outcome": "answered"
       }
     }
   ],
   "node_sequence": [
     "receive_question",
+    "plan_sources",
     "retrieve",
     "generate"
   ],
+  "plan": [
+    {
+      "source": "knowledge_base",
+      "args": {}
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "knowledge_base"
+  ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b82e2-fb56-6586-bfff-d93209d3e9d7",
+      "checkpoint_id": "1f1b837e-6c7f-628a-bfff-4716310d8e5b",
       "step": -1,
       "source": "input",
       "next": [
@@ -85,7 +115,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e2-fb57-67ce-8000-c60bb116bb50",
+      "checkpoint_id": "1f1b837e-6c80-6900-8000-da2d7a18d3b3",
       "step": 0,
       "source": "loop",
       "next": [
@@ -93,29 +123,37 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e2-fb59-606a-8001-52496da72f7a",
+      "checkpoint_id": "1f1b837e-6c82-6840-8001-be9949ad7d40",
       "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b837e-7b5f-6e80-8002-83bf82544698",
+      "step": 2,
       "source": "loop",
       "next": [
         "retrieve"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e2-fdbd-6b12-8002-c8f3b1137e69",
-      "step": 2,
+      "checkpoint_id": "1f1b837e-7ee3-675a-8003-06925ed4f3e4",
+      "step": 3,
       "source": "loop",
       "next": [
         "generate"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-12be-6dea-8003-55cc93e49066",
-      "step": 3,
+      "checkpoint_id": "1f1b837e-8e1f-6232-8004-e31bdeec90b4",
+      "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "No. A las pacientes con Medicare no se les cobra cargo por no-show, pero el incidente debe registrarse en su historial.\n\nFuente: appointment-policy · Sección: Política de cancelación",
+  "answer": "No. A los pacientes con Medicare no se les cobra cargo por no-show. Debes registrar el incidente en su historial.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
   "error": null
 }

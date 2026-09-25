@@ -1,0 +1,164 @@
+{
+  "trace_id": "eval-inventory-stock",
+  "schema_version": 2,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T17:39:37.319531+00:00",
+  "finished_at": "2026-09-24T17:39:44.915581+00:00",
+  "duration_ms": 7596.22,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "dd826b1bb652b3cba7dcd6ca8aed4b86cae14b9823098f75b413604d59225a57",
+      "length": 37
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 0.91,
+      "output": {
+        "question": {
+          "sha256": "dd826b1bb652b3cba7dcd6ca8aed4b86cae14b9823098f75b413604d59225a57",
+          "length": 37
+        },
+        "plan": [],
+        "plan_status": null,
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 4522.27,
+      "output": {
+        "plan": [
+          {
+            "source": "inventory",
+            "args": {
+              "product": "guantes de nitrilo"
+            }
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
+      "node": "check_inventory_stock",
+      "duration_ms": 1325.87,
+      "output": {
+        "tool_results": [
+          {
+            "tool": "check_inventory_stock",
+            "status": "ok",
+            "args": {
+              "product": "guantes de nitrilo"
+            },
+            "data": {
+              "total_matches": 1,
+              "items": [
+                {
+                  "id": 1,
+                  "name": "Guantes de nitrilo (caja de 100)",
+                  "sku": "HCR-PPE-001",
+                  "category": "ppe",
+                  "unit": "box",
+                  "country": "US",
+                  "current_stock": 350,
+                  "expiry_date": null
+                }
+              ]
+            },
+            "error_type": null,
+            "timeout_s": 5.0,
+            "duration_ms": 1321.93
+          }
+        ],
+        "completed_sources": [
+          "inventory"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "node": "generate",
+      "duration_ms": 1744.47,
+      "output": {
+        "answer": "Sí. Tenemos guantes de nitrilo en stock:\n\n- 350 cajas en total en la red.\n- Cada caja contiene 100 guantes.\n- SKU: HCR-PPE-001.\n- No hay fecha de caducidad registrada.\n\nFuente: gestor-de-inventario (datos en vivo), sección «Stock de guantes de nitrilo».",
+        "outcome": "answered"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "plan_sources",
+    "check_inventory_stock",
+    "generate"
+  ],
+  "plan": [
+    {
+      "source": "inventory",
+      "args": {
+        "product": "guantes de nitrilo"
+      }
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "inventory"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b83ee-9ae5-6dac-bfff-1a8c7a4f6012",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-9ae6-68d8-8000-c4a49e75132f",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-9ae7-65a8-8001-2912c0027657",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-c606-6a90-8002-a3cdea283cbc",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "check_inventory_stock"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-d2ab-6750-8003-ba639bb6b89f",
+      "step": 3,
+      "source": "loop",
+      "next": [
+        "generate"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b83ee-e34e-66c0-8004-b8b95e7a85fc",
+      "step": 4,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "answered",
+  "answer": "Sí. Tenemos guantes de nitrilo en stock:\n\n- 350 cajas en total en la red.\n- Cada caja contiene 100 guantes.\n- SKU: HCR-PPE-001.\n- No hay fecha de caducidad registrada.\n\nFuente: gestor-de-inventario (datos en vivo), sección «Stock de guantes de nitrilo».",
+  "error": null
+}

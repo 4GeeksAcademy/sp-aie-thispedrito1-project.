@@ -5,7 +5,8 @@ estructura: lo recorre con `stream_mode="updates"` (LangGraph avisa cada vez
 que un nodo termina y con lo que escribió), mide cada paso, lee del
 checkpointer la lista de checkpoints de la corrida y escribe un trace JSON
 consultable en `<trace_dir>/<trace_id>.json`. El orden de los pasos del trace
-es el de ejecución real, no uno reconstruido.
+es el de ejecución real, no uno reconstruido. `sources_used` resume qué
+fuentes se consultaron (knowledge_base, incidents, inventory) y en qué orden.
 
 Privacidad (HIPAA / UK GDPR, misma regla que los logs del RAG): la pregunta
 NUNCA se guarda en el trace. Se sustituye por su SHA-256 y su longitud, que
@@ -33,11 +34,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from services.agent.graph import GRAPH_NAME
+from services.agent.graph import GRAPH_NAME, NODE_SOURCES
 
 logger = logging.getLogger(__name__)
 
-TRACE_SCHEMA_VERSION = 1
+# v2 (Parte 2): `plan`, `plan_status` y `sources_used`.
+TRACE_SCHEMA_VERSION = 2
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TRACE_DIR = REPO_ROOT / "data" / "traces" / "agent"
 CHUNK_TRACE_FIELDS = ("source_document", "section", "chunk_index", "score")
@@ -157,6 +159,9 @@ def run_agent(
         "input": {"question": fingerprint(question or "")},
         "steps": [],
         "node_sequence": [],
+        "plan": [],
+        "plan_status": None,
+        "sources_used": [],
         "checkpoints": [],
         "outcome": None,
         "answer": None,
@@ -185,6 +190,10 @@ def run_agent(
 
     final_state = graph.get_state(config).values
     trace["checkpoints"] = _checkpoints(graph, config)
+    trace["plan"] = final_state.get("plan") or []
+    trace["plan_status"] = final_state.get("plan_status")
+    # Qué fuentes se consultaron de verdad y en qué orden (RAG, tools o ambos).
+    trace["sources_used"] = [NODE_SOURCES[node] for node in trace["node_sequence"] if node in NODE_SOURCES]
     trace["finished_at"] = _now()
     trace["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
     if failure is None:
@@ -207,12 +216,13 @@ def run_agent(
 
     # Nunca la pregunta: solo el recorrido y el desenlace.
     logger.info(
-        "Agent run %s %s: %s -> %s (%.0f ms)",
+        "Agent run %s %s: %s -> %s (%.0f ms, sources=%s)",
         trace_id,
         trace["status"],
         " > ".join(trace["node_sequence"]) or "-",
         trace["outcome"] or (trace["error"] or {}).get("node"),
         trace["duration_ms"],
+        trace["sources_used"],
     )
 
     if failure is not None:

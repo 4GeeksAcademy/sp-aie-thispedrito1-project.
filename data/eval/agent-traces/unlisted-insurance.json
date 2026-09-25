@@ -1,10 +1,10 @@
 {
   "trace_id": "eval-unlisted-insurance",
-  "schema_version": 1,
+  "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T15:39:55.820020+00:00",
-  "finished_at": "2026-09-24T15:39:59.893197+00:00",
-  "duration_ms": 4073.3,
+  "started_at": "2026-09-24T16:49:29.507533+00:00",
+  "finished_at": "2026-09-24T16:49:33.383093+00:00",
+  "duration_ms": 3875.64,
   "status": "completed",
   "input": {
     "question": {
@@ -16,12 +16,14 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.45,
+      "duration_ms": 1.06,
       "output": {
         "question": {
           "sha256": "f213e525e982d3656a33e42cac4328d06f25e75a529dd88012b92544e156d6bf",
           "length": 77
         },
+        "plan": [],
+        "plan_status": null,
         "context": [],
         "answer": null,
         "outcome": null
@@ -29,8 +31,22 @@
     },
     {
       "index": 2,
+      "node": "plan_sources",
+      "duration_ms": 1554.89,
+      "output": {
+        "plan": [
+          {
+            "source": "knowledge_base",
+            "args": {}
+          }
+        ],
+        "plan_status": "model"
+      }
+    },
+    {
+      "index": 3,
       "node": "retrieve",
-      "duration_ms": 240.94,
+      "duration_ms": 304.91,
       "output": {
         "context": [
           {
@@ -57,27 +73,41 @@
             "chunk_index": 0,
             "score": 0.40210605
           }
+        ],
+        "completed_sources": [
+          "knowledge_base"
         ]
       }
     },
     {
-      "index": 3,
+      "index": 4,
       "node": "generate",
-      "duration_ms": 3828.35,
+      "duration_ms": 2012.9,
       "output": {
-        "answer": "No le confirmes la cobertura todavía.\n\n- Estados Unidos: Oscar Health no aparece entre los seguros comerciales aceptados. Debe verificarse primero con el equipo de facturación, Tom Callahan.\n- Reino Unido: Oscar Health tampoco aparece entre las opciones de seguro privado indicadas. También debe verificarse con Tom Callahan.\n\nPuedes decirle al paciente: “Vamos a verificar su cobertura con nuestro equipo de facturación antes de confirmar cualquier cobertura.”\n\nFuente: insurance-coverage, secciones “Cobertura de Seguros Aceptados”, “Estados Unidos (Texas, Florida, Georgia)” y “Reino Unido (Londres y Manchester)”.",
+        "answer": "No puedo confirmar que Oscar Health esté cubierto porque no aparece en la lista de seguros aceptados.\n\nDile al paciente: “Debemos verificarlo primero con el equipo de facturación antes de confirmar la cobertura.”\n\nConsulta a Tom Callahan antes de comprometer nada con el paciente.\n\nFuente: insurance-coverage · Sección: Cobertura de Seguros Aceptados",
         "outcome": "answered"
       }
     }
   ],
   "node_sequence": [
     "receive_question",
+    "plan_sources",
     "retrieve",
     "generate"
   ],
+  "plan": [
+    {
+      "source": "knowledge_base",
+      "args": {}
+    }
+  ],
+  "plan_status": "model",
+  "sources_used": [
+    "knowledge_base"
+  ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b82e3-12c9-629a-bfff-0f34714a6876",
+      "checkpoint_id": "1f1b837e-8e2b-6442-bfff-38740e224d8c",
       "step": -1,
       "source": "input",
       "next": [
@@ -85,7 +115,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-12ca-6da2-8000-e997d4cb6928",
+      "checkpoint_id": "1f1b837e-8e2b-6f82-8000-1e3814e09a10",
       "step": 0,
       "source": "loop",
       "next": [
@@ -93,29 +123,37 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-12cd-60b6-8001-3064410c35e6",
+      "checkpoint_id": "1f1b837e-8e2c-6c66-8001-a173079cdcd3",
       "step": 1,
+      "source": "loop",
+      "next": [
+        "plan_sources"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b837e-9cff-6bc6-8002-5ce989785e4c",
+      "step": 2,
       "source": "loop",
       "next": [
         "retrieve"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-1518-6e4c-8002-f44d93b74fe6",
-      "step": 2,
+      "checkpoint_id": "1f1b837e-9fe8-69fa-8003-3eff20fbeba2",
+      "step": 3,
       "source": "loop",
       "next": [
         "generate"
       ]
     },
     {
-      "checkpoint_id": "1f1b82e3-399a-6054-8003-30ce56b1465b",
-      "step": 3,
+      "checkpoint_id": "1f1b837e-b319-6e98-8004-ab16fffc0356",
+      "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "No le confirmes la cobertura todavía.\n\n- Estados Unidos: Oscar Health no aparece entre los seguros comerciales aceptados. Debe verificarse primero con el equipo de facturación, Tom Callahan.\n- Reino Unido: Oscar Health tampoco aparece entre las opciones de seguro privado indicadas. También debe verificarse con Tom Callahan.\n\nPuedes decirle al paciente: “Vamos a verificar su cobertura con nuestro equipo de facturación antes de confirmar cualquier cobertura.”\n\nFuente: insurance-coverage, secciones “Cobertura de Seguros Aceptados”, “Estados Unidos (Texas, Florida, Georgia)” y “Reino Unido (Londres y Manchester)”.",
+  "answer": "No puedo confirmar que Oscar Health esté cubierto porque no aparece en la lista de seguros aceptados.\n\nDile al paciente: “Debemos verificarlo primero con el equipo de facturación antes de confirmar la cobertura.”\n\nConsulta a Tom Callahan antes de comprometer nada con el paciente.\n\nFuente: insurance-coverage · Sección: Cobertura de Seguros Aceptados",
   "error": null
 }
