@@ -197,4 +197,17 @@ services/api/.venv/bin/python -m mcps.healthcore
 
 El enrutamiento entre RAG y tools se mantiene: el planificador eligió `incidents` en las cuatro, igual que antes de la migración. Qdrant no se levantó (las preguntas de tickets no lo usan); el camino del RAG no cambió en este ticket y lo cubren los evals grabados.
 
-**Pendiente:** la prueba de MCP Playground desde Codespaces (sección 8), que hace el usuario.
+**MCP Playground desde Codespaces (2026-09-25).** Codespace `mcp-oauth-playground` sobre esta rama; API + MCP dentro, puerto 8765 público en `https://mcp-oauth-playground-x5jr7xjjvq45fpvpp-8765.app.github.dev/mcp`; token `client_credentials` de la app `mcp-playground-tester` en la cabecera `Authorization`. Capturas en `docs/mcp/playground/`.
+
+| # | Flujo en Playground | Resultado |
+|---|---|---|
+| 0 | Conectar sin token | "Failed to connect — This server requires authentication" (401 `missing_auth_header`) |
+| 1 | Conectar con token | `healthcore-company-tools`, Streamable HTTP, 5 tools (`01-conectado-5-tools.png`) |
+| 2 | `incidents_create` | ticket #95 `open`, `allowed_next_statuses: [in_progress, discarded]` |
+| 3 | `incidents_get` #95 | `open` (`02-incidents-get.png`) |
+| 4 | `incidents_update_status` #95 → `in_progress` | `in_progress`; el campo Status sale como desplegable a partir del `enum` del esquema (`03-…png`) |
+| 5 | `incidents_search` open + london_city | primero `validation_error` (Playground envía `""` en los campos vacíos, `04a-…png`); tras el arreglo `total: 4` (`04b-…png`) |
+| 6 | `inventory_query list_supplies` | `total: 6` desde Supabase (`05-…png`) |
+| 7 | `inventory_query adjust_stock` supply 1 | `read_only_resource` con `allowed_actions` (`06-inventory-escritura-rechazada.png`) |
+
+Hallazgos de esta prueba, corregidos en la rama y con tests: `mcpauth` seguía fijado a 0.1.1 en `requirements.txt` (la instalación limpia del Codespace lo reveló); Playground llama desde sus servidores, pero un cliente MCP en navegador necesitaría CORS y el `Origin` permitido (`MCP_ALLOWED_ORIGINS`); y los filtros opcionales vacíos (`""`) ahora significan "sin filtro". El Codespace quedó detenido (no borrado) al terminar.

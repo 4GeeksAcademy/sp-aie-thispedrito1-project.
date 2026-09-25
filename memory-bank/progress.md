@@ -121,7 +121,7 @@
   - **Tests:** `test_mcp_server.py` 44 (cadena en memoria con emisor RSA local) y `test_agent_mcp_client.py` 5. Sin regresiones: API 224, raiz 247. Sin cambios de frontend.
   - **Prueba real con Logto (tenant `eb77o9`):** 401 sin token, ciclo de ticket, `read_only_resource`, `insufficient_scope` con el token del agente, inventario de Supabase y el agente real por MCP (`via=mcp`). Encontro un bug que los tests no veian (`httpx.Request(auth=...)` en el flujo OAuth del agente), corregido y con tests.
   - **Agente real:** 4 preguntas por `/agent/query` con el modelo (tras regenerar la `LLM_API_KEY` caducada), todas `via=mcp`; "cierra el ticket 22" no modifica nada (solo `incidents:read`).
-  - **Pendiente:** la prueba de MCP Playground en Codespaces (la hace el usuario, guia en la §8 del diseno).
+  - **MCP Playground desde Codespaces hecho:** las 5 tools y el rechazo `read_only_resource`, con capturas en `docs/mcp/playground/`. Hallazgos corregidos: `mcpauth` sin fijar a 0.2.0b1 en requirements, CORS/Origin para clientes en navegador (`MCP_ALLOWED_ORIGINS`) y filtros vacios `""` como "sin filtro". Codespace detenido.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
