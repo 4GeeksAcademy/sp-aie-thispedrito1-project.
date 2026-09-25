@@ -31,8 +31,10 @@ langgraph==0.6.11
 # Servidor MCP con OAuth (mcps/healthcore): SDK oficial de MCP (trae FastMCP en
 # mcp.server.fastmcp y el transporte Streamable HTTP), MCP Auth como resource
 # server OAuth 2.1 y el adaptador con el que el agente LangGraph consume el
-# servidor como cliente. mcp<2 lo exige langchain-mcp-adapters; por eso no se
+# servidor como cliente. mcpauth 0.2.0b1 (beta) a propósito: la 0.1.1 no
+# tiene modo resource server ni Protected Resource Metadata. mcp<2 lo exige
+# langchain-mcp-adapters; por eso no se
 # instala el paquete `fastmcp` aparte (sus versiones nuevas usan mcp 2.x).
 mcp>=1.24,<2
-mcpauth==0.1.1
+mcpauth==0.2.0b1
 langchain-mcp-adapters==0.3.2
