@@ -114,6 +114,15 @@
   - **Tests:** tools 39, grafo 17, evals 86, endpoint 8. Sin regresiones: raiz 242, API 180. Sin cambios de frontend.
 - Supabase unificado (2026-09-24, a peticion del usuario, fuera del PR): todo HealthCore vive ahora en `healthcore-data` (antes `healthcore-inventory`, eu-central-1, ref `klaxalwsyrucwszvdkhu`). Se copio entera la base de eu-west-1 (`database-auditory`, ref `eizprmptspxhxvaqvqdz`, ahora pausada) desde su backup descargado; las tablas antiguas de eu-central-1 (seed duplicado del Hito 5 + 12 eventos de prueba) quedan archivadas en el esquema `archive_hito5`, sin borrar. Una transaccion, ensayo previo con ROLLBACK, verificacion de filas y stock. EduTrack no se migro (no es HealthCore).
 
+- Servidor MCP con OAuth (rama `feature/mcp-oauth-tools` sobre `main`, 2026-09-25). Diseno en `docs/mcp/mcp-server.md`.
+  - **Que hace:** `mcps/healthcore` expone por Streamable HTTP 5 tools (`incidents_get`, `incidents_search`, `incidents_create`, `incidents_update_status`, `inventory_query`) contra la API real, protegidas con MCP Auth (401 sin token valido, Protected Resource Metadata) y un scope por tool. El inventario es solo lectura en tres capas y rechaza escrituras con `read_only_resource`. Log de auditoria por invocacion. El agente consulta las incidencias como cliente MCP (`langchain-mcp-adapters`, token `client_credentials` con solo `incidents:read`); el acceso en proceso se elimino.
+  - **Decisiones del usuario:** recrear el venv en Python 3.12; Logto Cloud como proveedor OAuth; guia escrita para que el usuario haga la prueba de MCP Playground en Codespaces. Delegada ("hazlo tu"): la tabla de scopes por tool.
+  - **Encontrado al implementar:** mcpauth 0.1.1 no tiene modo resource server (se usa 0.2.0b1); el paquete `fastmcp` nuevo es incompatible con el adaptador (se usa el FastMCP del SDK); FastMCP antepone "Error executing tool" a los errores; la proteccion DNS-rebinding bloquearia Codespaces sin configurar hosts.
+  - **Tests:** `test_mcp_server.py` 37 (cadena en memoria con emisor RSA local) y `test_agent_mcp_client.py` 5. Sin regresiones: API 217, raiz 247. Sin cambios de frontend.
+  - **Prueba real con Logto (tenant `eb77o9`):** 401 sin token, ciclo de ticket, `read_only_resource`, `insufficient_scope` con el token del agente, inventario de Supabase y el agente real por MCP (`via=mcp`). Encontro un bug que los tests no veian (`httpx.Request(auth=...)` en el flujo OAuth del agente), corregido y con tests.
+  - **Agente real:** 4 preguntas por `/agent/query` con el modelo (tras regenerar la `LLM_API_KEY` caducada), todas `via=mcp`; "cierra el ticket 22" no modifica nada (solo `incidents:read`).
+  - **Pendiente:** la prueba de MCP Playground en Codespaces (la hace el usuario, guia en la §8 del diseno).
+
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
 - Mejora de robustez de tipos en frontend.
