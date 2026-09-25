@@ -168,7 +168,7 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py test
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (217 tests, 37 del servidor MCP): desde services/api, con el venv activado
+# Backend (222 tests, 42 del servidor MCP): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -504,7 +504,7 @@ Ticket "RFP — Servidor MCP para herramientas de la compañía", rama `feature/
 Mapa del código:
 - **`mcps/healthcore/`**: `config.py` (variables, `.env` propio), `server.py` (Starlette: Protected Resource Metadata + MCP Auth + FastMCP), `tools.py` (5 tools + log de auditoría), `scopes.py` (`TOOL_SCOPES`), `errors.py` (códigos), `api_client.py` (cliente HTTP a la API con cuenta de servicio + `InventoryReader` solo GET). Arranque: `python -m mcps.healthcore`.
 - **`services/agent/mcp_client.py`**: el agente como cliente MCP (`MultiServerMCPClient`, `ClientCredentialsAuth` como `httpx.Auth` contra Logto). `services/agent/tools/incidents.py` llama a `incidents_get`/`incidents_search` por MCP.
-- **Tests**: `services/api/tests/test_mcp_server.py` (37), `tests/pipelines/test_agent_mcp_client.py` (5, flujo OAuth del agente contra Logto simulado) + `tests/mcp_harness.py` (emisor OAuth falso con clave RSA local, cadena en memoria cliente → MCP → API FastAPI con `httpx.ASGITransport`). Fixture `service_account` en `conftest.py`.
+- **Tests**: `services/api/tests/test_mcp_server.py` (42), `tests/pipelines/test_agent_mcp_client.py` (5, flujo OAuth del agente contra Logto simulado) + `tests/mcp_harness.py` (emisor OAuth falso con clave RSA local, cadena en memoria cliente → MCP → API FastAPI con `httpx.ASGITransport`). Fixture `service_account` en `conftest.py`.
 
 Decisiones que conviene no romper:
 - **Streamable HTTP, sin estado y con respuestas JSON**: varios clientes remotos, un token por petición. stdio no tiene dónde llevar un Bearer.
@@ -518,7 +518,8 @@ Decisiones que conviene no romper:
 
 Gotchas reales:
 - **El FastMCP del SDK antepone siempre `Error executing tool <tool>: `** al texto de un `ToolError` (mcp 1.30, `tools/base.py`). `errors.parse_tool_error` lee el JSON desde la primera `{`.
-- **FastMCP activa la protección DNS-rebinding** con host localhost: la URL de Codespaces daría 421 sin añadirla a `allowed_hosts` (lo hace `config.load_settings` con el host de `MCP_RESOURCE_URL`).
+- **FastMCP activa la protección DNS-rebinding** con host localhost: la URL de Codespaces daría 421 sin añadirla a `allowed_hosts` (lo hace `config.load_settings` con el host de `MCP_RESOURCE_URL`). Un cliente en navegador (MCP Playground) daría además 403 por `Origin` y 401 en el preflight CORS: `MCP_ALLOWED_ORIGINS` activa un `CORSMiddleware` externo y añade el origen a la lista del SDK. Vacía = sin CORS.
+- **`mcpauth` debe estar fijado a 0.2.0b1 en `requirements.txt` y `pyproject.toml`**: en local se instaló a mano y los archivos seguían con 0.1.1; lo detectó la instalación limpia en Codespaces.
 - **Una app Starlette montada no ejecuta su lifespan**: el `session_manager.run()` de MCP se arranca en el lifespan de la app exterior. Además solo se puede arrancar una vez por instancia, así que los tests crean una app por llamada.
 - **En tests, el grupo de tareas del servidor MCP en memoria envuelve el error del cliente en un `ExceptionGroup`**; `mcp_harness.agent_mcp_call` lo desempaqueta. En producción el servidor es otro proceso y no ocurre.
 - **`services/api/tests` no es un paquete** y en la raíz hay otra carpeta `tests/`: importar `mcp_harness` directamente, nunca `from tests import …`.

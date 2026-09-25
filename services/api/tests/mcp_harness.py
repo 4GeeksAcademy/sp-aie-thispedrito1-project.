@@ -97,10 +97,11 @@ def make_token(
     return jwt.encode(claims, key, algorithm="RS256", headers={"kid": _KID})
 
 
-def build_app(api_app: Any) -> Any:
+def build_app(api_app: Any, settings: Optional[McpSettings] = None) -> Any:
     """App MCP completa (MCP Auth incluido) hablando con la API de los tests."""
-    api = HealthCoreApi(SETTINGS.api_base_url, SERVICE_EMAIL, SERVICE_PASSWORD, transport=httpx.ASGITransport(app=api_app))
-    return create_app(SETTINGS, auth_server=AUTH_SERVER, verify=build_jwt_verifier(AUTH_SERVER, key=_public_jwk()), api=api)
+    settings = settings or SETTINGS
+    api = HealthCoreApi(settings.api_base_url, SERVICE_EMAIL, SERVICE_PASSWORD, transport=httpx.ASGITransport(app=api_app))
+    return create_app(settings, auth_server=AUTH_SERVER, verify=build_jwt_verifier(AUTH_SERVER, key=_public_jwk()), api=api)
 
 
 def http_client(mcp_app: Any, token: Optional[str] = None, **kwargs: Any) -> httpx.AsyncClient:

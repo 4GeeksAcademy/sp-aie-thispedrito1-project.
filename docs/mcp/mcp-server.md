@@ -154,17 +154,19 @@ services/api/.venv/bin/python -m mcps.healthcore
 1. Abre el repo en un Codespace e instala las dependencias: `cd services/api && uv venv --python 3.12 .venv && uv pip install -r requirements.txt`.
 2. Arranca la API (puerto 8000) y el MCP con `MCP_HOST=0.0.0.0`.
 3. En la pestaña **Ports**, puerto 8765 → *Port Visibility → Public*. Copia la URL, del tipo `https://<codespace>-8765.app.github.dev`.
-4. En `mcps/healthcore/.env` pon `MCP_RESOURCE_URL=https://<codespace>-8765.app.github.dev/mcp` (su host se añade solo a los hosts permitidos) y reinicia el MCP. `MCP_AUDIENCE` no cambia.
+4. En `mcps/healthcore/.env` pon `MCP_RESOURCE_URL=https://<codespace>-8765.app.github.dev/mcp` (su host se añade solo a los hosts permitidos) y `MCP_ALLOWED_ORIGINS=https://www.mcpplayground.tech`, y reinicia el MCP. `MCP_AUDIENCE` no cambia.
+
+   Por qué `MCP_ALLOWED_ORIGINS`: Playground es una web. Si llama desde el navegador, envía `Origin`, que la protección DNS-rebinding del SDK rechaza con 403 si no está en la lista, y un preflight CORS `OPTIONS` **sin token**, que MCP Auth rechazaría con 401. Con la variable, un `CORSMiddleware` (la capa más externa) responde al preflight y el origen queda permitido; las peticiones reales siguen necesitando Bearer. Sin la variable no hay CORS en absoluto. Nunca `*`.
 5. En <https://www.mcpplayground.tech/playground>: transporte *Streamable HTTP*, URL `https://<codespace>-8765.app.github.dev/mcp` y cabecera `Authorization: Bearer <token>` (curl de la sección 6).
 6. Flujos a ejecutar: `incidents_create` → `incidents_get` → `incidents_update_status` (in_progress) → `incidents_search`; `inventory_query` con `list_supplies`; e **intento de escritura**: `inventory_query` con `{"action": "adjust_stock", "supply_id": 1}` → `read_only_resource`. Prueba también sin cabecera → 401.
 
 ## 9. Verificación
 
 **Tests (sin red):**
-- `services/api/tests/test_mcp_server.py` (37) sobre la cadena real en memoria: cliente MCP → MCP Auth → FastMCP → API FastAPI con TinyDB temporal. Tokens firmados con una clave RSA local y verificados con el código de MCP Auth.
+- `services/api/tests/test_mcp_server.py` (42) sobre la cadena real en memoria: cliente MCP → MCP Auth → FastMCP → API FastAPI con TinyDB temporal. Tokens firmados con una clave RSA local y verificados con el código de MCP Auth.
 - `tests/pipelines/test_agent_mcp_client.py` (5): el flujo OAuth del agente (`ClientCredentialsAuth`) contra un Logto simulado.
 - `test_agent.py` pasa por el MCP y `tests/pipelines/test_agent_tools.py` usa un doble del servidor MCP.
-- Sin regresiones: API 217, raíz 247.
+- Sin regresiones: API 222, raíz 247.
 
 **Prueba real (2026-09-25)** con Logto Cloud (tenant `eb77o9`), la API y el MCP como procesos, una copia temporal de la TinyDB con las 94 incidencias del seed y el inventario de Supabase real:
 

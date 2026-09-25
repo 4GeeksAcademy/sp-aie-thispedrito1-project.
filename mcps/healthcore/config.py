@@ -40,6 +40,10 @@ class McpSettings:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     allowed_hosts: List[str] = field(default_factory=list)
+    # Webs que pueden llamar al servidor DESDE EL NAVEGADOR (CORS + validación
+    # de Origin del SDK), p. ej. https://www.mcpplayground.tech. Vacío por
+    # defecto: los clientes que no son navegador (el agente) no envían Origin.
+    allowed_origins: List[str] = field(default_factory=list)
     api_timeout_s: float = 5.0
 
 
@@ -78,4 +82,5 @@ def load_settings() -> McpSettings:
         host=(os.getenv("MCP_HOST") or DEFAULT_HOST).strip(),
         port=port,
         allowed_hosts=sorted(set(allowed)),
+        allowed_origins=[o.strip().rstrip("/") for o in (os.getenv("MCP_ALLOWED_ORIGINS") or "").split(",") if o.strip()],
     )

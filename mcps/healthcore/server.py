@@ -34,6 +34,7 @@ from mcpauth.types import AuthInfo, ResourceServerConfig, ResourceServerMetadata
 from mcpauth.utils import create_verify_jwt, fetch_server_config
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.routing import Mount
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -115,7 +116,9 @@ def build_mcp_server(api: HealthCoreApi, settings: McpSettings) -> FastMCP:
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=list(settings.allowed_hosts),
-            allowed_origins=[f"http://{h}" for h in settings.allowed_hosts] + [f"https://{h}" for h in settings.allowed_hosts],
+            allowed_origins=[f"http://{h}" for h in settings.allowed_hosts]
+            + [f"https://{h}" for h in settings.allowed_hosts]
+            + list(settings.allowed_origins),
         ),
     )
     register_tools(mcp, api)
@@ -162,7 +165,22 @@ def create_app(
             logger.info("Servidor MCP listo en %s (emisor %s)", settings.resource_url, auth_server.metadata.issuer)
             yield
 
+    # CORS, la capa más externa: solo para clientes en navegador (MCP
+    # Playground). Responde al preflight OPTIONS —que el navegador envía SIN
+    # token— antes de MCP Auth; las peticiones reales siguen necesitando
+    # Bearer. Expone WWW-Authenticate para que el cliente descubra el emisor.
+    cors = [
+        Middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.allowed_origins),
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_headers=["authorization", "content-type", "accept", "mcp-session-id", "mcp-protocol-version", "last-event-id"],
+            expose_headers=["mcp-session-id", "www-authenticate"],
+        )
+    ] if settings.allowed_origins else []
+
     app = Starlette(
+        middleware=cors,
         routes=[
             *mcp_auth.resource_metadata_router().routes,
             Mount("/", app=mcp_http_app, middleware=[Middleware(bearer_auth), Middleware(AuthInfoToScope, mcp_auth=mcp_auth)]),

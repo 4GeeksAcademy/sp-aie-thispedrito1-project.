@@ -111,6 +111,63 @@ def test_invalid_tokens_are_rejected_with_401_and_their_own_code(token, expected
     assert response.json()["error"] == expected
 
 
+# --- Clientes en navegador (MCP Playground): CORS + Origin -------------------
+
+PLAYGROUND = "https://www.mcpplayground.tech"
+
+
+def browser_request(method, token=None, origin=PLAYGROUND, allowed=(PLAYGROUND,)):
+    import dataclasses
+
+    mcp_app = h.build_app(api_app, dataclasses.replace(h.SETTINGS, allowed_origins=list(allowed)))
+    headers = {"Origin": origin}
+    if method == "OPTIONS":
+        headers.update({"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization, content-type"})
+
+    async def go():
+        async with h.http_client(mcp_app, token) as http:
+            if method == "OPTIONS":
+                return await http.options("/mcp", headers=headers)
+            return await http.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+                headers={**headers, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+            )
+
+    return asyncio.run(h.with_lifespan(mcp_app, go))
+
+
+def test_browser_preflight_is_answered_without_a_token():
+    response = browser_request("OPTIONS")
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == PLAYGROUND
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_browser_request_still_needs_a_token_and_can_read_the_challenge():
+    response = browser_request("POST")
+    assert response.status_code == 401
+    assert response.headers["access-control-allow-origin"] == PLAYGROUND
+    assert "www-authenticate" in response.headers["access-control-expose-headers"].lower()
+
+
+def test_allowed_browser_origin_with_token_can_list_tools():
+    response = browser_request("POST", token=h.make_token())
+    assert response.status_code == 200
+    assert {tool["name"] for tool in response.json()["result"]["tools"]} == EXPECTED_TOOLS
+
+
+def test_unlisted_browser_origin_is_rejected_even_with_a_valid_token():
+    response = browser_request("POST", token=h.make_token(), origin="https://evil.example")
+    assert response.status_code == 403
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_without_allowed_origins_there_is_no_cors_at_all():
+    response = browser_request("OPTIONS", allowed=())
+    assert "access-control-allow-origin" not in response.headers
+
+
 # --- Discovery ----------------------------------------------------------------
 
 
