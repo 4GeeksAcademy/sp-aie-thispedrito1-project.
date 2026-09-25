@@ -1,0 +1,115 @@
+{
+  "trace_id": "eval-no-show-private-us",
+  "schema_version": 1,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T15:38:47.276137+00:00",
+  "finished_at": "2026-09-24T15:39:53.355994+00:00",
+  "duration_ms": 66082.19,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "dfc9fd75c9cb4fc4b2a23ff790df878290867c10ab4648de421da49e551d8080",
+      "length": 83
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 1.58,
+      "output": {
+        "question": {
+          "sha256": "dfc9fd75c9cb4fc4b2a23ff790df878290867c10ab4648de421da49e551d8080",
+          "length": 83
+        },
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "retrieve",
+      "duration_ms": 3534.29,
+      "output": {
+        "context": [
+          {
+            "source_document": "appointment-policy",
+            "section": "Política de cancelación",
+            "chunk_index": 1,
+            "score": 0.5699834
+          },
+          {
+            "source_document": "appointment-policy",
+            "section": "Política de Citas y Cancelaciones",
+            "chunk_index": 3,
+            "score": 0.47976807
+          },
+          {
+            "source_document": "insurance-coverage",
+            "section": "Estados Unidos (Texas, Florida, Georgia)",
+            "chunk_index": 0,
+            "score": 0.42388332
+          }
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "node": "generate",
+      "duration_ms": 62543.27,
+      "output": {
+        "answer": "A un paciente de pago privado en Texas que no se presentó a su cita se le cobra 50 USD.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
+        "outcome": "answered"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "retrieve",
+    "generate"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b82e0-8518-6ca4-bfff-9754db8df198",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e0-851a-6dc4-8000-0629470a6056",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e0-851b-6b98-8001-c61b32f6ec12",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "retrieve"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e0-a6cf-69b0-8002-dc42599b1529",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "generate"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e2-fb37-6c76-8003-42fe94bf58b5",
+      "step": 3,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "answered",
+  "answer": "A un paciente de pago privado en Texas que no se presentó a su cita se le cobra 50 USD.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
+  "error": null
+}

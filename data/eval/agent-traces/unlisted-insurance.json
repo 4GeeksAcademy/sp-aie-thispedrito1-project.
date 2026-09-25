@@ -1,0 +1,121 @@
+{
+  "trace_id": "eval-unlisted-insurance",
+  "schema_version": 1,
+  "graph": "healthcore_support_agent",
+  "started_at": "2026-09-24T15:39:55.820020+00:00",
+  "finished_at": "2026-09-24T15:39:59.893197+00:00",
+  "duration_ms": 4073.3,
+  "status": "completed",
+  "input": {
+    "question": {
+      "sha256": "f213e525e982d3656a33e42cac4328d06f25e75a529dd88012b92544e156d6bf",
+      "length": 77
+    }
+  },
+  "steps": [
+    {
+      "index": 1,
+      "node": "receive_question",
+      "duration_ms": 2.45,
+      "output": {
+        "question": {
+          "sha256": "f213e525e982d3656a33e42cac4328d06f25e75a529dd88012b92544e156d6bf",
+          "length": 77
+        },
+        "context": [],
+        "answer": null,
+        "outcome": null
+      }
+    },
+    {
+      "index": 2,
+      "node": "retrieve",
+      "duration_ms": 240.94,
+      "output": {
+        "context": [
+          {
+            "source_document": "new-patient-checklist",
+            "section": "Todo paciente nuevo debe completar antes de su primera cita",
+            "chunk_index": 0,
+            "score": 0.4389924
+          },
+          {
+            "source_document": "insurance-coverage",
+            "section": "Reino Unido (Londres y Manchester)",
+            "chunk_index": 1,
+            "score": 0.42510638
+          },
+          {
+            "source_document": "insurance-coverage",
+            "section": "Cobertura de Seguros Aceptados",
+            "chunk_index": 2,
+            "score": 0.41372484
+          },
+          {
+            "source_document": "insurance-coverage",
+            "section": "Estados Unidos (Texas, Florida, Georgia)",
+            "chunk_index": 0,
+            "score": 0.40210605
+          }
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "node": "generate",
+      "duration_ms": 3828.35,
+      "output": {
+        "answer": "No le confirmes la cobertura todavía.\n\n- Estados Unidos: Oscar Health no aparece entre los seguros comerciales aceptados. Debe verificarse primero con el equipo de facturación, Tom Callahan.\n- Reino Unido: Oscar Health tampoco aparece entre las opciones de seguro privado indicadas. También debe verificarse con Tom Callahan.\n\nPuedes decirle al paciente: “Vamos a verificar su cobertura con nuestro equipo de facturación antes de confirmar cualquier cobertura.”\n\nFuente: insurance-coverage, secciones “Cobertura de Seguros Aceptados”, “Estados Unidos (Texas, Florida, Georgia)” y “Reino Unido (Londres y Manchester)”.",
+        "outcome": "answered"
+      }
+    }
+  ],
+  "node_sequence": [
+    "receive_question",
+    "retrieve",
+    "generate"
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "1f1b82e3-12c9-629a-bfff-0f34714a6876",
+      "step": -1,
+      "source": "input",
+      "next": [
+        "__start__"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e3-12ca-6da2-8000-e997d4cb6928",
+      "step": 0,
+      "source": "loop",
+      "next": [
+        "receive_question"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e3-12cd-60b6-8001-3064410c35e6",
+      "step": 1,
+      "source": "loop",
+      "next": [
+        "retrieve"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e3-1518-6e4c-8002-f44d93b74fe6",
+      "step": 2,
+      "source": "loop",
+      "next": [
+        "generate"
+      ]
+    },
+    {
+      "checkpoint_id": "1f1b82e3-399a-6054-8003-30ce56b1465b",
+      "step": 3,
+      "source": "loop",
+      "next": []
+    }
+  ],
+  "outcome": "answered",
+  "answer": "No le confirmes la cobertura todavía.\n\n- Estados Unidos: Oscar Health no aparece entre los seguros comerciales aceptados. Debe verificarse primero con el equipo de facturación, Tom Callahan.\n- Reino Unido: Oscar Health tampoco aparece entre las opciones de seguro privado indicadas. También debe verificarse con Tom Callahan.\n\nPuedes decirle al paciente: “Vamos a verificar su cobertura con nuestro equipo de facturación antes de confirmar cualquier cobertura.”\n\nFuente: insurance-coverage, secciones “Cobertura de Seguros Aceptados”, “Estados Unidos (Texas, Florida, Georgia)” y “Reino Unido (Londres y Manchester)”.",
+  "error": null
+}

@@ -12,6 +12,7 @@
 - Cola de tareas asincronas con Celery 5.6 + Redis 7.4 (broker y result backend) y Flower 2.0 para monitorizarla (Ticket #DEV-55). Worker en proceso aparte de FastAPI; `REDIS_URL` por entorno.
 - Machine learning: scikit-learn 1.6.1 + matplotlib 3.9.4 (ultimas compatibles con Python 3.9), declaradas en `requirements-ml.txt` de la raiz e instaladas con `uv pip install` en el venv de la API. `uv` 0.12.13 esta instalado en `~/.local/bin` desde el 2026-09-14.
 - RAG (Hito 7): Qdrant 1.16.3 en Docker (`qdrant/qdrant:v1.16.3`, servicio `qdrant`) con `qdrant-client` 1.16.1, y SDK `openai` 2.48.0 contra el proxy LiteLLM de 4Geeks (`llm.4geeks.ai`, compatible con OpenAI). Ambos en `services/api/requirements.txt` y `pyproject.toml`, porque la API los importa. Modelos: embeddings `madrid-spain/openrouter/perplexity/pplx-embed-v1-0.6b` (1024 dimensiones, coseno) y generacion `madrid-spain/openai/gpt-5.6-luna`. Sin frameworks de orquestacion (LangChain/LlamaIndex): lo exige el hito.
+- Agente de soporte (Parte 1, 2026-09-24): `langgraph==0.6.11` (1.x exige Python 3.10; el venv es 3.9), en `requirements.txt` y `pyproject.toml`. Orquesta el RAG existente como grafo (`services/agent/`) sin sustituir sus funciones. Checkpointer `InMemorySaver` y trace JSON propio (no LangSmith, para no enviar preguntas a un servicio externo).
 
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:

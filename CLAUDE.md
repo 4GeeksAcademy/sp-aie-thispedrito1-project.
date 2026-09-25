@@ -104,6 +104,16 @@ docker compose stop qdrant
 
 Desde la raíz. Necesita `LLM_BASE_URL`, `LLM_API_KEY`, `EMBEDDING_MODEL` y `GENERATION_MODEL` en `services/api/.env` (IDs en `.env.example`). `qdrant-client` y `openai` están en `services/api/requirements.txt`. Detalle en `docs/rag/rag-design.md`.
 
+### Agente LangGraph (Parte 1)
+
+```bash
+docker compose up -d qdrant && services/api/.venv/bin/python scripts/index_knowledge_base.py   # si la colección no existe
+services/api/.venv/bin/python scripts/record_agent_traces.py                                   # 1 corrida real por caso → data/eval/agent-traces/
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_evals.py -v                 # evals sobre los traces grabados (sin red)
+```
+
+Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `services/api/requirements.txt`. Detalle en `docs/agent/agent-design.md`.
+
 ### Job nocturno de telemetría (Ticket #DEV-53)
 
 ```bash
@@ -140,10 +150,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
+# Tests del agente LangGraph (17: rutas, compilación, checkpoints, trace; con dobles) + evals (26, sobre traces grabados): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_evals.py
+
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (172 tests): desde services/api, con el venv activado
+# Backend (178 tests): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -413,6 +426,31 @@ Gotchas reales:
 - **Una respuesta tardó 71 s** (lo normal es 1,4-6 s): encaja con el timeout de 30 s + reintento del SDK (`max_retries=2`). Sin corregir; ver el diseño.
 - **Clave del proxy caducada**: LiteLLM responde 401 "Invalid proxy server token" aunque el formato sea correcto (`sk-` + 22). Se arregla regenerándola en la plataforma, no en el código.
 - **Verificación sin datos reales**: API con `SUPPLIERS_DB_PATH` temporal y `DATABASE_URL=` vacío (el arranque solo avisa), y token con `create_access_token` + `hash_password` (no `get_password_hash`, que no existe).
+
+### Agente de soporte con LangGraph (Parte 1) — `docs/agent/agent-design.md`
+
+Rama `feature/langgraph-agent-base` apilada sobre `feature/rag-knowledge-base`, 2026-09-24. El RAG del Hito 7 como grafo de LangGraph, sin reescribirlo: los nodos llaman a `rag.retrieve()` y `rag.generate_answer()` de `data/pipelines/rag.py`, nunca a `rag.query()`.
+
+Mapa del código:
+- **`services/agent/graph.py`**: `AgentState` (4 claves: `question`, `context`, `answer`, `outcome`, sin historial), `AgentNodes` (5 nodos: `receive_question`, `reject_question`, `retrieve`, `no_information`, `generate`, con las dependencias inyectables), las aristas `route_after_receive`/`route_after_retrieve` y `compile_agent_graph()` + `validate_structure()`.
+- **`services/agent/tracing.py`**: `run_agent()` recorre el grafo con `stream_mode="updates"` y escribe el trace JSON (`AGENT_TRACE_DIR`, por defecto `data/traces/agent/`, en `.gitignore`).
+- **`services/agent/router.py`**: `POST /agent/query` → `{answer, trace_id, outcome}`, con autenticación. Convive con `/knowledge/query`; la pantalla "Asistente" no cambió.
+- **Evals:** `data/eval/agent-eval-cases.json` (5 casos) → `scripts/record_agent_traces.py` → `data/eval/agent-traces/*.json` (versionados) → `tests/pipelines/test_agent_evals.py` (26, sin red). Tests de estructura con dobles en `tests/pipelines/test_agent_graph.py` (17) y del endpoint en `services/api/tests/test_agent.py` (6).
+
+Decisiones que conviene no romper:
+- **Sin contexto, texto fijo (`NO_INFORMATION_ANSWER`) y sin llamar al modelo.** Contradice a propósito el "siempre responde el modelo" de `/knowledge/query`, que no cambia: el ticket de esta clase pide no generar sobre contexto vacío.
+- **`route_after_retrieve` no vuelve a mirar las puntuaciones**: el umbral vive solo en `retrieve()`.
+- **El grafo se compila al importar el router** (arranque de la API). Un grafo roto impide arrancar.
+- **Traces sin la pregunta** (decisión del usuario): solo SHA-256 + longitud. Chunks sin texto; errores con nodo y tipo, nunca con el mensaje. Log JSON propio, no LangSmith (decisión del usuario).
+- **Checkpoints en `InMemorySaver`, liberados al terminar** (`keep_checkpoints=False`) para no acumular corridas en la RAM de la API; sus ids quedan en el trace.
+- **Los evals juzgan traces grabados**, no corridas en vivo. Si cambian los casos, los documentos, el prompt, el umbral o el grafo, hay que volver a grabar; el eval de la huella detecta un caso cambiado sin grabar.
+
+Gotchas reales de LangGraph 0.6.11 (comprobados, no supuestos):
+- **`compile()` no detecta nodos huérfanos ni callejones sin salida**, y descarta en silencio las claves que no están en el estado. Por eso existen `validate_structure()` y el envoltorio `_checked`.
+- **`get_graph()` inventa una arista a END** en cualquier nodo sin salida: la validación se hace sobre `builder.edges` + `builder.branches`, no sobre el dibujo.
+- **Si falla una arista condicional, `get_state().next` queda vacío.** El nodo culpable (el anterior a la arista) aparece en `tasks[].error`; `_failed_node` mira ahí primero.
+- **LangGraph 1.x exige Python 3.10**: el venv es 3.9, así que 0.6.11.
+- **El trace confirmó la latencia del Hito 7:** en una corrida de 66 s, 62,5 s fueron de `generate` (timeout + reintento del proveedor) y 3,5 s de `retrieve`.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

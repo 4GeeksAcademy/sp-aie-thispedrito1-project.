@@ -36,3 +36,8 @@ data/eval/monthly_clinic_supply_performance/
 # userId seudonimizados y datos operativos. Nunca al repo (HIPAA / UK GDPR).
 data/raw/telemetry_*.csv
 data/raw/.telemetry_*.csv.tmp
+
+# Traces de las corridas del agente LangGraph (POST /agent/query). Llevan la
+# respuesta generada; la pregunta va solo como huella. Los traces de los
+# evals (data/eval/agent-traces/) sí se versionan.
+data/traces/
