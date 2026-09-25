@@ -272,6 +272,22 @@ def test_search_filters_and_counts(client, auth_headers, service_account):
     assert found["incidents"][0]["branch"] == "london_city"
 
 
+def test_empty_optional_filters_mean_no_filter(client, auth_headers, service_account):
+    """MCP Playground envía "" en los campos que se dejan vacíos (comprobado)."""
+    token = h.make_token()
+    for branch in ("london_city", "central"):
+        h.call(api_app, token, "incidents_create", {**INCIDENT_PAYLOAD, "branch": branch})
+
+    found = h.call(api_app, token, "incidents_search", {"status": "open", "category": "", "branch": "london_city", "origin": "  "})
+    assert not found.isError, found
+    assert found.structuredContent["total"] == 1
+
+
+def test_empty_inventory_filters_mean_no_filter(service_account, supply):
+    listed = h.call(api_app, h.make_token([INVENTORY_READ]), "inventory_query", {"action": "list_supplies", "search": "", "country": ""})
+    assert listed.structuredContent["total"] == 1
+
+
 # --- Mínimo privilegio ----------------------------------------------------------
 
 

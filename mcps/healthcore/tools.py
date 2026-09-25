@@ -196,6 +196,16 @@ def _enum(values: Any) -> Dict[str, Any]:
     return {"enum": list(values)}
 
 
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    """Un filtro opcional vacío significa "sin filtro". Algunos clientes MCP
+    (MCP Playground, comprobado) envían `""` en vez de omitir el campo; sin
+    esto, la API lo rechazaba como categoría/origen no válidos."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 # --- Registro de tools --------------------------------------------------------
 
 
@@ -240,7 +250,8 @@ def register_tools(mcp: FastMCP, api: HealthCoreApi) -> None:
         origin: Annotated[Optional[str], Field(description="Origen", json_schema_extra=_enum(INCIDENT_ORIGINS))] = None,
         limit: Annotated[int, Field(ge=1, le=MAX_SEARCH_RESULTS, description="Máximo de incidencias a devolver")] = DEFAULT_SEARCH_RESULTS,
     ) -> IncidentSearchResult:
-        filters = {k: v for k, v in {"status": status, "category": category, "branch": branch, "origin": origin}.items() if v is not None}
+        raw = {"status": status, "category": category, "branch": branch, "origin": origin}
+        filters = {k: v for k, v in ((k, _blank_to_none(v)) for k, v in raw.items()) if v is not None}
 
         async def run() -> IncidentSearchResult:
             rows = await api.request("GET", "/api/incidents", params=filters)
@@ -317,6 +328,8 @@ def register_tools(mcp: FastMCP, api: HealthCoreApi) -> None:
         search: Annotated[Optional[str], Field(max_length=100, description="Texto a buscar en nombre o SKU (list_supplies)")] = None,
         country: Annotated[Optional[str], Field(description="País del insumo", json_schema_extra=_enum(("US", "UK")))] = None,
     ) -> InventoryQueryResult:
+        search_text, country_code = _blank_to_none(search), _blank_to_none(country)
+
         async def run() -> InventoryQueryResult:
             kind = classify_inventory_action(action)
             if kind == "write":
@@ -333,12 +346,12 @@ def register_tools(mcp: FastMCP, api: HealthCoreApi) -> None:
                 supply = _supply(await inventory.get(f"/inventory/products/{supply_id}"))
                 return InventoryQueryResult(action=action, total=1, supplies=[supply])
             rows = [_supply(row) for row in await inventory.get("/inventory/products")]
-            if search:
-                needle = search.strip().lower()
+            if search_text:
+                needle = search_text.lower()
                 rows = [row for row in rows if needle in row.name.lower() or needle in row.sku.lower()]
-            if country:
-                rows = [row for row in rows if row.country == country]
+            if country_code:
+                rows = [row for row in rows if row.country == country_code]
             return InventoryQueryResult(action=action, total=len(rows), supplies=rows[:MAX_SUPPLIES])
 
-        log_args = {"action": action, "supply_id": supply_id, "country": country, "search": bool(search)}
+        log_args = {"action": action, "supply_id": supply_id, "country": country_code, "search": bool(search_text)}
         return await _invoke("inventory_query", ctx, log_args, run)

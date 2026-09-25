@@ -163,10 +163,10 @@ services/api/.venv/bin/python -m mcps.healthcore
 ## 9. Verificación
 
 **Tests (sin red):**
-- `services/api/tests/test_mcp_server.py` (42) sobre la cadena real en memoria: cliente MCP → MCP Auth → FastMCP → API FastAPI con TinyDB temporal. Tokens firmados con una clave RSA local y verificados con el código de MCP Auth.
+- `services/api/tests/test_mcp_server.py` (44) sobre la cadena real en memoria: cliente MCP → MCP Auth → FastMCP → API FastAPI con TinyDB temporal. Tokens firmados con una clave RSA local y verificados con el código de MCP Auth.
 - `tests/pipelines/test_agent_mcp_client.py` (5): el flujo OAuth del agente (`ClientCredentialsAuth`) contra un Logto simulado.
 - `test_agent.py` pasa por el MCP y `tests/pipelines/test_agent_tools.py` usa un doble del servidor MCP.
-- Sin regresiones: API 222, raíz 247.
+- Sin regresiones: API 224, raíz 247.
 
 **Prueba real (2026-09-25)** con Logto Cloud (tenant `eb77o9`), la API y el MCP como procesos, una copia temporal de la TinyDB con las 94 incidencias del seed y el inventario de Supabase real:
 
