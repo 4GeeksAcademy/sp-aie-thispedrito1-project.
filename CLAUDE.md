@@ -116,6 +116,16 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_evals.py -v  
 
 Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `services/api/requirements.txt`. Los casos de inventario necesitan Supabase despierto. Detalle en `docs/agent/agent-design.md` (Parte 1) y `docs/agent/agent-tools.md` (Parte 2).
 
+### Memoria del agente (Ticket #MEM-092)
+
+```bash
+docker compose up -d qdrant                                                      # si la pregunta consulta el RAG
+GENERATION_MODEL=madrid-spain/z-ai/glm-5.3-flash services/api/.venv/bin/python scripts/record_memory_evidence.py   # evidencia real → docs/agent/memory-evidence/
+docker compose stop qdrant
+```
+
+Desde la raíz. Arranca la API en el puerto 8010 con una TinyDB temporal (2 coordinadores + admin, tokens sin login) y escribe en Supabase (`agent_memories`, `agent_memory_proposals`). Si se repite, antes hay que vaciar la memoria de la corrida anterior: un recuerdo ya aprobado cambia el guion. Detalle en `docs/agent/agent-memory.md`.
+
 ### Servidor MCP con OAuth (`mcps/healthcore`)
 
 ```bash
@@ -162,13 +172,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados): desde la RAÍZ
-services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py
+# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py
 
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (224 tests, 44 del servidor MCP): desde services/api, con el venv activado
+# Backend (240 tests, 44 del servidor MCP, 16 de la memoria del agente): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -528,6 +538,34 @@ Gotchas reales:
 - **Logto:** tenant `eb77o9` (emisor `https://eb77o9.logto.app/oidc`), API `http://localhost:8765/mcp`, roles M2M `mcp-agent-reader` (solo `incidents:read`) y `mcp-full-tester`, apps `healthcore-agent` y `mcp-playground-tester`. Un rol creado como "User" no se puede cambiar a M2M: hay que borrarlo y recrearlo. Logto recorta los scopes al rol aunque el cliente pida más.
 - **Prueba real hecha el 2026-09-25** (tablas en la §9 del documento), incluidas 4 preguntas reales por `/agent/query` con `via=mcp` (antes hubo que regenerar la `LLM_API_KEY` del proxy de 4Geeks, caducada). Pedirle al agente "cierra el ticket 22" no cambia nada: solo tiene `incidents:read`.
 - **MCP Playground hecho** desde el Codespace `mcp-oauth-playground` (detenido, no borrado), con las 6 herramientas probadas y la escritura de inventario rechazada; capturas en `docs/mcp/playground/`. Gotcha: Playground llama desde SUS servidores (IP de AWS en el log), no desde el navegador, y envía `""` en los campos vacíos. Gotcha de Codespaces por `gh`: sin editor conectado el puerto no existe hasta abrir un `gh codespace ports forward`; y `pkill -f <texto>` dentro de `gh codespace ssh -- '...'` mata la propia sesión si el texto aparece en el comando.
+
+### Memoria y auto-mejora del agente — `docs/agent/agent-memory.md`
+
+Ticket #MEM-092 (Hito 8, Parte 1), rama `feature/agent-memory` apilada sobre `feature/mcp-oauth-tools`, 2026-09-28. El agente propone recordar hechos en su propia respuesta; el usuario decide; solo lo aprobado se guarda y todo queda auditado.
+
+Mapa del código (`services/agent/memory/`):
+- `models.py`: tablas `agent_memories` (hechos, nunca se borran: cambian de `status`) y `agent_memory_proposals` (la auditoría: una fila por propuesta, aprobada o no), en Supabase vía `SQLModel.metadata`. Índice único parcial = una sola propuesta `pending` por usuario.
+- `store.py` (`MemoryStore`): la ÚNICA interfaz de lectura/escritura (`recall`, `get_pending`, `propose`, `record_blocked`, `resolve`, `commit`, `audit`, `revoke`) + `as_evidence` (recuerdos → chunks "Nota aprobada por el staff").
+- `reply.py`: `generate_reply` = respuesta + `memory_proposal` en UNA llamada (JSON), con `MEMORY_RULES` añadido al prompt de `rag.build_messages`. Salida no JSON → respuesta sin propuesta.
+- `decision.py`: `classify_decision` (modelo, JSON validado; fallo → `unclear`) + `resolve_decision` (pura: confianza < 0,75 → descartar; ante la duda nunca se aprueba).
+- `phi_guard.py`: validador determinista HIPAA + UK GDPR. `consolidation.py`: deduplicar (≥0,85), sustituir (≥0,5 misma sede/tipo), topes (50 compartidos, 10 preferencias/usuario), caducidad 180 días, cuarentena por PHI.
+- `conversation.py` (`handle_turn`): resuelve la pendiente ANTES del grafo, ejecuta el grafo con `recall()`, valida PHI y propone.
+- Grafo: fuente `agent_memory` / nodo `recall_memory` (no toca la BD: recibe `memories` en la entrada) y herramienta `recall_agent_memory` del planificador, que la elige también cuando el usuario INFORMA (si no, acabaría en `no_information`). Router: bloque `memory {resolved, offered}` en `/agent/query`, `GET /agent/memory`, `GET /agent/memory/audit` y `DELETE /agent/memory/{id}` (admin).
+
+Decisiones que conviene no romper:
+- **Postgres, no Qdrant ni Redis** (decisión del usuario): la auditoría necesita durabilidad y SQL. Nunca escribir en `healthcore_knowledge`; hay test con `ast` que lo vigila.
+- **El grafo no toca la base de datos**: el checkpointer serializa el estado, no puede llevar una sesión. La memoria entra por la entrada del grafo y sale como `memory_proposal`.
+- **Hechos operativos compartidos, preferencias privadas.** El objetivo del ticket es que otra persona no repita la corrección.
+- **El mensaje del usuario se valida SIEMPRE contra PHI**, proponga el modelo o no. Gotcha real (lo detectó la prueba real, no los tests): con "El paciente Johnson canceló su cita, apúntalo" el modelo no propuso ni marcó `user_requested_memory` y dijo "anoto la cancelación". Test de regresión `test_patient_data_is_refused_even_when_the_model_proposes_nothing`.
+- **Ningún texto del usuario en la auditoría**: solo su SHA-256. En el trace, la propuesta va como tipo + huella (aún no ha pasado el validador).
+- **Supabase caído → el agente responde sin memoria** (`get_inventory_db_optional`), sin proponer: no habría dónde registrar la decisión.
+- `resolve_decision`: un `reject` con confianza baja es `discard`, no `reject` (la auditoría no atribuye una negativa dudosa).
+
+Gotchas y residuales:
+- **El proxy de 4Geeks bloquea `gpt-5.6-luna`** (`403 Model is blocked`, 2026-09-28). Disponibles: `madrid-spain/z-ai/glm-5.3-flash` (usado en la evidencia por variable de entorno; JSON y tools OK), `…/deepseek/deepseek-v4-flash` y `…/xiaomi/mimo-v2.5`. `services/api/.env` NO se cambió (decisión del usuario).
+- **Traces de evals del agente no regrabados**: el prompt de `generate` cambió. Los evals pasan (campos aditivos, `TRACE_SCHEMA_VERSION` sigue en 2), pero hay que regrabarlos cuando haya modelo definitivo.
+- SQLite (tests) devuelve fechas sin zona: `consolidation.as_utc` antes de comparar en Python.
+- `consolidation.sweep` no hace commit (lo hace `store.resolve`, en la misma transacción que la decisión).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

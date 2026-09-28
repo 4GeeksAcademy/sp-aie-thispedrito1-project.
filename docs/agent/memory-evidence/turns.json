@@ -1,0 +1,217 @@
+[
+  {
+    "turn": 1,
+    "user": "ana",
+    "purpose": "ciclo A · propuesta",
+    "message": "En la clínica de Manchester el proceso de referidos internos ahora pasa primero por el coordinador antes que por el especialista — cambió el trimestre pasado.",
+    "status_code": 200,
+    "seconds": 19.6,
+    "response": {
+      "answer": "Recibido, gracias por avisar. No puedo confirmar ese cambio con la base de conocimiento en este momento, así que te sugiero verificarlo con el responsable de procesos de la sede de Manchester antes de comunicarlo a los pacientes. Fuente: información aportada por el coordinador\n\n¿Quieres que recuerde esto para la próxima vez?\n«En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado.»\nResponde sí o no, o dime cómo quieres que lo guarde.",
+      "trace_id": "bb904e28-b5cc-40ec-8d11-edb1fe5bc65b",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": {
+          "status": "proposed",
+          "proposal_id": "d7b45962-8bba-4b0d-949e-c63dff1d1326",
+          "content": "En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado."
+        }
+      }
+    }
+  },
+  {
+    "turn": 2,
+    "user": "ana",
+    "purpose": "ciclo A · aprobación → escritura",
+    "message": "Sí, guárdalo por favor.",
+    "status_code": 200,
+    "seconds": 2.8,
+    "response": {
+      "answer": "Hecho: lo he guardado en mi memoria. «En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado.»",
+      "trace_id": null,
+      "outcome": "memory_decision",
+      "memory": {
+        "resolved": {
+          "status": "saved",
+          "proposal_id": "d7b45962-8bba-4b0d-949e-c63dff1d1326",
+          "content": "En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado."
+        },
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 3,
+    "user": "luis",
+    "purpose": "ciclo A · otro coordinador lo recibe",
+    "message": "¿Cómo funcionan ahora los referidos internos en la clínica de Manchester?",
+    "status_code": 200,
+    "seconds": 41.6,
+    "response": {
+      "answer": "Claro, te lo explico. En la clínica de Manchester, los referidos internos ahora pasan primero por el coordinador antes de llegar al especialista. Es decir, tú eres el primer paso del proceso. Este cambio se introdujo el trimestre pasado, así que ya es el flujo habitual. Si el paciente pregunta, puedes decirle: su derivación interna la revisa primero el equipo de coordinación y, desde ahí, se envía al especialista correspondiente. Fuente: agent-memory, Nota aprobada por el staff (clinic_operations, Manchester, confirmada 2026-09-28).",
+      "trace_id": "7785b398-97cd-4477-8ae6-c1d432bcc4c6",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 4,
+    "user": "ana",
+    "purpose": "ciclo B · propuesta",
+    "message": "Esa alerta de no-show elevado en la clínica de Austin fue porque hubo un cierre de carretera esa semana, no un problema real del programa de recordatorios.",
+    "status_code": 200,
+    "seconds": 8.0,
+    "response": {
+      "answer": "Recibido, gracias por aclararlo. Tomo nota de que el pico de no-shows en Austin se debió a un cierre de carretera esa semana y no a un fallo del programa de recordatorios; con eso, no habría que revisar el programa por ahora.\n\n¿Quieres que recuerde esto para la próxima vez?\n«La alerta de no-show elevado en la clínica de Austin se explicó por un cierre de carretera puntual, no por un fallo del programa de recordatorios.»\nResponde sí o no, o dime cómo quieres que lo guarde.",
+      "trace_id": "5ba6b61b-069d-4e15-bcae-f8f6737a1a03",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": {
+          "status": "proposed",
+          "proposal_id": "00a4d115-e5ac-4be6-b2af-281babb1998a",
+          "content": "La alerta de no-show elevado en la clínica de Austin se explicó por un cierre de carretera puntual, no por un fallo del programa de recordatorios."
+        }
+      }
+    }
+  },
+  {
+    "turn": 5,
+    "user": "ana",
+    "purpose": "ciclo B · rechazo → sin escritura",
+    "message": "No, no hace falta que lo recuerdes.",
+    "status_code": 200,
+    "seconds": 4.6,
+    "response": {
+      "answer": "De acuerdo, no lo guardo.",
+      "trace_id": null,
+      "outcome": "memory_decision",
+      "memory": {
+        "resolved": {
+          "status": "rejected",
+          "proposal_id": "00a4d115-e5ac-4be6-b2af-281babb1998a",
+          "content": null
+        },
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 6,
+    "user": "luis",
+    "purpose": "ciclo B · la memoria no cambió",
+    "message": "¿Por qué hubo una alerta de no-show elevado en Austin?",
+    "status_code": 200,
+    "seconds": 5.7,
+    "response": {
+      "answer": "No tengo información suficiente en la base de conocimiento para responder a eso. El contexto disponible solo recoge una nota operativa sobre el proceso de referidos internos en Manchester, y no menciona alertas de no-show ni la sede de Austin. Te sugiero consultar la alerta en el dashboard o el gestor de incidencias, o preguntar al responsable correspondiente.",
+      "trace_id": "ac509a4e-dec8-451e-b6cd-969f400d8f8a",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 7,
+    "user": "ana",
+    "purpose": "PHI · rechazo explícito",
+    "message": "El paciente Johnson canceló su cita de mañana, apúntalo.",
+    "status_code": 200,
+    "seconds": 10.8,
+    "response": {
+      "answer": "Recibido, gracias por el aviso. No puedo registrar información de pacientes, así que ese apunte de la cancelación debes hacerlo tú directamente en la agenda del sistema de citas. Si necesitas ayuda para gestionar la reprogramación o alguna duda del proceso, aquí estoy.\nFuente: información aportada por el coordinador\n\nNo puedo guardar esto en mi memoria: contiene el nombre de un paciente. Por HIPAA (EE. UU.) y UK GDPR (R. U.), la memoria del asistente nunca guarda datos que identifiquen a un paciente ni información clínica. Regístralo en el sistema clínico correspondiente. Si lo que quieres que recuerde es un patrón operativo, escríbemelo sin datos del paciente.",
+      "trace_id": "e5f903a2-17ef-4aa6-bd8e-3f0501b0a95c",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": {
+          "status": "blocked_phi",
+          "proposal_id": null,
+          "content": null
+        }
+      }
+    }
+  },
+  {
+    "turn": 8,
+    "user": "luis",
+    "purpose": "sin propuesta · consulta puntual",
+    "message": "¿Cuál es la tasa de no-show de esta semana?",
+    "status_code": 200,
+    "seconds": 9.2,
+    "response": {
+      "answer": "No tengo información suficiente en la base de conocimiento para responder a eso. No dispongo de datos sobre la tasa de no-show de esta semana; te sugiero consultarla en el dashboard operativo o con el responsable correspondiente.",
+      "trace_id": "721347e1-9e01-457a-acd2-209ec944df03",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 9,
+    "user": "luis",
+    "purpose": "sin propuesta · cierre",
+    "message": "Gracias, con eso resuelvo mi reporte.",
+    "status_code": 200,
+    "seconds": 5.5,
+    "response": {
+      "answer": "De nada, me alegro de que te haya servido. Si necesitas algo más con el reporte o cualquier otra consulta, aquí estoy.",
+      "trace_id": "4686befe-6035-4751-974e-55678e37df30",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": null
+      }
+    }
+  },
+  {
+    "turn": 10,
+    "user": "ana",
+    "purpose": "cambio de tema · propuesta",
+    "message": "El reporte semanal para Diane Foster debe incluir vacantes por rol, no solo por clínica — eso lo pidió hace dos semanas.",
+    "status_code": 200,
+    "seconds": 6.5,
+    "response": {
+      "answer": "Recibido: entiendo que el reporte semanal para Diane Foster debe desglosar las vacantes por rol, además de por clínica, según lo que pidió hace dos semanas. Lo tomo como indicación tuya para tenerlo en cuenta. Fuente: información aportada por el coordinador.\n\n¿Quieres que recuerde esto para la próxima vez?\n«Diane Foster pidió que el reporte semanal incluya las vacantes desglosadas por rol, no solo por clínica.»\nResponde sí o no, o dime cómo quieres que lo guarde.",
+      "trace_id": "2690dd2a-d0e2-4c34-a190-53cd539a21da",
+      "outcome": "answered",
+      "memory": {
+        "resolved": null,
+        "offered": {
+          "status": "proposed",
+          "proposal_id": "64e7d652-f5a8-4233-9c0e-c06bc07f66e5",
+          "content": "Diane Foster pidió que el reporte semanal incluya las vacantes desglosadas por rol, no solo por clínica."
+        }
+      }
+    }
+  },
+  {
+    "turn": 11,
+    "user": "ana",
+    "purpose": "cambio de tema · descarte + respuesta",
+    "message": "¿Cuánto se cobra por un no-show a un paciente de pago privado en Texas?",
+    "status_code": 200,
+    "seconds": 20.4,
+    "response": {
+      "answer": "He descartado la nota que te propuse antes: no la guardo porque no me respondiste sí o no.\n\nPara un paciente de pago privado en Texas, el cargo por no-show (o cancelación con menos de 24 horas de anticipación) es de 50 USD. Recuerda que a pacientes con Medicare o Medicaid no se les cobra este cargo; solo se registra el incidente en su historial. Fuente: appointment-policy · Sección: Política de cancelación.",
+      "trace_id": "cb197f8b-7a73-48ea-bbec-16d6ba4ebbbd",
+      "outcome": "answered",
+      "memory": {
+        "resolved": {
+          "status": "discarded",
+          "proposal_id": "64e7d652-f5a8-4233-9c0e-c06bc07f66e5",
+          "content": null
+        },
+        "offered": null
+      }
+    }
+  }
+]

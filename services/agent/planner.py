@@ -45,11 +45,13 @@ logger = logging.getLogger(__name__)
 SOURCE_INCIDENTS = "incidents"
 SOURCE_INVENTORY = "inventory"
 SOURCE_KNOWLEDGE_BASE = "knowledge_base"
-SOURCE_ORDER = (SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_KNOWLEDGE_BASE)
+# Ticket #MEM-092: memoria aprobada del agente (Supabase, no Qdrant).
+SOURCE_AGENT_MEMORY = "agent_memory"
+SOURCE_ORDER = (SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_AGENT_MEMORY, SOURCE_KNOWLEDGE_BASE)
 
 PLANNER_TIMEOUT_S = 10.0
 
-Source = Literal["incidents", "inventory", "knowledge_base"]
+Source = Literal["incidents", "inventory", "agent_memory", "knowledge_base"]
 
 # Nombre de la herramienta que ve el modelo → fuente y contrato de entrada.
 MODEL_TOOLS: Dict[str, Dict[str, Any]] = {
@@ -57,6 +59,7 @@ MODEL_TOOLS: Dict[str, Dict[str, Any]] = {
     "get_incident": {"source": SOURCE_INCIDENTS, "input": IncidentLookupInput},
     "search_incidents": {"source": SOURCE_INCIDENTS, "input": IncidentLookupInput},
     "check_inventory_stock": {"source": SOURCE_INVENTORY, "input": InventoryLookupInput},
+    "recall_agent_memory": {"source": SOURCE_AGENT_MEMORY, "input": None},
 }
 
 PLANNER_PROMPT = """Eres el enrutador del asistente de los coordinadores de pacientes de HealthCore. \
@@ -70,6 +73,10 @@ general o fuera de tema.
 estado, categoría, sede u origen. Pon null en todo filtro que la pregunta no mencione; nunca \
 inventes un filtro.
 - check_inventory_stock: stock EN VIVO de un insumo médico por su nombre o SKU.
+- recall_agent_memory: notas que el staff pidió recordar (cambios operativos de una sede, \
+patrones de incidentes conocidos, preferencias de presentación de informes). Elígela si la \
+pregunta toca esos temas, y SIEMPRE que el usuario no pregunte sino que te informe o corrija un \
+dato (en ese caso puede ser la única herramienta).
 Si la pregunta mezcla un dato en vivo y una política, elige ambas herramientas. Nunca uses \
 las herramientas de incidencias ni check_inventory_stock para preguntas de políticas."""
 
@@ -116,6 +123,15 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                     "required": list(filters),
                     "additionalProperties": False,
                 },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "recall_agent_memory",
+                "description": "Lee las notas aprobadas por el staff (memoria del asistente). También para "
+                "mensajes en los que el usuario informa o corrige un dato en vez de preguntar.",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
             },
         },
         {
@@ -174,7 +190,21 @@ def _validated_calls(tool_calls: Any) -> "tuple[List[PlannedCall], List[str]]":
     return ordered, rejected
 
 
-def plan_sources(question: str, *, client: Optional[Any] = None, model: Optional[str] = None) -> Plan:
+def _system_prompt(memory_topics: Optional[List[str]]) -> str:
+    """El planificador ve solo un índice de la memoria (tipo y sede), nunca
+    su contenido: le basta para saber si merece la pena consultarla."""
+    if not memory_topics:
+        return PLANNER_PROMPT + "\nMemoria del asistente: vacía."
+    return PLANNER_PROMPT + "\nMemoria del asistente disponible sobre: " + "; ".join(memory_topics) + "."
+
+
+def plan_sources(
+    question: str,
+    *,
+    memory_topics: Optional[List[str]] = None,
+    client: Optional[Any] = None,
+    model: Optional[str] = None,
+) -> Plan:
     """Nunca lanza: ante cualquier fallo del modelo, plan de la Parte 1 (solo RAG)."""
     from data.pipelines import rag
     from data.process.rag import get_llm_client
@@ -185,7 +215,7 @@ def plan_sources(question: str, *, client: Optional[Any] = None, model: Optional
             llm = llm.with_options(timeout=PLANNER_TIMEOUT_S, max_retries=0)
         completion = llm.chat.completions.create(
             model=model or rag.get_generation_model(),
-            messages=[{"role": "system", "content": PLANNER_PROMPT}, {"role": "user", "content": question}],
+            messages=[{"role": "system", "content": _system_prompt(memory_topics)}, {"role": "user", "content": question}],
             tools=_tool_schemas(),
             tool_choice="required",
             temperature=0,

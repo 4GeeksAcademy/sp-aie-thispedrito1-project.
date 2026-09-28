@@ -10,12 +10,23 @@ pregunta, sin que el usuario lo diga:
                                    │  route_next_source, tras cada fuente:
                                    ├→ lookup_incident ────────┐  siguiente fuente del plan,
                                    ├→ check_inventory_stock ──┤  o tool_fallback si una tool falló,
-                                   └→ retrieve ───────────────┘  o generate / no_information al acabar
+                                   ├→ recall_memory ──────────┤  o generate / no_information al acabar
+                                   └→ retrieve ───────────────┘
                      tool_fallback → END · no_information → END · generate → END
+
+Memoria (Ticket #MEM-092): `recall_memory` NO lee la base de datos. Los
+recuerdos aprobados llegan en la entrada del grafo (`memories`), leídos por
+`services/agent/memory/conversation.py` con la interfaz explícita de
+`memory/store.py`; el nodo solo los pasa al contexto cuando el plan lo pide.
+El grafo no escribe memoria: `generate` devuelve, en la misma llamada al
+modelo, la respuesta y una `memory_proposal` opcional, y es la capa de
+conversación la que la valida (PHI) y se la propone al usuario.
 
 Contrato de nodos: `retrieve` llama SOLO a `rag.retrieve()`, `generate` SOLO
 a `rag.generate_answer()` (con los chunks del RAG y/o los datos en vivo como
-contexto), y cada tool solo a su gestor. Ningún nodo llama a `rag.query()`.
+contexto), y cada tool solo a su gestor. Desde el Ticket #MEM-092, `generate`
+llama a `memory.reply.generate_reply()`, que reutiliza el prompt del RAG y
+pide además la autoevaluación de memoria en la misma llamada. Ningún nodo llama a `rag.query()`.
 
 Desde el ticket del servidor MCP, `lookup_incident` es el nodo CLIENTE MCP:
 su tool (`tools/incidents.py`) ya no lee el Incidents Manager en proceso,
@@ -37,13 +48,14 @@ para Python 3.9, el venv es 3.12 desde el ticket del servidor MCP).
 import logging
 import operator
 from collections import deque
-from typing import Annotated, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypedDict
+from typing import Annotated, Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, TypedDict, Union
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from services.agent.evidence import fallback_message, tool_evidence
-from services.agent.planner import SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_KNOWLEDGE_BASE, Plan
+from services.agent.memory.reply import AgentReply
+from services.agent.planner import SOURCE_AGENT_MEMORY, SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_KNOWLEDGE_BASE, Plan
 from services.agent.tools.base import ToolResult
 from services.agent.tools.incidents import IncidentLookupInput
 from services.agent.tools.inventory import InventoryLookupInput
@@ -59,6 +71,7 @@ REJECT_QUESTION = "reject_question"
 PLAN_SOURCES = "plan_sources"
 LOOKUP_INCIDENT = "lookup_incident"
 CHECK_INVENTORY_STOCK = "check_inventory_stock"
+RECALL_MEMORY = "recall_memory"
 RETRIEVE = "retrieve"
 TOOL_FALLBACK = "tool_fallback"
 NO_INFORMATION = "no_information"
@@ -68,6 +81,7 @@ GENERATE = "generate"
 SOURCE_NODES = {
     SOURCE_INCIDENTS: LOOKUP_INCIDENT,
     SOURCE_INVENTORY: CHECK_INVENTORY_STOCK,
+    SOURCE_AGENT_MEMORY: RECALL_MEMORY,
     SOURCE_KNOWLEDGE_BASE: RETRIEVE,
 }
 NODE_SOURCES = {node: source for source, node in SOURCE_NODES.items()}
@@ -102,6 +116,12 @@ class AgentState(TypedDict, total=False):
     completed_sources: Annotated[List[str], operator.add]
     tool_results: Annotated[List[Dict[str, Any]], operator.add]  # ToolResult serializados
     context: List[Dict[str, Any]]  # chunks de retrieve() que superaron min_score
+    # Memoria (#MEM-092). `memories` es ENTRADA (recuerdos aprobados, con forma
+    # de chunk); `memory_context` es lo que recall_memory pasó a la generación.
+    memories: List[Dict[str, Any]]
+    memory_context: List[Dict[str, Any]]
+    memory_proposal: Optional[Dict[str, Any]]  # propuesta SIN validar aún (PHI la valida conversation.py)
+    user_requested_memory: bool
     answer: Optional[str]
     outcome: Optional[str]  # answered | no_information | invalid_question | tool_fallback
 
@@ -118,8 +138,8 @@ class AgentStateError(RuntimeError):
 
 
 RetrieveFn = Callable[..., List[Dict[str, Any]]]
-GenerateFn = Callable[[str, List[Dict[str, Any]]], str]
-PlannerFn = Callable[[str], Plan]
+GenerateFn = Callable[[str, List[Dict[str, Any]]], Union[str, AgentReply]]
+PlannerFn = Callable[..., Plan]
 IncidentToolFn = Callable[[IncidentLookupInput], ToolResult]
 InventoryToolFn = Callable[[InventoryLookupInput], ToolResult]
 
@@ -134,10 +154,10 @@ def _default_retrieve(question: str, *, k: int, min_score: float) -> List[Dict[s
     return rag.retrieve(question, k=k, min_score=min_score)
 
 
-def _default_generate(question: str, context: List[Dict[str, Any]]) -> str:
-    from data.pipelines import rag
+def _default_generate(question: str, context: List[Dict[str, Any]]) -> AgentReply:
+    from services.agent.memory import reply
 
-    return rag.generate_answer(question, context)
+    return reply.generate_reply(question, context)
 
 
 def _default_min_score() -> float:
@@ -152,10 +172,21 @@ def _default_k() -> int:
     return rag.DEFAULT_K
 
 
-def _default_planner(question: str) -> Plan:
+def _default_planner(question: str, memory_topics: Optional[List[str]] = None) -> Plan:
     from services.agent import planner
 
+    if memory_topics:
+        return planner.plan_sources(question, memory_topics=memory_topics)
     return planner.plan_sources(question)
+
+
+def memory_topics(memories: List[Dict[str, Any]]) -> List[str]:
+    """Índice de la memoria para el planificador: solo tipo y sede."""
+    topics = set()
+    for memory in memories:
+        kind = memory.get("memory_kind") or "nota"
+        topics.add(f"{kind} ({memory['clinic']})" if memory.get("clinic") else kind)
+    return sorted(topics)
 
 
 def _default_incident_tool(payload: IncidentLookupInput) -> ToolResult:
@@ -204,7 +235,17 @@ class AgentNodes:
     def receive_question(self, state: AgentState) -> Dict[str, Any]:
         """Normaliza la pregunta y deja el resto del estado limpio."""
         question = (state.get("question") or "").strip()
-        return {"question": question, "plan": [], "plan_status": None, "context": [], "answer": None, "outcome": None}
+        return {
+            "question": question,
+            "plan": [],
+            "plan_status": None,
+            "context": [],
+            "memory_context": [],
+            "memory_proposal": None,
+            "user_requested_memory": False,
+            "answer": None,
+            "outcome": None,
+        }
 
     def reject_question(self, state: AgentState) -> Dict[str, Any]:
         """Pregunta vacía: se corta aquí, sin planificar, consultar ni generar."""
@@ -213,7 +254,8 @@ class AgentNodes:
     def plan_sources(self, state: AgentState) -> Dict[str, Any]:
         """El modelo elige las fuentes (ver planner.py). Nunca falla: ante un
         problema del modelo, el plan es solo la base de conocimiento."""
-        plan = self.planner_fn(state["question"])
+        topics = memory_topics(state.get("memories") or [])
+        plan = self.planner_fn(state["question"], topics) if topics else self.planner_fn(state["question"])
         return {"plan": [call.model_dump() for call in plan.calls], "plan_status": plan.status}
 
     def lookup_incident(self, state: AgentState) -> Dict[str, Any]:
@@ -227,6 +269,12 @@ class AgentNodes:
         payload = InventoryLookupInput.model_validate(_planned_args(state, SOURCE_INVENTORY))
         result = self.inventory_tool_fn(payload)
         return {"tool_results": [result.model_dump(mode="json")], "completed_sources": [SOURCE_INVENTORY]}
+
+    def recall_memory(self, state: AgentState) -> Dict[str, Any]:
+        """Solo lectura de lo ya recuperado por la interfaz de memoria: sin
+        base de datos ni modelo. Puede quedar vacío (el usuario informa de
+        algo que todavía nadie ha pedido recordar)."""
+        return {"memory_context": list(state.get("memories") or []), "completed_sources": [SOURCE_AGENT_MEMORY]}
 
     def retrieve(self, state: AgentState) -> Dict[str, Any]:
         """Solo recuperación: `rag.retrieve()` con el umbral afinado del Hito 7."""
@@ -244,9 +292,21 @@ class AgentNodes:
 
     def generate(self, state: AgentState) -> Dict[str, Any]:
         """Solo generación, sobre los datos en vivo y los chunks ya recuperados."""
-        evidence = tool_evidence(state.get("tool_results") or []) + list(state.get("context") or [])
-        answer = self.generate_fn(state["question"], evidence)
-        return {"answer": answer, "outcome": OUTCOME_ANSWERED}
+        evidence = (
+            tool_evidence(state.get("tool_results") or [])
+            + list(state.get("memory_context") or [])
+            + list(state.get("context") or [])
+        )
+        reply = self.generate_fn(state["question"], evidence)
+        if isinstance(reply, str):  # generadores de texto plano (dobles de test): sin propuesta
+            reply = AgentReply(answer=reply)
+        proposal = reply.memory_proposal.model_dump() if reply.memory_proposal else None
+        return {
+            "answer": reply.answer,
+            "outcome": OUTCOME_ANSWERED,
+            "memory_proposal": proposal,
+            "user_requested_memory": reply.user_requested_memory,
+        }
 
 
 # --- Aristas condicionales ----------------------------------------------------
@@ -269,6 +329,9 @@ def route_next_source(state: AgentState) -> str:
     tres finales: TOOL_FALLBACK, NO_INFORMATION o GENERATE."""
     tool_results = state.get("tool_results") or []
     has_evidence = bool(state.get("context")) or any(result["status"] == "ok" for result in tool_results)
+    # Si el plan pidió la memoria, se genera aunque esté vacía: el mensaje
+    # puede ser un dato que el usuario aporta y hay que acusarlo de recibido.
+    has_evidence = has_evidence or SOURCE_AGENT_MEMORY in (state.get("completed_sources") or [])
     # Cortocircuito: si una tool no pudo dar su dato, la respuesta será el
     # fallback honesto pase lo que pase; consultar el resto sería trabajo tirado.
     if any(result["status"] != "ok" for result in tool_results):
@@ -309,6 +372,7 @@ def build_agent_graph(nodes: Optional[AgentNodes] = None) -> StateGraph:
         PLAN_SOURCES,
         LOOKUP_INCIDENT,
         CHECK_INVENTORY_STOCK,
+        RECALL_MEMORY,
         RETRIEVE,
         TOOL_FALLBACK,
         NO_INFORMATION,
@@ -320,13 +384,18 @@ def build_agent_graph(nodes: Optional[AgentNodes] = None) -> StateGraph:
     builder.add_conditional_edges(RECEIVE_QUESTION, route_after_receive, [PLAN_SOURCES, REJECT_QUESTION])
     # Una sola función de enrutamiento para todas las fuentes; el path_map de
     # cada nodo declara solo los destinos posibles desde ahí (el plan siempre
-    # sigue el orden incidencias → inventario → RAG), así el dibujo del grafo
-    # es fiel y un destino imposible haría fallar la corrida.
-    builder.add_conditional_edges(PLAN_SOURCES, route_next_source, [LOOKUP_INCIDENT, CHECK_INVENTORY_STOCK, RETRIEVE])
+    # sigue el orden incidencias → inventario → memoria → RAG), así el dibujo
+    # del grafo es fiel y un destino imposible haría fallar la corrida.
     builder.add_conditional_edges(
-        LOOKUP_INCIDENT, route_next_source, [CHECK_INVENTORY_STOCK, RETRIEVE, TOOL_FALLBACK, GENERATE]
+        PLAN_SOURCES, route_next_source, [LOOKUP_INCIDENT, CHECK_INVENTORY_STOCK, RECALL_MEMORY, RETRIEVE]
     )
-    builder.add_conditional_edges(CHECK_INVENTORY_STOCK, route_next_source, [RETRIEVE, TOOL_FALLBACK, GENERATE])
+    builder.add_conditional_edges(
+        LOOKUP_INCIDENT, route_next_source, [CHECK_INVENTORY_STOCK, RECALL_MEMORY, RETRIEVE, TOOL_FALLBACK, GENERATE]
+    )
+    builder.add_conditional_edges(
+        CHECK_INVENTORY_STOCK, route_next_source, [RECALL_MEMORY, RETRIEVE, TOOL_FALLBACK, GENERATE]
+    )
+    builder.add_conditional_edges(RECALL_MEMORY, route_next_source, [RETRIEVE, GENERATE])
     builder.add_conditional_edges(RETRIEVE, route_next_source, [NO_INFORMATION, GENERATE])
     for final in (REJECT_QUESTION, TOOL_FALLBACK, NO_INFORMATION, GENERATE):
         builder.add_edge(final, END)

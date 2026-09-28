@@ -15,6 +15,12 @@ una huella, no una anonimización fuerte: una pregunta corta y predecible se
 podría adivinar probando candidatos. De los chunks se guardan fuente, sección,
 índice y puntuación, no el texto (ya está en docs/company-knowledge-base/).
 
+Memoria (Ticket #MEM-092): la propuesta de memoria que devuelve `generate`
+aún no ha pasado el validador de PHI cuando se escribe el trace, así que en
+el trace solo aparecen su tipo y la huella de su texto; de los recuerdos
+usados, solo sus ids. El texto aprobado vive en `agent_memory_proposals`.
+Campos aditivos: un trace v2 anterior sigue siendo válido.
+
 Checkpoints: por defecto se borran del checkpointer en memoria al terminar
 (`keep_checkpoints=False`), para que la API no acumule una corrida por
 petición en RAM; sus identificadores quedan en el trace. Los tests y la
@@ -63,6 +69,8 @@ class AgentRunResult:
     trace_id: str
     trace_path: Optional[Path]
     trace: Dict[str, Any]
+    memory_proposal: Optional[Dict[str, Any]] = None  # sin validar: la valida memory/conversation.py
+    user_requested_memory: bool = False
 
 
 def get_trace_dir() -> Path:
@@ -82,9 +90,19 @@ def redact_update(update: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             redacted["question"] = fingerprint(value or "")
         elif key == "context":
             redacted["context"] = [{field: chunk.get(field) for field in CHUNK_TRACE_FIELDS} for chunk in value or []]
+        elif key == "memory_context":
+            redacted["memory_context"] = [chunk.get("memory_id") for chunk in value or []]
+        elif key == "memory_proposal":
+            redacted["memory_proposal"] = redact_proposal(value)
         else:
             redacted[key] = value
     return redacted
+
+
+def redact_proposal(proposal: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not proposal:
+        return None
+    return {"kind": proposal.get("kind"), "content": fingerprint(proposal.get("content") or "")}
 
 
 def _now() -> str:
@@ -139,6 +157,7 @@ def run_agent(
     trace_dir: Optional[Path] = None,
     file_stem: Optional[str] = None,
     keep_checkpoints: bool = False,
+    memories: Optional[List[Dict[str, Any]]] = None,
 ) -> AgentRunResult:
     """Ejecuta el grafo compilado para una pregunta y deja su trace en disco.
 
@@ -165,6 +184,7 @@ def run_agent(
         "checkpoints": [],
         "outcome": None,
         "answer": None,
+        "memory": {"available": [m.get("memory_id") for m in memories or []], "proposal": None},
         "error": None,
     }
     started = time.perf_counter()
@@ -172,7 +192,7 @@ def run_agent(
     failure: Optional[BaseException] = None
 
     try:
-        for chunk in graph.stream({"question": question}, config, stream_mode="updates"):
+        for chunk in graph.stream({"question": question, "memories": list(memories or [])}, config, stream_mode="updates"):
             now = time.perf_counter()
             for node, update in chunk.items():
                 trace["steps"].append(
@@ -200,6 +220,7 @@ def run_agent(
         trace["status"] = "completed"
         trace["outcome"] = final_state.get("outcome")
         trace["answer"] = final_state.get("answer")
+        trace["memory"]["proposal"] = redact_proposal(final_state.get("memory_proposal"))
     else:
         failed_node = _failed_node(graph, config)
         trace["status"] = "failed"
@@ -233,4 +254,6 @@ def run_agent(
         trace_id=trace_id,
         trace_path=trace_path,
         trace=trace,
+        memory_proposal=final_state.get("memory_proposal") if failure is None else None,
+        user_requested_memory=bool(final_state.get("user_requested_memory")),
     )
