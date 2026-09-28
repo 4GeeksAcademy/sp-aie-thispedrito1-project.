@@ -49,7 +49,10 @@ SOURCE_KNOWLEDGE_BASE = "knowledge_base"
 SOURCE_AGENT_MEMORY = "agent_memory"
 SOURCE_ORDER = (SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_AGENT_MEMORY, SOURCE_KNOWLEDGE_BASE)
 
-PLANNER_TIMEOUT_S = 10.0
+# 20 s desde el cambio a deepseek-v4-flash (2026-09-28): con 10 s, afinado para
+# gpt-5.6-luna (bloqueado en el proxy), deepseek se pasaba por décimas (10,0-10,2 s)
+# y el plan caía a solo RAG en 3 de 12 casos de evaluación.
+PLANNER_TIMEOUT_S = 20.0
 
 Source = Literal["incidents", "inventory", "agent_memory", "knowledge_base"]
 

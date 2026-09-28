@@ -2,9 +2,9 @@
   "trace_id": "eval-ticket-not-found",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:52:21.825594+00:00",
-  "finished_at": "2026-09-24T16:52:23.576203+00:00",
-  "duration_ms": 1750.65,
+  "started_at": "2026-09-28T19:41:50.103116+00:00",
+  "finished_at": "2026-09-28T19:41:53.012767+00:00",
+  "duration_ms": 2909.69,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.52,
+      "duration_ms": 1.69,
       "output": {
         "question": {
           "sha256": "84e743b9bb970c507009859050b3b24a2fa34b661588871f495e74808467359b",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 1742.63,
+      "duration_ms": 2857.07,
       "output": {
         "plan": [
           {
@@ -48,7 +51,7 @@
     {
       "index": 3,
       "node": "lookup_incident",
-      "duration_ms": 2.8,
+      "duration_ms": 49.57,
       "output": {
         "tool_results": [
           {
@@ -59,8 +62,9 @@
             },
             "data": null,
             "error_type": "ToolNotFound",
-            "timeout_s": 3.0,
-            "duration_ms": 1.82
+            "via": "mcp",
+            "timeout_s": 5.0,
+            "duration_ms": 49.04
           }
         ],
         "completed_sources": [
@@ -71,7 +75,7 @@
     {
       "index": 4,
       "node": "tool_fallback",
-      "duration_ms": 1.09,
+      "duration_ms": 0.6,
       "output": {
         "answer": "No encuentro la incidencia #4821 en el gestor de incidencias. Revisa el número: no des ningún estado al paciente sin confirmarlo.",
         "outcome": "tool_fallback"
@@ -98,7 +102,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b8384-f986-62fe-bfff-de408a6a43e0",
+      "checkpoint_id": "1f1bb74a-6036-619a-bfff-cbd7dca3389f",
       "step": -1,
       "source": "input",
       "next": [
@@ -106,7 +110,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-f987-6f46-8000-edc4a361ec60",
+      "checkpoint_id": "1f1bb74a-6036-6f50-8000-13fef7c77d79",
       "step": 0,
       "source": "loop",
       "next": [
@@ -114,7 +118,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-f98a-6520-8001-9d77ff46e728",
+      "checkpoint_id": "1f1bb74a-6038-63d2-8001-e4b4fe7614e4",
       "step": 1,
       "source": "loop",
       "next": [
@@ -122,7 +126,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-0a28-6102-8002-9ec941ea4dd1",
+      "checkpoint_id": "1f1bb74a-7b77-6512-8002-bcbae229de6b",
       "step": 2,
       "source": "loop",
       "next": [
@@ -130,7 +134,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-0a2f-670e-8003-a011aab3e90d",
+      "checkpoint_id": "1f1bb74a-7bf0-6ea8-8003-ffb7939760c6",
       "step": 3,
       "source": "loop",
       "next": [
@@ -138,7 +142,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-0a31-6914-8004-2a84d4c26408",
+      "checkpoint_id": "1f1bb74a-7bf1-6fe2-8004-d099590fe8f7",
       "step": 4,
       "source": "loop",
       "next": []
@@ -146,5 +150,9 @@
   ],
   "outcome": "tool_fallback",
   "answer": "No encuentro la incidencia #4821 en el gestor de incidencias. Revisa el número: no des ningún estado al paciente sin confirmarlo.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

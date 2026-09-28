@@ -2,9 +2,9 @@
   "trace_id": "eval-unlisted-insurance",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:49:29.507533+00:00",
-  "finished_at": "2026-09-24T16:49:33.383093+00:00",
-  "duration_ms": 3875.64,
+  "started_at": "2026-09-28T19:40:49.567344+00:00",
+  "finished_at": "2026-09-28T19:41:07.667151+00:00",
+  "duration_ms": 18100.03,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 1.06,
+      "duration_ms": 2.61,
       "output": {
         "question": {
           "sha256": "f213e525e982d3656a33e42cac4328d06f25e75a529dd88012b92544e156d6bf",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 1554.89,
+      "duration_ms": 5571.47,
       "output": {
         "plan": [
           {
@@ -46,7 +49,7 @@
     {
       "index": 3,
       "node": "retrieve",
-      "duration_ms": 304.91,
+      "duration_ms": 241.56,
       "output": {
         "context": [
           {
@@ -82,10 +85,12 @@
     {
       "index": 4,
       "node": "generate",
-      "duration_ms": 2012.9,
+      "duration_ms": 12282.0,
       "output": {
-        "answer": "No puedo confirmar que Oscar Health esté cubierto porque no aparece en la lista de seguros aceptados.\n\nDile al paciente: “Debemos verificarlo primero con el equipo de facturación antes de confirmar la cobertura.”\n\nConsulta a Tom Callahan antes de comprometer nada con el paciente.\n\nFuente: insurance-coverage · Sección: Cobertura de Seguros Aceptados",
-        "outcome": "answered"
+        "answer": "No tengo información suficiente en la base de conocimiento para confirmar la cobertura de Oscar Health. Esa aseguradora no aparece en la lista de seguros aceptados del contexto. No la confirmes ni la descartes todavía: debe verificarse con el equipo de facturación antes de comprometer nada con el paciente. Si quieres, te recuerdo que el responsable de facturación es Tom Callahan. Fuente: insurance-coverage, sección Cobertura de Seguros Aceptados.",
+        "outcome": "answered",
+        "memory_proposal": null,
+        "user_requested_memory": false
       }
     }
   ],
@@ -107,7 +112,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b837e-8e2b-6442-bfff-38740e224d8c",
+      "checkpoint_id": "1f1bb748-1ee6-69bc-bfff-4c32004ef0ec",
       "step": -1,
       "source": "input",
       "next": [
@@ -115,7 +120,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-8e2b-6f82-8000-1e3814e09a10",
+      "checkpoint_id": "1f1bb748-1ee8-62b2-8000-7b92235eec4a",
       "step": 0,
       "source": "loop",
       "next": [
@@ -123,7 +128,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-8e2c-6c66-8001-a173079cdcd3",
+      "checkpoint_id": "1f1bb748-1eea-6800-8001-814331e98777",
       "step": 1,
       "source": "loop",
       "next": [
@@ -131,7 +136,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-9cff-6bc6-8002-5ce989785e4c",
+      "checkpoint_id": "1f1bb748-540a-6c4c-8002-c19c861f7fff",
       "step": 2,
       "source": "loop",
       "next": [
@@ -139,7 +144,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-9fe8-69fa-8003-3eff20fbeba2",
+      "checkpoint_id": "1f1bb748-5659-6ce6-8003-ec577b57c88d",
       "step": 3,
       "source": "loop",
       "next": [
@@ -147,13 +152,17 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-b319-6e98-8004-ab16fffc0356",
+      "checkpoint_id": "1f1bb748-cb79-6b02-8004-d8f405a70a68",
       "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "No puedo confirmar que Oscar Health esté cubierto porque no aparece en la lista de seguros aceptados.\n\nDile al paciente: “Debemos verificarlo primero con el equipo de facturación antes de confirmar la cobertura.”\n\nConsulta a Tom Callahan antes de comprometer nada con el paciente.\n\nFuente: insurance-coverage · Sección: Cobertura de Seguros Aceptados",
+  "answer": "No tengo información suficiente en la base de conocimiento para confirmar la cobertura de Oscar Health. Esa aseguradora no aparece en la lista de seguros aceptados del contexto. No la confirmes ni la descartes todavía: debe verificarse con el equipo de facturación antes de comprometer nada con el paciente. Si quieres, te recuerdo que el responsable de facturación es Tom Callahan. Fuente: insurance-coverage, sección Cobertura de Seguros Aceptados.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

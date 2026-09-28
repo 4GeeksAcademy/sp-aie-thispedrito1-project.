@@ -120,7 +120,7 @@ Desde la raíz. `langgraph==0.6.11` (última compatible con Python 3.9) en `serv
 
 ```bash
 docker compose up -d qdrant                                                      # si la pregunta consulta el RAG
-GENERATION_MODEL=madrid-spain/z-ai/glm-5.3-flash services/api/.venv/bin/python scripts/record_memory_evidence.py   # evidencia real → docs/agent/memory-evidence/
+services/api/.venv/bin/python scripts/record_memory_evidence.py   # evidencia real → docs/agent/memory-evidence/
 docker compose stop qdrant
 ```
 
@@ -441,7 +441,7 @@ Decisiones que conviene no romper:
 - **Sin contexto también responde el modelo** (marcador `NO_CONTEXT_MARKER`), porque el ticket exige que la respuesta la genere siempre un modelo. El prompt le obliga a decir que no hay información suficiente.
 - **Las reglas de negocio apuntan al contexto, no copian cifras**: seguro no listado → facturación; separar EE. UU. y R. U. si no se especifica; moneda del país; nunca un cargo por no-show a Medicare/Medicaid; los 11 días de referencia no son un compromiso. `test_system_prompt_carries_the_context_business_rules` las fija.
 - **La pregunta nunca va a los logs** (podría llevar datos de un paciente). Solo documento, `chunk_index` y score.
-- **Modelos del proxy de 4Geeks** (LiteLLM en `llm.4geeks.ai`, SDK `openai`): embeddings `madrid-spain/openrouter/perplexity/pplx-embed-v1-0.6b` (1024 dimensiones, el único de embeddings que ofrece) y generación `madrid-spain/openai/gpt-5.6-luna`. `get_embedding_model`/`get_generation_model` rechazan que sean el mismo ID.
+- **Modelos del proxy de 4Geeks** (LiteLLM en `llm.4geeks.ai`, SDK `openai`): embeddings `madrid-spain/openrouter/perplexity/pplx-embed-v1-0.6b` (1024 dimensiones, el único de embeddings que ofrece) y generación `madrid-spain/openai/gpt-5.6-luna` (bloqueado desde el 2026-09-28; ahora `deepseek-v4-flash`, ver la sección de memoria del agente). `get_embedding_model`/`get_generation_model` rechazan que sean el mismo ID.
 
 Gotchas reales:
 - **El modelo responde en Markdown** (`**50 USD**`) y la pantalla lo mostraba con asteriscos. Lo detectó el recorrido en Chrome, no los tests (usaban respuestas en texto plano). El prompt pide texto plano y `toPlainText` limpia `**`/`__`/`#` de forma defensiva.
@@ -562,8 +562,8 @@ Decisiones que conviene no romper:
 - `resolve_decision`: un `reject` con confianza baja es `discard`, no `reject` (la auditoría no atribuye una negativa dudosa).
 
 Gotchas y residuales:
-- **El proxy de 4Geeks bloquea `gpt-5.6-luna`** (`403 Model is blocked`, 2026-09-28). Disponibles: `madrid-spain/z-ai/glm-5.3-flash` (usado en la evidencia por variable de entorno; JSON y tools OK), `…/deepseek/deepseek-v4-flash` y `…/xiaomi/mimo-v2.5`. `services/api/.env` NO se cambió (decisión del usuario).
-- **Traces de evals del agente no regrabados**: el prompt de `generate` cambió. Los evals pasan (campos aditivos, `TRACE_SCHEMA_VERSION` sigue en 2), pero hay que regrabarlos cuando haya modelo definitivo.
+- **Modelo de generación desde el 2026-09-28: `madrid-spain/openrouter/deepseek/deepseek-v4-flash`** (en `services/api/.env` y en los dos `.env.example`; decisión del usuario). El proxy bloqueó `gpt-5.6-luna` (`403 Model is blocked`) y `glm-5.3-flash` tuvo caídas intermitentes ("no healthy deployments"); `mimo-v2.5` corta los argumentos del esquema `["string","null"]` de `search_incidents`. deepseek es lento (~5-20 s por llamada), por eso `PLANNER_TIMEOUT_S` subió de 10 a 20 s. La evidencia de memoria se grabó con `glm-5.3-flash`.
+- **Traces de evals del agente regrabados con deepseek** (2026-09-28, 86/86). `scripts/record_agent_traces.py` estaba roto desde el ticket MCP (pasaba `repository_factory`, que ya no existe; la caída se simula ahora con `mcp_call`) y necesita la cadena completa: API en 8000 + `python -m mcps.healthcore` con el mismo `SUPPLIERS_DB_PATH` sembrado y con la cuenta de servicio. Hace una llamada MCP de calentamiento: la primera de un proceso (token Logto + sesión + login) supera los 5 s del timeout de la tool. Si una corrida cae a `fallback` por un pico de latencia del proxy, regrabar solo ese caso (`record_agent_traces.py <id>`).
 - SQLite (tests) devuelve fechas sin zona: `consolidation.as_utc` antes de comparar en Python.
 - `consolidation.sweep` no hace commit (lo hace `store.resolve`, en la misma transacción que la decisión).
 

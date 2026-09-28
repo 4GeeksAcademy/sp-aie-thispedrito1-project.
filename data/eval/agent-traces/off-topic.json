@@ -2,9 +2,9 @@
   "trace_id": "eval-off-topic",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:49:33.385162+00:00",
-  "finished_at": "2026-09-24T16:49:35.423534+00:00",
-  "duration_ms": 2038.4,
+  "started_at": "2026-09-28T19:41:07.670485+00:00",
+  "finished_at": "2026-09-28T19:41:15.585684+00:00",
+  "duration_ms": 7916.3,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.7,
+      "duration_ms": 2.49,
       "output": {
         "question": {
           "sha256": "d699d9a1b64615367ab2c61da82c578ee1502cb4c3f50df082abbb37ee9ae301",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 1652.96,
+      "duration_ms": 7602.78,
       "output": {
         "plan": [
           {
@@ -46,7 +49,7 @@
     {
       "index": 3,
       "node": "retrieve",
-      "duration_ms": 380.0,
+      "duration_ms": 308.91,
       "output": {
         "context": [],
         "completed_sources": [
@@ -57,7 +60,7 @@
     {
       "index": 4,
       "node": "no_information",
-      "duration_ms": 1.16,
+      "duration_ms": 0.7,
       "output": {
         "answer": "No tengo información suficiente en la base de conocimiento para responder a eso. Consúltalo con el responsable correspondiente antes de confirmar nada al paciente.",
         "outcome": "no_information"
@@ -82,7 +85,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b837e-b327-62be-bfff-1ca56541a28b",
+      "checkpoint_id": "1f1bb748-cb8b-696a-bfff-a08e4221fa64",
       "step": -1,
       "source": "input",
       "next": [
@@ -90,7 +93,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-b328-6c72-8000-5073e5e695d7",
+      "checkpoint_id": "1f1bb748-cb8d-64a4-8000-310d0c85da86",
       "step": 0,
       "source": "loop",
       "next": [
@@ -98,7 +101,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-b32b-6396-8001-5540af85f5ab",
+      "checkpoint_id": "1f1bb748-cb8f-66be-8001-253d6a773476",
       "step": 1,
       "source": "loop",
       "next": [
@@ -106,7 +109,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-c2ee-601c-8002-1cfc175b9232",
+      "checkpoint_id": "1f1bb749-140c-6a54-8002-b7ecf0b90f55",
       "step": 2,
       "source": "loop",
       "next": [
@@ -114,7 +117,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-c68e-6168-8003-06a82c9beae5",
+      "checkpoint_id": "1f1bb749-16ff-6766-8003-b689f8752e2b",
       "step": 3,
       "source": "loop",
       "next": [
@@ -122,7 +125,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-c690-692c-8004-a2121cc39880",
+      "checkpoint_id": "1f1bb749-1701-64d0-8004-2adf8750721b",
       "step": 4,
       "source": "loop",
       "next": []
@@ -130,5 +133,9 @@
   ],
   "outcome": "no_information",
   "answer": "No tengo información suficiente en la base de conocimiento para responder a eso. Consúltalo con el responsable correspondiente antes de confirmar nada al paciente.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

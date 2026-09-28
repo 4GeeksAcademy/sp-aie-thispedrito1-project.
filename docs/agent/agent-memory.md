@@ -146,7 +146,7 @@ La similitud es Jaccard sobre palabras significativas, sin embeddings: con decen
 
 `services/api/.venv/bin/python scripts/record_memory_evidence.py`, con la API real (uvicorn), Supabase real (`healthcore-data`), Qdrant real y el modelo real del proxy de 4Geeks. Se usaron dos coordinadores de prueba (Ana y Luis) y un admin en una TinyDB temporal. Resultados completos en `docs/agent/memory-evidence/` (`turns.json`, `memory-visible.json`, `audit.json`).
 
-> Modelo de generación: `madrid-spain/z-ai/glm-5.3-flash`, pasado como variable de entorno solo para esta prueba. El proxy devuelve `403 Model is blocked` para `gpt-5.6-luna`, el configurado en `.env`. `glm-5.3-flash` soporta el modo JSON y *function calling* (comprobado).
+> Modelo de generación de esta grabación: `madrid-spain/z-ai/glm-5.3-flash` (el proxy devuelve `403 Model is blocked` para `gpt-5.6-luna`). Después, por caídas intermitentes de glm, el modelo del proyecto pasó a `madrid-spain/openrouter/deepseek/deepseek-v4-flash` (§10).
 
 | # | Quién | Mensaje (resumen) | Resultado |
 |---|---|---|---|
@@ -188,7 +188,7 @@ Se actualizaron a propósito los tests que fijaban el contrato anterior: la list
 
 ## 10. Residuales conocidos
 
-- **`gpt-5.6-luna` bloqueado en el proxy.** `services/api/.env` sigue apuntando a él, así que sin cambiar `GENERATION_MODEL`, `/agent/query`, `/knowledge/query` y el planificador fallan (503 / fallback a solo RAG). La evidencia usó `glm-5.3-flash` por variable de entorno.
-- **Los traces grabados de los evals del agente (`data/eval/agent-traces/`) son anteriores a este ticket.** Siguen pasando porque los campos nuevos del trace son aditivos, pero el prompt de generación cambió y el modelo original ya no está disponible. Hay que volver a grabarlos cuando se decida el modelo definitivo.
+- **Modelo de generación cambiado a `deepseek-v4-flash`** (`services/api/.env` y `.env.example`): `gpt-5.6-luna` está bloqueado en el proxy y `glm-5.3-flash` tuvo caídas intermitentes. deepseek es más lento, así que `PLANNER_TIMEOUT_S` subió de 10 a 20 s. Los 12 traces de los evals del agente se regrabaron con él (86/86).
+- **Arranque en frío del MCP:** la primera llamada de un proceso (token de Logto + sesión + login de la cuenta de servicio) puede superar los 5 s del timeout de la tool y responder con el fallback honesto. Las siguientes tardan ~0,1 s.
 - **El validador de PHI es de reglas.** Un nombre de paciente sin la palabra "paciente" ni tratamiento ("Johnson canceló") no lo detecta la regla `patient_name` por sí sola. Lo mitigan que el modelo tiene prohibido proponer eso y que la propuesta debe ser un patrón operativo autocontenido. Un NER clínico sería la mejora natural.
 - **La similitud de Jaccard** puede no reconocer como corrección un cambio redactado con palabras muy distintas. En ese caso convivirían dos notas hasta que caduque la vieja o un admin la retire.
