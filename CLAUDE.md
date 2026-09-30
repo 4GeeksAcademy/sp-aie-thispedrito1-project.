@@ -126,6 +126,17 @@ docker compose stop qdrant
 
 Desde la raíz. Arranca la API en el puerto 8010 con una TinyDB temporal (2 coordinadores + admin, tokens sin login) y escribe en Supabase (`agent_memories`, `agent_memory_proposals`). Si se repite, antes hay que vaciar la memoria de la corrida anterior: un recuerdo ya aprobado cambia el guion. Detalle en `docs/agent/agent-memory.md`.
 
+### Harness y guardrails del agente (Ticket #SEC-114)
+
+```bash
+services/api/.venv/bin/python scripts/run_guardrail_cases.py          # 35 casos, sin red: solo guardarraíles + resumen
+docker compose up -d qdrant                                           # solo para --live
+services/api/.venv/bin/python scripts/run_guardrail_cases.py --live   # agente real → docs/agent/guardrails-evidence/cases.json
+docker compose stop qdrant
+```
+
+Desde la raíz. Casos en `data/eval/guardrail-cases.json`. Con la API arrancada, `GET /agent/guardrails/summary` (admin) da el mismo resumen. Detalle en `docs/agent/agent-guardrails.md`.
+
 ### Servidor MCP con OAuth (`mcps/healthcore`)
 
 ```bash
@@ -172,13 +183,13 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49): desde la RAÍZ
-services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py
+# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49) + harness/guardrails (112, sin LLM): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py tests/pipelines/test_agent_guardrails.py
 
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (240 tests, 44 del servidor MCP, 16 de la memoria del agente): desde services/api, con el venv activado
+# Backend (246 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -566,6 +577,33 @@ Gotchas y residuales:
 - **Traces de evals del agente regrabados con deepseek** (2026-09-28, 86/86). `scripts/record_agent_traces.py` estaba roto desde el ticket MCP (pasaba `repository_factory`, que ya no existe; la caída se simula ahora con `mcp_call`) y necesita la cadena completa: API en 8000 + `python -m mcps.healthcore` con el mismo `SUPPLIERS_DB_PATH` sembrado y con la cuenta de servicio. Hace una llamada MCP de calentamiento: la primera de un proceso (token Logto + sesión + login) supera los 5 s del timeout de la tool. Si una corrida cae a `fallback` por un pico de latencia del proxy, regrabar solo ese caso (`record_agent_traces.py <id>`).
 - SQLite (tests) devuelve fechas sin zona: `consolidation.as_utc` antes de comparar en Python.
 - `consolidation.sweep` no hace commit (lo hace `store.resolve`, en la misma transacción que la decisión).
+
+### Harness y guardrails del agente — `docs/agent/agent-guardrails.md`
+
+Ticket #SEC-114 (Hito 8, Parte 2), rama `feature/agent-guardrails` sobre `main` (que ya incluye la Parte 1), 2026-09-30. Protege el MISMO agente de `/agent/query`. El CONTEXT lo llama "asistente de compliance de Claire Whitfield"; decisión del usuario: ampliar su dominio en el prompt (políticas y protocolos de HealthCore bajo HIPAA/UK GDPR, brechas, BAA/DPA) **sin inventar documentos**. Lo que la KB no cubre se responde como marco general y se deriva a Compliance.
+
+Mapa del código (`services/agent/guardrails/`):
+- `patterns.py`: `normalize()` (minúsculas, sin tildes, sin caracteres invisibles, leetspeak deshecho) y los bancos de regex: jailbreak, uso personal (duras / blandas), small talk, anclas de dominio, regulación y brechas.
+- `input_guard.py`: `check_input` → ALLOW / BLOCK / REDIRECT. Orden: jailbreak → caso de paciente (`is_identifiable_patient_case`) → brecha activa (`BreachWindow`, 15 min por usuario) → uso personal → small talk.
+- `prompt.py`: `INSTRUCTION_HIERARCHY` (con `CANARY`), `AGENT_ROLE`, `DOMAIN_SCOPE` + las reglas de `rag.py`; `build_agent_messages` (lo usa `memory/reply.py`).
+- `isolation.py`: sanea RAG, tools y notas de memoria y los encierra en `<fuente_externa>`; el mensaje del usuario va en `<mensaje_usuario>`.
+- `output_guard.py`: estructura, filtración del prompt, PHI y cifras de brechas; sustituye la respuesta entera.
+- `general.py`: small talk y regulación fuera de la KB; la reconducción la añade el código.
+- `monitor.py`: `MONITOR` (singleton), log `healthcore.agent.guardrails` y `summary()` → `GET /agent/guardrails/summary` (admin). `POST /agent/query` devuelve `guardrail`.
+
+Decisiones que conviene no romper:
+- **Un BLOCK nunca llega al modelo** (texto fijo, idéntico en cada reintento). El prompt es la segunda capa.
+- **PHI sobre el texto original, el resto sobre el normalizado.** El canario también se busca en el original: el leetspeak convierte `SEC114`.
+- **Caso de paciente:** un identificador directo basta; un paciente concreto + edad o clínico también; sin paciente concreto, dos cuasi-identificadores (edad, clínico, sede). "Pacientes de 65 años con Medicare" y "un paciente de Manchester, ¿NHS?" deben seguir pasando (hay tests).
+- **Las notas de memoria cuentan como contenido externo** y se sanean igual que el RAG.
+- **Nada de texto en logs**: guardia, acción, tipo de fallo, motivo, seudónimo del usuario y `trace_id`.
+- **Tests sin red:** `services/api/tests/conftest.py::offline_agent_harness` sustituye `conversation.answer_general` y reinicia `MONITOR`/`BREACH_WINDOWS`. `handle_turn` resuelve `general_fn` al llamar, justo para esto.
+- Un mensaje con nombre de paciente ya no llega a la memoria: lo para la entrada y `_audit_blocked_phi` lo deja en `agent_memory_proposals` (categorías + huella). El validador de la memoria sigue siendo la segunda capa para lo que la entrada deja pasar (clínico sin identificar, ediciones del clasificador).
+
+Gotchas y residuales:
+- `phi_guard.insurance_number` daba falsos positivos ("sección Cobertura"); ahora exige límite de palabra y un dígito. Lo detectó la calibración con los traces reales.
+- `POST /knowledge/query` (Hito 7) no pasa por el harness.
+- La ventana de brecha y el monitor viven en memoria del proceso: con varios workers de uvicorn cada uno tendría los suyos.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

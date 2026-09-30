@@ -50,7 +50,8 @@ def test_agent_answers_through_the_graph_and_leaves_a_trace(client: TestClient, 
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"answer", "trace_id", "outcome", "memory"}
+    assert set(body) == {"answer", "trace_id", "outcome", "memory", "guardrail"}
+    assert body["guardrail"] is None
     assert body["memory"] == {"resolved": None, "offered": None}
     assert body["answer"] == "Sin cargo."
     assert body["outcome"] == "answered"

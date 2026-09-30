@@ -19,6 +19,18 @@ propuesta pendiente del propio usuario con una decisión clasificada.
 
 Si Supabase no responde, el agente contesta sin memoria (ni lee, ni propone):
 la memoria es un complemento, no puede tumbar la consulta.
+
+Harness de protección (Ticket #SEC-114), alrededor de esos tres pasos:
+
+0. Guardarraíl de entrada ANTES de todo (`guardrails.input_guard`): un
+   jailbreak, un caso de paciente identificable, la extracción de una brecha
+   o una tarea personal se responden con un texto fijo sin tocar la memoria
+   ni el grafo; la charla casual se responde en modo general con reconducción.
+4. Guardarraíl de salida sobre la respuesta del grafo (`guardrails.output_guard`):
+   si la retiene, se sustituye por un texto fijo y NO se ofrece memoria.
+5. Regulación de industria sin respuesta en la base de conocimiento → modo
+   general (marco regulatorio + derivación a Compliance).
+Cada activación queda en `guardrails.monitor`.
 """
 
 from __future__ import annotations
@@ -30,6 +42,11 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.agent.graph import OUTCOME_NO_INFORMATION
+from services.agent.guardrails.general import CASUAL, REGULATION, GeneralAnswer, answer_general
+from services.agent.guardrails.input_guard import ALLOW, BreachWindow, InputVerdict, check_input
+from services.agent.guardrails.monitor import MONITOR, REDIRECT, CONTENT, GuardEvent, GuardrailMonitor
+from services.agent.guardrails.output_guard import check_output
 from services.agent.memory import phi_guard
 from services.agent.memory.consolidation import PhiInMemoryError
 from services.agent.memory.decision import DecisionClassification, Resolution, classify_decision, resolve_decision
@@ -47,6 +64,8 @@ from services.agent.tracing import run_agent
 logger = logging.getLogger(__name__)
 
 OUTCOME_MEMORY_DECISION = "memory_decision"
+OUTCOME_GUARDRAIL_BLOCKED = "guardrail_blocked"
+OUTCOME_GUARDRAIL_REDIRECTED = "guardrail_redirected"
 
 # Estados de memoria que ve el cliente en la respuesta.
 MEMORY_PROPOSED = "proposed"
@@ -68,6 +87,7 @@ NOT_MEMORABLE_MESSAGE = (
 
 ClassifyFn = Callable[[str, str], DecisionClassification]
 RunFn = Callable[..., Any]
+GeneralFn = Callable[[str, str], GeneralAnswer]
 
 
 @dataclass
@@ -87,6 +107,7 @@ class TurnResult:
     trace_id: Optional[str]
     resolved: Optional[MemoryEvent] = None  # decisión sobre la propuesta que estaba pendiente
     offered: Optional[MemoryEvent] = None  # propuesta nueva (o su bloqueo) de este turno
+    guardrail: Optional[GuardEvent] = None  # guardarraíl que bloqueó o redirigió el turno
 
 
 def sha256(text: str) -> str:
@@ -232,6 +253,36 @@ def _offer_proposal(
     return None
 
 
+def _audit_blocked_phi(store: Optional[MemoryStore], verdict: InputVerdict, *, user_id: str, message_sha: str) -> None:
+    """Un caso de paciente rechazado en la entrada sigue quedando en la
+    auditoría de memoria (como antes del harness): categorías + huella, nunca texto."""
+    if store is None or not verdict.categories:
+        return
+    try:
+        store.record_blocked(
+            user_id=user_id,
+            kind=None,
+            clinic=None,
+            phi_categories=list(verdict.categories),
+            origin_message_sha256=message_sha,
+            origin_trace_id=None,
+            note="Mensaje con datos identificables de un paciente rechazado por el guardarraíl de entrada",
+        )
+    except SQLAlchemyError as exc:
+        logger.warning("Agent memory audit unavailable: %s", type(exc).__name__)
+        store.rollback()
+
+
+def _general_turn(
+    general_fn: GeneralFn, message: str, mode: str, event: GuardEvent, monitor: GuardrailMonitor, *, user_id: str, **extra: Any
+) -> TurnResult:
+    general = general_fn(message, mode)
+    monitor.record(event, user_id=user_id)
+    if general.output_event is not None:
+        monitor.record(general.output_event, user_id=user_id)
+    return TurnResult(general.answer, OUTCOME_GUARDRAIL_REDIRECTED, extra.pop("trace_id", None), guardrail=event, **extra)
+
+
 def handle_turn(
     agent: Any,
     message: str,
@@ -240,11 +291,24 @@ def handle_turn(
     store: Optional[MemoryStore],
     classify_fn: ClassifyFn = classify_decision,
     run_fn: RunFn = run_agent,
+    general_fn: Optional[GeneralFn] = None,
+    monitor: GuardrailMonitor = MONITOR,
+    breach_windows: Optional[BreachWindow] = None,
 ) -> TurnResult:
     message = (message or "").strip()
     message_sha = sha256(message)
     resolved: Optional[MemoryEvent] = None
     question: Optional[str] = message
+
+    general_fn = general_fn or answer_general  # resuelto al llamar: sustituible en tests
+    verdict = check_input(message, user_id=user_id, breach_windows=breach_windows)
+    if verdict.action != ALLOW:
+        event = verdict.event
+        if verdict.action == REDIRECT:
+            return _general_turn(general_fn, message, CASUAL, event, monitor, user_id=user_id)
+        monitor.record(event, user_id=user_id)
+        _audit_blocked_phi(store, verdict, user_id=user_id, message_sha=message_sha)
+        return TurnResult(verdict.message or "", OUTCOME_GUARDRAIL_BLOCKED, None, guardrail=event)
 
     if store is not None:
         try:
@@ -271,6 +335,25 @@ def handle_turn(
             store = None
 
     run = run_fn(agent, question, memories=memories)
+
+    if run.answer:
+        output = check_output(run.answer)
+        if output.blocked:
+            monitor.record(output.event, user_id=user_id, trace_id=run.trace_id)
+            parts = [resolved.message if resolved else None, output.answer]
+            return TurnResult(
+                answer="\n\n".join(part for part in parts if part),
+                outcome=OUTCOME_GUARDRAIL_BLOCKED,
+                trace_id=run.trace_id,
+                resolved=resolved,
+                guardrail=output.event,
+            )
+        if run.outcome == OUTCOME_NO_INFORMATION and verdict.regulation_topic:
+            event = GuardEvent("regulation_general", REDIRECT, CONTENT, "regulation_not_in_kb")
+            return _general_turn(
+                general_fn, question, REGULATION, event, monitor, user_id=user_id, trace_id=run.trace_id, resolved=resolved
+            )
+
     offered: Optional[MemoryEvent] = None
     if store is not None and run.answer:
         try:

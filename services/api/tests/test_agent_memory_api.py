@@ -134,33 +134,33 @@ def test_rejected_cycle_leaves_memory_unchanged_but_audited(client, auth_headers
 
 def test_patient_data_is_refused_explicitly_and_logged_without_the_text(client, auth_headers, admin_headers, model, inventory_engine):
     """CONTEXT: "El paciente Johnson canceló su cita de mañana, apúntalo." debe
-    rechazarse explícitamente, explicando por qué, no ignorarse en silencio."""
+    rechazarse explícitamente, explicando por qué, no ignorarse en silencio.
+    Desde el Ticket #SEC-114 lo para el guardarraíl de entrada, antes de que
+    el mensaje llegue al modelo, y la auditoría de memoria lo sigue registrando."""
     johnson = "El paciente Johnson canceló su cita de mañana, apúntalo."
-    model.replies.append(reply.AgentReply(
-        answer="Entendido.",
-        memory_proposal=reply.MemoryProposalDraft(kind="clinic_operations", content="Johnson canceló su cita de mañana"),
-        user_requested_memory=True,
-    ))
 
     body = ask(client, auth_headers, johnson)
 
-    assert body["memory"]["offered"] == {"status": "blocked_phi", "proposal_id": None, "content": None}
-    assert "No puedo guardar esto en mi memoria" in body["answer"] and "HIPAA" in body["answer"]
+    assert body["guardrail"]["guard"] == "input_patient_phi" and body["outcome"] == "guardrail_blocked"
+    assert "No puedo tratar casos de pacientes concretos" in body["answer"] and "HIPAA" in body["answer"]
+    assert "Johnson" not in body["answer"]
+    assert body["memory"] == {"resolved": None, "offered": None}
+    assert model.generated_with == []  # el modelo nunca vio el mensaje
     [entry] = client.get("/agent/memory/audit", headers=admin_headers).json()
     assert entry["status"] == "blocked_phi" and entry["proposed_content"] is None
     assert "patient_name" in entry["phi_categories"]
+    assert entry["decision_note"].startswith("Mensaje con datos identificables")
     assert "Johnson" not in json.dumps(entry)
     # Nada pendiente: el siguiente mensaje no se clasifica contra nada.
-    model.replies.append(reply.AgentReply(answer="ok"))
     ask(client, auth_headers, "Gracias")
     assert model.classified == []
 
 
 def test_request_to_remember_phi_without_a_proposal_is_still_refused(client, auth_headers, model):
-    model.replies.append(reply.AgentReply(answer="Lo siento.", user_requested_memory=True))
     body = ask(client, auth_headers, "Recuerda que la Sra. García tiene diabetes")
-    assert body["memory"]["offered"]["status"] == "blocked_phi"
-    assert "información clínica" in body["answer"]
+    assert body["guardrail"]["guard"] == "input_patient_phi"
+    assert "García" not in body["answer"] and "diabetes" not in body["answer"]
+    assert model.generated_with == []
 
 
 def test_request_to_remember_something_not_memorable_is_explained(client, auth_headers, model):
@@ -241,7 +241,10 @@ def test_an_edit_that_adds_patient_data_is_blocked(client, auth_headers, model, 
     ask(client, auth_headers, MANCHESTER)
     model.decisions.append(decision("edit", edited_content="Manchester: el paciente Smith va primero al coordinador"))
 
-    body = ask(client, auth_headers, "Sí, y añade que el paciente Smith va primero")
+    # El mensaje no trae identificadores (pasa el guardarraíl de entrada); el
+    # PHI solo aparece en la edición que devuelve el clasificador: lo tiene que
+    # parar el validador de la memoria (segunda capa).
+    body = ask(client, auth_headers, "Sí, guárdalo con el detalle que te comenté antes")
 
     assert body["memory"]["resolved"]["status"] == "blocked_phi"
     assert rows(inventory_engine, AgentMemory) == []
@@ -295,14 +298,19 @@ def test_audit_and_revoke_are_admin_only(client, auth_headers, admin_headers, mo
 def test_patient_data_is_refused_even_when_the_model_proposes_nothing(client, auth_headers, admin_headers, model):
     """Regresión de la prueba real: con el ejemplo del CONTEXT, el modelo no
     propuso ni marcó `user_requested_memory` (y dijo "anoto la cancelación").
-    La validación del mensaje no puede depender de ese campo."""
+    La validación del mensaje no puede depender de ese campo.
+
+    Desde el Ticket #SEC-114 los mensajes con identificadores los para antes
+    el guardarraíl de entrada; aquí se usa contenido clínico sin identificar a
+    nadie, que la entrada deja pasar y la memoria no debe guardar."""
     model.replies.append(reply.AgentReply(answer="Recibido."))
 
-    body = ask(client, auth_headers, "El paciente Johnson canceló su cita de mañana, apúntalo.")
+    body = ask(client, auth_headers, "Apunta que los resultados de laboratorio llegan tarde los lunes.")
 
+    assert body["guardrail"] is None
     assert body["memory"]["offered"]["status"] == "blocked_phi"
     assert "no guardo en mi memoria nada de este mensaje" in body["answer"]
     [entry] = client.get("/agent/memory/audit", headers=admin_headers).json()
     assert entry["status"] == "blocked_phi" and entry["proposed_content"] is None
     assert entry["decision_note"].startswith("Mensaje con PHI excluido")
-    assert "Johnson" not in json.dumps(entry)
+    assert "laboratorio" not in json.dumps(entry)

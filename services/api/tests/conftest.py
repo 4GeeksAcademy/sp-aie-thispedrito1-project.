@@ -55,6 +55,28 @@ def clean_db():
     yield
 
 
+@pytest.fixture(autouse=True)
+def offline_agent_harness(monkeypatch):
+    """Harness del agente (Ticket #SEC-114) sin red y sin estado entre tests.
+
+    El modo general (small talk, "Gracias") llamaría al modelo real con la
+    clave del `.env`: aquí responde solo con la reconducción fija. El monitor
+    y las ventanas de brecha son singletons del proceso, como la caché."""
+    from services.agent.guardrails import general
+    from services.agent.guardrails.input_guard import BREACH_WINDOWS
+    from services.agent.guardrails.monitor import MONITOR
+    from services.agent.memory import conversation
+
+    monkeypatch.setattr(
+        conversation, "answer_general", lambda question, mode: general.GeneralAnswer(general.REDIRECTS[mode])
+    )
+    MONITOR.reset()
+    BREACH_WINDOWS.clear()
+    yield
+    MONITOR.reset()
+    BREACH_WINDOWS.clear()
+
+
 @pytest.fixture()
 def inventory_engine():
     """A throwaway in-memory SQLite database standing in for Supabase.

@@ -8,13 +8,17 @@ de la corrida; nunca devuelve chunks, puntuaciones ni el recorrido.
 decisión sobre la propuesta que estaba pendiente (`resolved`) y la propuesta
 nueva o su bloqueo (`offered`). `content` solo lleva textos ya validados sin
 PHI. `trace_id` es null cuando el mensaje solo resolvía una propuesta y no
-hizo falta ejecutar el grafo."""
+hizo falta ejecutar el grafo.
+
+`guardrail` (Ticket #SEC-114) dice qué guardarraíl bloqueó o redirigió el
+turno, con el tipo de fallo; null si ninguno intervino. Nunca incluye el
+fragmento que activó la regla, solo su nombre."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -36,11 +40,38 @@ class MemoryTurnOut(BaseModel):
     offered: Optional[MemoryEventOut] = None
 
 
+class GuardrailOut(BaseModel):
+    guard: str
+    action: str
+    failure_type: str
+    reason: str
+
+
 class AgentQueryResponse(BaseModel):
     answer: str
     trace_id: Optional[str] = None
     outcome: Optional[str] = None
     memory: MemoryTurnOut = MemoryTurnOut()
+    guardrail: Optional[GuardrailOut] = None
+
+
+class GuardrailCountOut(BaseModel):
+    guard: str
+    action: str
+    failure_type: str
+    reason: str
+    count: int
+
+
+class GuardrailSummaryOut(BaseModel):
+    """Activaciones de los guardarraíles desde `since` (arranque de la API)."""
+
+    since: datetime
+    total: int
+    by_guard: Dict[str, int]
+    by_failure_type: Dict[str, int]
+    by_action: Dict[str, int]
+    detail: List[GuardrailCountOut]
 
 
 class AgentMemoryOut(BaseModel):
