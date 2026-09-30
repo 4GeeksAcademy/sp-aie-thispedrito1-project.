@@ -125,9 +125,11 @@ def test_reply_with_an_unknown_memory_kind_drops_only_the_proposal():
 
 def test_reply_prompt_reuses_the_rag_prompt_and_adds_the_memory_criteria():
     from data.pipelines import rag
+    from services.agent.guardrails.prompt import INSTRUCTION_HIERARCHY
 
     system = build_reply_messages("¿Horario?", [])[0]["content"]
-    assert system.startswith(rag.ASSISTANT_ROLE)
+    # Desde el Ticket #SEC-114 el prompt seguro va primero (jerarquía de instrucciones).
+    assert system.startswith(INSTRUCTION_HIERARCHY)
     assert rag.GROUNDING_RULES in system and rag.BUSINESS_RULES in system
     assert "NO propongas memoria" in system and "memory_proposal" in system
 

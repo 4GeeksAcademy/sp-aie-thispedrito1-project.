@@ -5,9 +5,11 @@ ahora le pide una salida estructurada (JSON) con la respuesta y, en el mismo
 objeto, un campo `memory_proposal` (null casi siempre). No hay segunda
 llamada, ni agente evaluador aparte: es el mismo agente con un campo más.
 
-El prompt reutiliza el de `data/pipelines/rag.py` (rol, reglas de veracidad y
-de negocio) sin copiarlo, y añade MEMORY_RULES: el criterio explícito, sacado
-del CONTEXT de HealthCore, de qué merece proponerse y qué no.
+El prompt es el system prompt seguro del agente (`guardrails/prompt.py`,
+Ticket #SEC-114: jerarquía de instrucciones, dominio, reglas de veracidad y de
+negocio de `data/pipelines/rag.py` sin copiarlas) más MEMORY_RULES: el
+criterio explícito, sacado del CONTEXT de HealthCore, de qué merece
+proponerse y qué no. El contexto llega aislado en bloques `<fuente_externa>`.
 
 Falla cerrado para la memoria: si la salida no es un JSON válido, el texto se
 usa como respuesta y NO hay propuesta. Una propuesta mal formada (tipo fuera
@@ -23,6 +25,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from services.agent.guardrails.monitor import MONITOR, SANITIZE, STRUCTURAL, GuardEvent
+from services.agent.guardrails.prompt import build_agent_messages
 from services.agent.memory.models import MEMORY_KINDS
 
 logger = logging.getLogger(__name__)
@@ -105,6 +109,7 @@ def parse_reply(raw: str) -> AgentReply:
         data: Dict[str, Any] = json.loads(_strip_fences(raw))
     except ValueError:
         logger.warning("Agent reply was not JSON; answering without memory proposal")
+        MONITOR.record(GuardEvent("reply_structure", SANITIZE, STRUCTURAL, "reply_not_json"))
         return AgentReply(answer=raw)
     answer = str(data.get("answer") or "").strip()
     if not answer:
@@ -115,6 +120,7 @@ def parse_reply(raw: str) -> AgentReply:
             proposal = MemoryProposalDraft.model_validate(data["memory_proposal"])
         except ValidationError:
             logger.warning("Agent reply carried an invalid memory proposal; discarded")
+            MONITOR.record(GuardEvent("reply_structure", SANITIZE, STRUCTURAL, "invalid_memory_proposal"))
     return AgentReply(
         answer=answer,
         memory_proposal=proposal,
@@ -123,11 +129,7 @@ def parse_reply(raw: str) -> AgentReply:
 
 
 def build_reply_messages(question: str, context: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
-    from data.pipelines import rag
-
-    messages = rag.build_messages(question, context)
-    messages[0] = {"role": "system", "content": messages[0]["content"] + "\n\n" + MEMORY_RULES}
-    return messages
+    return build_agent_messages(question, context, MEMORY_RULES)
 
 
 def generate_reply(

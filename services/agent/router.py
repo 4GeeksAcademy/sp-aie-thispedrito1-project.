@@ -11,6 +11,10 @@ opcional: sin base de datos el agente responde igual, solo que sin memoria.
 `GET /agent/memory` muestra lo que el agente recuerda para quien pregunta;
 `GET /agent/memory/audit` y `DELETE /agent/memory/{id}` son solo de admin.
 
+Harness (Ticket #SEC-114): los guardarraíles actúan dentro de `handle_turn`;
+aquí solo se expone qué intervino (`guardrail` en la respuesta) y el resumen
+de activaciones de la sesión (`GET /agent/guardrails/summary`, solo admin).
+
 El grafo se compila al importar este módulo, es decir, al arrancar la API:
 un error estructural impide arrancar en vez de aparecer en una petición.
 """
@@ -28,10 +32,17 @@ from data.process.rag import RagConfigError
 from database import get_inventory_db, get_inventory_db_optional
 from security import get_current_user, require_admin
 from services.agent.graph import OUTCOME_INVALID_QUESTION, compile_agent_graph
+from services.agent.guardrails.monitor import MONITOR, GuardEvent
 from services.agent.memory.conversation import MemoryEvent, handle_turn
 from services.agent.memory.decision import classify_decision
 from services.agent.memory.store import MemoryStore
-from services.agent.schemas import AgentMemoryAuditOut, AgentMemoryOut, AgentQueryRequest, AgentQueryResponse
+from services.agent.schemas import (
+    AgentMemoryAuditOut,
+    AgentMemoryOut,
+    AgentQueryRequest,
+    AgentQueryResponse,
+    GuardrailSummaryOut,
+)
 from services.agent.tracing import AgentRunError
 
 logger = logging.getLogger(__name__)
@@ -55,6 +66,12 @@ def _event(event: Optional[MemoryEvent]) -> Optional[Dict[str, Any]]:
     if event is None:
         return None
     return {"status": event.status, "proposal_id": event.proposal_id, "content": event.content}
+
+
+def _guardrail(event: Optional[GuardEvent]) -> Optional[Dict[str, Any]]:
+    if event is None:
+        return None
+    return {"guard": event.guard, "action": event.action, "failure_type": event.failure_type, "reason": event.reason}
 
 
 @router.post("/query", response_model=AgentQueryResponse)
@@ -89,7 +106,16 @@ def query_agent(
         "trace_id": result.trace_id,
         "outcome": result.outcome,
         "memory": {"resolved": _event(result.resolved), "offered": _event(result.offered)},
+        "guardrail": _guardrail(result.guardrail),
     }
+
+
+@router.get("/guardrails/summary", response_model=GuardrailSummaryOut)
+def guardrails_summary(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    """Cuántas veces se activó cada guardarraíl desde que arrancó la API
+    (la "sesión de pruebas"), por guardia, tipo de fallo y acción. Solo admin."""
+    require_admin(user)
+    return MONITOR.summary()
 
 
 @router.get("/memory", response_model=List[AgentMemoryOut])

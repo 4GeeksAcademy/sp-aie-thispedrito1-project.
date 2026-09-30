@@ -65,12 +65,15 @@ _RULES: Tuple[Tuple[str, Pattern[str]], ...] = (
     ("nhs_number", re.compile(r"\b\d{3}[\s-]?\d{3}[\s-]?\d{4}\b")),
     # SSN (EE. UU.)
     ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
-    # Número de seguro, póliza o afiliado seguido de un código
+    # Número de seguro, póliza o afiliado seguido de un código. El marcador va
+    # entre límites de palabra y el código lleva al menos un dígito: sin eso,
+    # "insurance-coverage, sección Cobertura" coincidía (la "n" final de
+    # "sección" + una palabra cualquiera) y bloqueaba respuestas legítimas.
     (
         "insurance_number",
         re.compile(
             r"\b(?:p[óo]liza|seguro|afiliad[oa]|member|policy|insurance|subscriber)\b[^.\n]{0,20}?"
-            r"(?:n[º°o.]*|n[úu]mero|number|id|#|:)\s*[A-Z0-9][A-Z0-9-]{4,}",
+            r"(?:\bn[º°o.]*|\bn[úu]mero|\bnumber|\bid|#|:)\s*(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,}",
             re.IGNORECASE,
         ),
     ),
@@ -141,6 +144,12 @@ _PLAIN_REASONS = {
     "phone": "un número de teléfono",
     "uk_postcode": "un código postal",
 }
+
+
+def plain_reasons(categories: Tuple[str, ...]) -> str:
+    """Categorías → motivo legible, para los mensajes al usuario. Las que no
+    son de este módulo (p. ej. la sede, del guardarraíl de entrada) se omiten."""
+    return ", ".join(_PLAIN_REASONS[category] for category in categories if category in _PLAIN_REASONS)
 
 
 def exclusion_notice(verdict: PhiVerdict) -> str:

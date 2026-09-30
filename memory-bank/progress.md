@@ -131,6 +131,13 @@
   - **Tests:** raiz 49 nuevos (`test_agent_memory.py`), API 16 nuevos (`test_agent_memory_api.py`); se actualizaron los que fijaban el contrato anterior (nodos, tools del planificador, `generate_reply`, bloque `memory`). Totales: API 240, raiz 296, sin fallos. Sin cambios de frontend. No hay linter de Python configurado.
   - **Evidencia real:** 11 turnos con dos coordinadores (ciclo aprobado reflejado en el otro coordinador, ciclo rechazado sin cambios, PHI bloqueada, sin propuesta, cambio de tema) en `docs/agent/memory-evidence/`.
 
+- Harness y guardrails del agente (rama `feature/agent-guardrails` sobre `main`, 2026-09-30, Ticket #SEC-114, Hito 8 Parte 2). Diseno y evidencia en `docs/agent/agent-guardrails.md`.
+  - **Que hace:** envuelve el mismo agente de `/agent/query` con 6 capas: guardia de entrada (jailbreak, caso de paciente identificable, extraccion de brecha activa, uso personal → rechazo fijo; small talk → respuesta breve + reconduccion), system prompt seguro con el dominio del CONTEXT, aislamiento de RAG/tools/notas de memoria, guardia de salida, modo general con reconduccion añadida por el codigo, y monitor (log por activacion con tipo de fallo + resumen admin).
+  - **Decisiones del usuario:** mismo agente con el dominio ampliado sin inventar documentos (el CONTEXT habla del asistente de compliance de Claire Whitfield; la KB sigue siendo la del Hito 7); ventana de brecha por usuario en memoria del proceso (15 min); resumen en memoria + endpoint admin, sin tabla nueva. Delegada ("hazlo tu"): la regla `is_identifiable_patient_case` (identificador directo, o paciente concreto + edad/clinico, o dos cuasi-identificadores juntos).
+  - **Encontrado al implementar:** `phi_guard` marcaba como numero de poliza "seccion Cobertura" en 2 respuestas reales grabadas (corregido: limite de palabra + digito obligatorio); el canario no se detectaba sobre el texto normalizado porque el leetspeak convierte `SEC114`.
+  - **Tests:** raiz 408 (nuevo `test_agent_guardrails.py`), API 246 (nuevo `test_agent_guardrails_api.py`). Se adaptaron 4 tests de memoria: los mensajes con nombre de paciente los para ahora la entrada (con auditoria intacta) y los de la segunda capa usan mensajes que la entrada deja pasar. `conftest.py` de la API deja el modo general sin red. No hay linter de Python configurado.
+  - **Residual:** `POST /knowledge/query` (Hito 7) no pasa por el harness; solo lo usa la pantalla "Asistente".
+
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
 - Mejora de robustez de tipos en frontend.
