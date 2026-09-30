@@ -1,25 +1,28 @@
-"""Tool `lookup_incident`: estado en vivo de las incidencias del gestor de incidencias.
+"""Tool `lookup_incident`: estado en vivo de las incidencias, VÍA EL SERVIDOR MCP.
 
-Lee del gestor que ya existe (`services/api/incident_repository.py`, el
-mismo repositorio que sirve GET /api/incidents y GET /api/incidents/{id}) en
-el propio proceso: el agente vive en la misma API, así que no hay token de
-servicio que pasar y no hay riesgo de que la API se llame a sí misma. Nunca
-datos simulados.
+Migrada en el ticket del servidor MCP (rama `feature/mcp-oauth-tools`): el
+agente ya no importa `IncidentRepository` ni toca la TinyDB. Llama a las
+tools `incidents_get` / `incidents_search` del servidor MCP de HealthCore
+(`mcps/healthcore`) como cliente autenticado con OAuth (ver
+`services/agent/mcp_client.py`), y el servidor a su vez al Incidents Manager
+por HTTP. Es el ÚNICO camino del agente hacia las incidencias: la versión en
+proceso (`query_incidents` + `_default_repository`) se eliminó, no se dejó
+desactivada, para que no existan dos rutas.
 
-Solo lectura: únicamente `get_by_id()` y `list()`. Ni `create()` ni
-`update_status()` (test_agent_tools.py lo fija con un repositorio que falla
-ante cualquier otro método).
+Lo que NO cambió, a propósito, para no romper el enrutamiento RAG/tools ni
+los traces grabados: el nombre de la tool y del nodo (`lookup_incident`), el
+contrato de entrada (`IncidentLookupInput`, que valida el planificador) y el
+de salida (`IncidentLookupOutput`, que lee `evidence.py`).
 
-Minimización de datos (HIPAA / UK GDPR): la salida NO incluye `title` ni
-`description`. Son texto libre que puede contener datos de pacientes, mismo
-criterio que `incident_created` en telemetría; al modelo y al trace solo
-llegan estado, categoría, origen, sede y fechas.
+Minimización de datos (HIPAA / UK GDPR): el servidor MCP ya no devuelve
+`title` ni `description`, así que al modelo y al trace solo llegan estado,
+categoría, origen, sede y fechas.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Callable, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator, model_validator
 
@@ -32,8 +35,13 @@ from packages.shared.incidents_validation import (
 from services.agent.tools.base import ToolNotFound, ToolResult, run_tool
 
 TOOL_NAME = "lookup_incident"
-TIMEOUT_S = 3.0
+# Antes 3 s (lectura en proceso). Ahora hay red: token de Logto (cacheado),
+# tools/list + tools/call contra el MCP y la llamada del MCP a la API.
+TIMEOUT_S = 5.0
 MAX_RESULTS = 10
+VIA = "mcp"
+MCP_GET_TOOL = "incidents_get"
+MCP_SEARCH_TOOL = "incidents_search"
 FILTER_FIELDS = ("status", "category", "branch", "origin")
 ALLOWED_VALUES = {
     "status": INCIDENT_STATUSES,
@@ -43,6 +51,8 @@ ALLOWED_VALUES = {
 }
 # Para que el modelo redacte en español sin inventar la traducción del estado.
 STATUS_LABELS_ES = {"open": "abierta", "in_progress": "en curso", "resolved": "resuelta", "discarded": "descartada"}
+
+McpCall = Callable[[str, Dict[str, Any]], Dict[str, Any]]
 
 
 class IncidentLookupInput(BaseModel):
@@ -74,7 +84,7 @@ class IncidentLookupInput(BaseModel):
 
 
 class IncidentRecord(BaseModel):
-    """Los campos operativos de IncidentRead, sin texto libre."""
+    """Los campos operativos de una incidencia, sin texto libre."""
 
     id: int
     status: str
@@ -92,13 +102,13 @@ class IncidentLookupOutput(BaseModel):
     incidents: List[IncidentRecord]
 
 
-def _default_repository() -> Any:
-    from incident_repository import IncidentRepository
+def _default_mcp_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    from services.agent import mcp_client
 
-    return IncidentRepository()
+    return mcp_client.call_tool(name, args)
 
 
-def _to_record(entity: dict) -> IncidentRecord:
+def _to_record(entity: Dict[str, Any]) -> IncidentRecord:
     return IncidentRecord(
         id=entity["id"],
         status=entity["status"],
@@ -111,28 +121,37 @@ def _to_record(entity: dict) -> IncidentRecord:
     )
 
 
-def query_incidents(payload: IncidentLookupInput, repository: Any) -> IncidentLookupOutput:
-    """La consulta en sí, sin timeout: solo métodos de lectura del repositorio."""
+def query_incidents_via_mcp(payload: IncidentLookupInput, mcp_call: McpCall) -> IncidentLookupOutput:
+    """Traduce la consulta del planificador a la tool MCP que corresponde."""
+    from services.agent.mcp_client import McpToolCallError
+
     if payload.ticket_id is not None:
-        entity = repository.get_by_id(payload.ticket_id)
-        if entity is None:
-            raise ToolNotFound(f"incident {payload.ticket_id}")
+        try:
+            entity = mcp_call(MCP_GET_TOOL, {"incident_id": payload.ticket_id})
+        except McpToolCallError as exc:
+            if exc.code == "not_found":
+                raise ToolNotFound(f"incident {payload.ticket_id}") from exc
+            raise
         return IncidentLookupOutput(mode="by_id", total=1, incidents=[_to_record(entity)])
 
-    matches = repository.list(**{field: getattr(payload, field) for field in FILTER_FIELDS})
+    filters = {field: getattr(payload, field) for field in FILTER_FIELDS if getattr(payload, field) is not None}
+    found = mcp_call(MCP_SEARCH_TOOL, {**filters, "limit": MAX_RESULTS})
     return IncidentLookupOutput(
         mode="search",
-        total=len(matches),
-        incidents=[_to_record(entity) for entity in matches[:MAX_RESULTS]],
+        total=found["total"],
+        incidents=[_to_record(entity) for entity in found["incidents"][:MAX_RESULTS]],
     )
 
 
 def lookup_incident(
     payload: IncidentLookupInput,
     *,
-    repository_factory: Callable[[], Any] = _default_repository,
+    mcp_call: Optional[McpCall] = None,
     timeout_s: float = TIMEOUT_S,
 ) -> ToolResult:
-    """Punto de entrada de la tool: nunca lanza, siempre devuelve un ToolResult."""
+    """Punto de entrada de la tool: nunca lanza, siempre devuelve un ToolResult.
+    Un error del servidor MCP (sin permiso, caído, token rechazado) acaba en
+    `unavailable` y el grafo responde con el fallback honesto."""
+    call = mcp_call or _default_mcp_call
     args = payload.model_dump(exclude_none=True)
-    return run_tool(TOOL_NAME, args, lambda: query_incidents(payload, repository_factory()), timeout_s=timeout_s)
+    return run_tool(TOOL_NAME, args, lambda: query_incidents_via_mcp(payload, call), timeout_s=timeout_s, via=VIA)

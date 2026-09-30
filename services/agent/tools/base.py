@@ -44,6 +44,9 @@ class ToolResult(BaseModel):
     args: Dict[str, Any]
     data: Optional[Dict[str, Any]] = None
     error_type: Optional[str] = None
+    # Por dónde se obtuvo el dato: "mcp" = a través del servidor MCP de
+    # HealthCore; None = en proceso (inventario). Queda en el trace.
+    via: Optional[str] = None
     timeout_s: float
     duration_ms: float
 
@@ -54,6 +57,7 @@ def run_tool(
     call: Callable[[], BaseModel],
     *,
     timeout_s: float,
+    via: Optional[str] = None,
 ) -> ToolResult:
     """Ejecuta `call` con timeout y convierte cualquier desenlace en ToolResult."""
     started = time.perf_counter()
@@ -65,6 +69,7 @@ def run_tool(
             args=args,
             data=data.model_dump(mode="json") if data is not None else None,
             error_type=type(error).__name__ if error is not None else None,
+            via=via,
             timeout_s=timeout_s,
             duration_ms=round((time.perf_counter() - started) * 1000, 2),
         )

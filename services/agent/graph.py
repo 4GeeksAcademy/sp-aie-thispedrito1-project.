@@ -17,14 +17,21 @@ Contrato de nodos: `retrieve` llama SOLO a `rag.retrieve()`, `generate` SOLO
 a `rag.generate_answer()` (con los chunks del RAG y/o los datos en vivo como
 contexto), y cada tool solo a su gestor. Ningún nodo llama a `rag.query()`.
 
+Desde el ticket del servidor MCP, `lookup_incident` es el nodo CLIENTE MCP:
+su tool (`tools/incidents.py`) ya no lee el Incidents Manager en proceso,
+sino que invoca `incidents_get` / `incidents_search` del servidor
+`mcps/healthcore` con `langchain-mcp-adapters` y un token OAuth de solo
+lectura. Mismo nombre de nodo y mismos contratos: el enrutamiento no cambia.
+
 El grafo se compila (y se valida su estructura) antes de cualquier ejecución:
 `compile_agent_graph()` falla con `AgentGraphError` si hay un nodo sin
 conexión o que no llega a END, cosas que `StateGraph.compile()` de LangGraph
 0.6 deja pasar (comprobado).
 
 Sin `from __future__ import annotations`: LangGraph resuelve las anotaciones
-de `AgentState` en tiempo de ejecución y en Python 3.9 conviene no convertirlas
-en cadenas (mismo criterio que `data/pipelines/pipeline.py` con Prefect).
+de `AgentState` en tiempo de ejecución y conviene no convertirlas en cadenas
+(mismo criterio que `data/pipelines/pipeline.py` con Prefect; se escribió
+para Python 3.9, el venv es 3.12 desde el ticket del servidor MCP).
 """
 
 import logging

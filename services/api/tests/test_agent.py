@@ -104,7 +104,12 @@ def test_agent_misconfiguration_is_a_clean_503(client: TestClient, auth_headers,
     assert response.json() == {"detail": "Support agent is not configured."}
 
 
-def test_agent_reads_the_live_incident_manager(client: TestClient, auth_headers, monkeypatch, trace_dir) -> None:
+def test_agent_reads_the_live_incident_manager(client: TestClient, auth_headers, service_account, monkeypatch, trace_dir) -> None:
+    """Agente → servidor MCP (en memoria, con OAuth) → Incidents Manager real."""
+    from services.agent.tools import incidents as incident_tool
+    from mcp_harness import agent_mcp_call, make_token
+
+    monkeypatch.setattr(incident_tool, "_default_mcp_call", agent_mcp_call(make_token(["incidents:read"])))
     created = client.post(
         "/api/incidents",
         json={
@@ -133,9 +138,15 @@ def test_agent_reads_the_live_incident_manager(client: TestClient, auth_headers,
     assert "Texto libre" not in evidence and "Cobro duplicado" not in evidence
     trace = json.loads((trace_dir / f"{response.json()['trace_id']}.json").read_text(encoding="utf-8"))
     assert trace["sources_used"] == ["incidents"]
+    incident_step = next(step for step in trace["steps"] if step["node"] == "lookup_incident")
+    assert [r["via"] for r in incident_step["output"]["tool_results"]] == ["mcp"]
 
 
-def test_agent_unknown_ticket_is_an_honest_answer_not_an_error(client: TestClient, auth_headers, monkeypatch) -> None:
+def test_agent_unknown_ticket_is_an_honest_answer_not_an_error(client: TestClient, auth_headers, service_account, monkeypatch) -> None:
+    from mcp_harness import agent_mcp_call, make_token
+    from services.agent.tools import incidents as incident_tool
+
+    monkeypatch.setattr(incident_tool, "_default_mcp_call", agent_mcp_call(make_token(["incidents:read"])))
     monkeypatch.setattr(rag, "generate_answer", lambda q, c: pytest.fail("no debe generar sin el dato"))
     use_plan(monkeypatch, PlannedCall(source="incidents", args={"ticket_id": 99999}))
 
