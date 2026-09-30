@@ -4,6 +4,13 @@ Solo HTTP: autenticación, validación y códigos de estado. No decide nada del
 flujo (eso son las aristas del grafo) ni recupera ni genera (eso es
 data/pipelines/rag.py). Convive con POST /knowledge/query, que no cambia.
 
+Memoria (Ticket #MEM-092): cada consulta pasa por
+`memory.conversation.handle_turn`, que resuelve primero una propuesta de
+memoria pendiente y después ejecuta el grafo. La sesión de Supabase es la
+opcional: sin base de datos el agente responde igual, solo que sin memoria.
+`GET /agent/memory` muestra lo que el agente recuerda para quien pregunta;
+`GET /agent/memory/audit` y `DELETE /agent/memory/{id}` son solo de admin.
+
 El grafo se compila al importar este módulo, es decir, al arrancar la API:
 un error estructural impide arrancar en vez de aparecer en una petición.
 """
@@ -11,15 +18,21 @@ un error estructural impide arrancar en vez de aparecer en una petición.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+import uuid
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlmodel import Session
 
 from data.process.rag import RagConfigError
-from security import get_current_user
+from database import get_inventory_db, get_inventory_db_optional
+from security import get_current_user, require_admin
 from services.agent.graph import OUTCOME_INVALID_QUESTION, compile_agent_graph
-from services.agent.schemas import AgentQueryRequest, AgentQueryResponse
-from services.agent.tracing import AgentRunError, run_agent
+from services.agent.memory.conversation import MemoryEvent, handle_turn
+from services.agent.memory.decision import classify_decision
+from services.agent.memory.store import MemoryStore
+from services.agent.schemas import AgentMemoryAuditOut, AgentMemoryOut, AgentQueryRequest, AgentQueryResponse
+from services.agent.tracing import AgentRunError
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +46,28 @@ def get_agent() -> Any:
     return _AGENT
 
 
+def get_decision_classifier() -> Any:
+    """Dependencia sustituible en tests por un clasificador determinista."""
+    return classify_decision
+
+
+def _event(event: Optional[MemoryEvent]) -> Optional[Dict[str, Any]]:
+    if event is None:
+        return None
+    return {"status": event.status, "proposal_id": event.proposal_id, "content": event.content}
+
+
 @router.post("/query", response_model=AgentQueryResponse)
-def query_agent(payload: AgentQueryRequest, agent: Any = Depends(get_agent)) -> Dict[str, Any]:
+def query_agent(
+    payload: AgentQueryRequest,
+    agent: Any = Depends(get_agent),
+    user: Dict[str, Any] = Depends(get_current_user),
+    session: Optional[Session] = Depends(get_inventory_db_optional),
+    classify_fn: Any = Depends(get_decision_classifier),
+) -> Dict[str, Any]:
+    store = MemoryStore(session) if session is not None else None
     try:
-        result = run_agent(agent, payload.question)
+        result = handle_turn(agent, payload.question, user_id=str(user["id"]), store=store, classify_fn=classify_fn)
     except AgentRunError as exc:
         if isinstance(exc.cause, RagConfigError):
             logger.error("Agent misconfigured at node %s: %s", exc.node, exc.cause)
@@ -53,4 +84,39 @@ def query_agent(payload: AgentQueryRequest, agent: Any = Depends(get_agent)) -> 
     # red del grafo por si otro cliente lo invoca sin pasar por el esquema.
     if result.outcome == OUTCOME_INVALID_QUESTION or not result.answer:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question must not be blank.")
-    return {"answer": result.answer, "trace_id": result.trace_id, "outcome": result.outcome}
+    return {
+        "answer": result.answer,
+        "trace_id": result.trace_id,
+        "outcome": result.outcome,
+        "memory": {"resolved": _event(result.resolved), "offered": _event(result.offered)},
+    }
+
+
+@router.get("/memory", response_model=List[AgentMemoryOut])
+def list_my_memory(
+    user: Dict[str, Any] = Depends(get_current_user), session: Session = Depends(get_inventory_db)
+) -> List[Any]:
+    """Lo que el agente recuerda para quien pregunta (hechos compartidos + sus preferencias)."""
+    return MemoryStore(session).recall(str(user["id"]))
+
+
+@router.get("/memory/audit", response_model=List[AgentMemoryAuditOut])
+def memory_audit(
+    user: Dict[str, Any] = Depends(get_current_user), session: Session = Depends(get_inventory_db)
+) -> List[Any]:
+    """Registro de auditoría: toda propuesta y su decisión, aprobada o no."""
+    require_admin(user)
+    return MemoryStore(session).audit()
+
+
+@router.delete("/memory/{memory_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def revoke_memory(
+    memory_id: uuid.UUID,
+    user: Dict[str, Any] = Depends(get_current_user),
+    session: Session = Depends(get_inventory_db),
+) -> Response:
+    """Retira un recuerdo (queda como `revoked`, no se borra). Solo admin."""
+    require_admin(user)
+    if MemoryStore(session).revoke(memory_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -17,9 +17,15 @@ evidencia del PR); tests/pipelines/test_agent_evals.py los evalúa después sin
 volver a llamar a nada. Hay que volver a grabar si cambian los casos, los
 documentos, el prompt, el umbral, las tools o el grafo.
 
-Casos con `"outage": "incidents"`: el gestor de incidencias se sustituye por
-uno que no responde nunca (duerme más que el timeout), para ejercitar el
-timeout real de 3 s de la tool y la ruta de fallback. No cambia ningún dato.
+Desde el ticket del servidor MCP, la tool de incidencias va por MCP: hacen
+falta la API (puerto 8000, con el mismo SUPPLIERS_DB_PATH, la cuenta de
+servicio de scripts/create_mcp_service_account.py) y el servidor MCP
+(`python -m mcps.healthcore`, puerto 8765) con las variables MCP_* del .env.
+
+Casos con `"outage": "incidents"`: la llamada MCP se sustituye por una que no
+responde nunca (duerme más que el timeout), para ejercitar el timeout real de
+la tool (TIMEOUT_S) y la ruta de fallback. No cambia ningún dato. (Antes
+sustituía el repositorio en proceso, que ya no existe desde la migración a MCP.)
 
 Las preguntas de los casos no contienen datos de pacientes; aun así el trace
 solo guarda su huella, igual que en producción.
@@ -46,14 +52,14 @@ CASES_PATH = ROOT_DIR / "data" / "eval" / "agent-eval-cases.json"
 OUTAGE_SLEEP_S = incidents.TIMEOUT_S + 5
 
 
-def _unresponsive_repository():
+def _unresponsive_mcp_call(name, args):
     time.sleep(OUTAGE_SLEEP_S)
     raise ConnectionError("incident manager did not answer")
 
 
 def _agent_with_incident_outage():
     nodes = AgentNodes(
-        incident_tool_fn=lambda payload: incidents.lookup_incident(payload, repository_factory=_unresponsive_repository)
+        incident_tool_fn=lambda payload: incidents.lookup_incident(payload, mcp_call=_unresponsive_mcp_call)
     )
     return compile_agent_graph(build_agent_graph(nodes))
 
@@ -77,6 +83,11 @@ def main(selected: list) -> int:
     cases = [case for case in suite["cases"] if not selected or case["id"] in selected]
     if not _check_incident_manager_has_data():
         return 1
+
+    # Calentamiento: la primera llamada MCP de un proceso pide el token a Logto,
+    # abre la sesión y hace el login de la cuenta de servicio (>5 s, el timeout
+    # de la tool). Los evals miden el funcionamiento normal, no el arranque en frío.
+    incidents.lookup_incident(incidents.IncidentLookupInput(ticket_id=1), timeout_s=30)
 
     agent = compile_agent_graph()
     outage_agent = _agent_with_incident_outage()

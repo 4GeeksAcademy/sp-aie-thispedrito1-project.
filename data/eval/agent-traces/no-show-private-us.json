@@ -2,9 +2,9 @@
   "trace_id": "eval-no-show-private-us",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:48:19.548047+00:00",
-  "finished_at": "2026-09-24T16:49:25.974332+00:00",
-  "duration_ms": 66428.31,
+  "started_at": "2026-09-28T19:40:19.608956+00:00",
+  "finished_at": "2026-09-28T19:40:30.979337+00:00",
+  "duration_ms": 11370.56,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 0.99,
+      "duration_ms": 0.96,
       "output": {
         "question": {
           "sha256": "dfc9fd75c9cb4fc4b2a23ff790df878290867c10ab4648de421da49e551d8080",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 3051.97,
+      "duration_ms": 5444.42,
       "output": {
         "plan": [
           {
@@ -46,7 +49,7 @@
     {
       "index": 3,
       "node": "retrieve",
-      "duration_ms": 61723.94,
+      "duration_ms": 763.53,
       "output": {
         "context": [
           {
@@ -76,10 +79,12 @@
     {
       "index": 4,
       "node": "generate",
-      "duration_ms": 1650.26,
+      "duration_ms": 5158.7,
       "output": {
-        "answer": "Al paciente de pago privado en Texas se le cobra un cargo de 50 USD por no presentarse a la cita.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
-        "outcome": "answered"
+        "answer": "Para un paciente de pago privado en Texas que no se presenta a su cita, se le cobra un cargo de 50 USD.",
+        "outcome": "answered",
+        "memory_proposal": null,
+        "user_requested_memory": false
       }
     }
   ],
@@ -101,7 +106,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b837b-f2fb-660e-bfff-7e812157b048",
+      "checkpoint_id": "1f1bb747-0130-67fc-bfff-64c3ac060785",
       "step": -1,
       "source": "input",
       "next": [
@@ -109,7 +114,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837b-f2fc-6130-8000-7ba1706ca9dc",
+      "checkpoint_id": "1f1bb747-0131-61ac-8000-fbc411cc9e0c",
       "step": 0,
       "source": "loop",
       "next": [
@@ -117,7 +122,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837b-f2fd-6008-8001-0e9583172b91",
+      "checkpoint_id": "1f1bb747-0131-6f44-8001-3a9edcd22dd0",
       "step": 1,
       "source": "loop",
       "next": [
@@ -125,7 +130,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837c-1016-6f5e-8002-49555270797c",
+      "checkpoint_id": "1f1bb747-351c-6e6c-8002-811e64308cb8",
       "step": 2,
       "source": "loop",
       "next": [
@@ -133,7 +138,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-5cb4-6b52-8003-f7ca9a9fa41f",
+      "checkpoint_id": "1f1bb747-3c64-64cc-8003-13f79b5cbef6",
       "step": 3,
       "source": "loop",
       "next": [
@@ -141,13 +146,17 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b837e-6c74-6a24-8004-61f480d61136",
+      "checkpoint_id": "1f1bb747-6d95-6eec-8004-88ff8b236fdc",
       "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "Al paciente de pago privado en Texas se le cobra un cargo de 50 USD por no presentarse a la cita.\n\nFuente: appointment-policy, sección “Política de cancelación”.",
+  "answer": "Para un paciente de pago privado en Texas que no se presenta a su cita, se le cobra un cargo de 50 USD.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

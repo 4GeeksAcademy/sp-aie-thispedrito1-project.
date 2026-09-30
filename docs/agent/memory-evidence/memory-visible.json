@@ -1,0 +1,20 @@
+{
+  "ana": [
+    {
+      "id": "8fce999b-b1c9-4004-88e9-31cc8b7bb3f1",
+      "kind": "clinic_operations",
+      "clinic": "Manchester",
+      "content": "En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado.",
+      "last_confirmed_at": "2026-09-28T19:00:05.038675Z"
+    }
+  ],
+  "luis": [
+    {
+      "id": "8fce999b-b1c9-4004-88e9-31cc8b7bb3f1",
+      "kind": "clinic_operations",
+      "clinic": "Manchester",
+      "content": "En la clínica de Manchester, el proceso de referidos internos pasa primero por el coordinador antes que por el especialista, cambio introducido el trimestre pasado.",
+      "last_confirmed_at": "2026-09-28T19:00:05.038675Z"
+    }
+  ]
+}

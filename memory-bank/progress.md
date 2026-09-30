@@ -123,6 +123,14 @@
   - **Agente real:** 4 preguntas por `/agent/query` con el modelo (tras regenerar la `LLM_API_KEY` caducada), todas `via=mcp`; "cierra el ticket 22" no modifica nada (solo `incidents:read`).
   - **MCP Playground desde Codespaces hecho:** las 5 tools y el rechazo `read_only_resource`, con capturas en `docs/mcp/playground/`. Hallazgos corregidos: `mcpauth` sin fijar a 0.2.0b1 en requirements, CORS/Origin para clientes en navegador (`MCP_ALLOWED_ORIGINS`) y filtros vacios `""` como "sin filtro". Codespace detenido.
 
+- Memoria y auto-mejora del agente (rama `feature/agent-memory` sobre `feature/mcp-oauth-tools`, 2026-09-28, Ticket #MEM-092, Hito 8 Parte 1). Diseno y evidencia en `docs/agent/agent-memory.md`.
+  - **Que hace:** el agente de `/agent/query` propone en su propia respuesta recordar hechos operativos (cambios por sede, patrones de incidentes, preferencias del staff), en la misma llamada al modelo que redacta la respuesta (`memory_proposal`). El siguiente mensaje se clasifica contra la propuesta pendiente (aprobar/rechazar/editar/sin relacion/ambiguo, con confianza); ante la duda se descarta. Solo lo aprobado se escribe, consolidado (dedup, sustitucion, topes, caducidad 180 dias). Todo queda en `agent_memory_proposals` (auditoria) con huellas SHA-256 de los mensajes, nunca su texto.
+  - **Decisiones del usuario:** Supabase/Postgres como almacen (no Redis ni Qdrant); evidencia solo por API + documento, sin pantalla nueva; evidencia grabada con `glm-5.3-flash` por variable de entorno; despues, `GENERATION_MODEL` del `.env` y de los `.env.example` pasa a `deepseek-v4-flash` y se regraban los 12 traces de evals del agente (86/86; habia que arreglar `record_agent_traces.py`, roto desde el ticket MCP, y subir `PLANNER_TIMEOUT_S` a 20 s). Delegada ("hazlo tu"): la politica `resolve_decision` (un `reject` dudoso se registra como descarte).
+  - **PHI (HIPAA + UK GDPR):** validador determinista `phi_guard` sobre el mensaje del usuario (siempre), la propuesta, la edicion y en la consolidacion (cuarentena de lo ya guardado).
+  - **Encontrado en la prueba real:** con "El paciente Johnson cancelo su cita, apuntalo" el modelo no propuso ni marco nada y dijo "anoto la cancelacion": se paso a validar SIEMPRE el mensaje, con test de regresion. El proxy de 4Geeks bloquea `gpt-5.6-luna` (403).
+  - **Tests:** raiz 49 nuevos (`test_agent_memory.py`), API 16 nuevos (`test_agent_memory_api.py`); se actualizaron los que fijaban el contrato anterior (nodos, tools del planificador, `generate_reply`, bloque `memory`). Totales: API 240, raiz 296, sin fallos. Sin cambios de frontend. No hay linter de Python configurado.
+  - **Evidencia real:** 11 turnos con dos coordinadores (ciclo aprobado reflejado en el otro coordinador, ciclo rechazado sin cambios, PHI bloqueada, sin propuesta, cambio de tema) en `docs/agent/memory-evidence/`.
+
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
 - Mejora de robustez de tipos en frontend.
@@ -157,6 +165,7 @@
 - Hay dos `.env` con `DATABASE_URL`: el de la raíz (lo usa `docker compose`) y `services/api/.env` (dev nativo). Si divergen, los contenedores ganan y usan el suyo. Ambos deben apuntar a `healthcore-data` (eu-central-1).
 - Cola de tareas: la imagen `services/worker/Dockerfile` no se ha construido nunca (falta de disco el 2026-09-13); la primera vez que se levante `worker`/`flower` en Docker puede aparecer un fallo de build no detectado. Flower no tiene login: sus puertos solo se publican en `127.0.0.1`.
 - `GET /telemetry/report` responde 500 (no 400) ante fechas mal formadas en `start_date`/`end_date`: `_parse_query_datetime` no captura el `ValueError`.
+- Proxy LLM de 4Geeks inestable (2026-09-28): bloqueo `gpt-5.6-luna` (403) y `glm-5.3-flash` tuvo caidas intermitentes; ademas hubo un 503 general del proxy. `GENERATION_MODEL` es ahora `deepseek-v4-flash` (lento: 5-20 s por llamada; planificador con 20 s de limite). Un pico de latencia puede hacer caer el plan a solo RAG.
 
 ## Criterio de avance para la siguiente iteracion
 - Sin errores criticos de lint en modulos clave.

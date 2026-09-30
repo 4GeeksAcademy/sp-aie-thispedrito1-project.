@@ -281,6 +281,7 @@ def test_planner_orders_live_tools_before_the_knowledge_base():
     assert request["tool_choice"] == "required"
     assert {t["function"]["name"] for t in request["tools"]} == {
         "search_knowledge_base", "get_incident", "search_incidents", "check_inventory_stock",
+        "recall_agent_memory",
     }
     assert llm.options == {"timeout": planner.PLANNER_TIMEOUT_S, "max_retries": 0}
 

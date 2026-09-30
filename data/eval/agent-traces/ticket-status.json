@@ -2,9 +2,9 @@
   "trace_id": "eval-ticket-status",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:52:15.646966+00:00",
-  "finished_at": "2026-09-24T16:52:18.972289+00:00",
-  "duration_ms": 3325.45,
+  "started_at": "2026-09-28T19:43:24.419857+00:00",
+  "finished_at": "2026-09-28T19:43:32.635885+00:00",
+  "duration_ms": 8216.16,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 0.93,
+      "duration_ms": 0.97,
       "output": {
         "question": {
           "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 2102.13,
+      "duration_ms": 6188.66,
       "output": {
         "plan": [
           {
@@ -48,7 +51,7 @@
     {
       "index": 3,
       "node": "lookup_incident",
-      "duration_ms": 2.41,
+      "duration_ms": 78.31,
       "output": {
         "tool_results": [
           {
@@ -74,8 +77,9 @@
               ]
             },
             "error_type": null,
-            "timeout_s": 3.0,
-            "duration_ms": 1.68
+            "via": "mcp",
+            "timeout_s": 5.0,
+            "duration_ms": 77.8
           }
         ],
         "completed_sources": [
@@ -86,10 +90,12 @@
     {
       "index": 4,
       "node": "generate",
-      "duration_ms": 1217.26,
+      "duration_ms": 1945.52,
       "output": {
-        "answer": "El ticket 12 está resuelto.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Incidencia #12",
-        "outcome": "answered"
+        "answer": "El ticket 12 está en estado resuelto. Ya fue cerrado.",
+        "outcome": "answered",
+        "memory_proposal": null,
+        "user_requested_memory": false
       }
     }
   ],
@@ -113,7 +119,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b8384-be98-6b88-bfff-e3a7ba7875de",
+      "checkpoint_id": "1f1bb74d-e3ae-6fc4-bfff-a66a4d194448",
       "step": -1,
       "source": "input",
       "next": [
@@ -121,7 +127,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-be99-6600-8000-10eb2b1fbb89",
+      "checkpoint_id": "1f1bb74d-e3af-699c-8000-195188a3d537",
       "step": 0,
       "source": "loop",
       "next": [
@@ -129,7 +135,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-be9a-63c0-8001-b6161b8d5357",
+      "checkpoint_id": "1f1bb74d-e3b0-6748-8001-658776378e2d",
       "step": 1,
       "source": "loop",
       "next": [
@@ -137,7 +143,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-d2a5-654a-8002-cca502b1376c",
+      "checkpoint_id": "1f1bb74e-1eb4-66aa-8002-4feea3d5164e",
       "step": 2,
       "source": "loop",
       "next": [
@@ -145,7 +151,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-d2ab-6c6a-8003-e3ebcc2bbecb",
+      "checkpoint_id": "1f1bb74e-1f74-65fe-8003-288f12174182",
       "step": 3,
       "source": "loop",
       "next": [
@@ -153,13 +159,17 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8384-de45-6f8a-8004-6f10b7cc8b43",
+      "checkpoint_id": "1f1bb74e-3200-60f6-8004-00060069b493",
       "step": 4,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "El ticket 12 está resuelto.\n\nFuente: gestor-de-incidencias (datos en vivo), sección Incidencia #12",
+  "answer": "El ticket 12 está en estado resuelto. Ya fue cerrado.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

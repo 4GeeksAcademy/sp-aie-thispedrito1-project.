@@ -2,9 +2,9 @@
   "trace_id": "eval-ticket-plus-policy",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:52:23.577852+00:00",
-  "finished_at": "2026-09-24T16:52:30.032231+00:00",
-  "duration_ms": 6454.59,
+  "started_at": "2026-09-28T19:41:53.013690+00:00",
+  "finished_at": "2026-09-28T19:42:11.583863+00:00",
+  "duration_ms": 18570.56,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.63,
+      "duration_ms": 0.88,
       "output": {
         "question": {
           "sha256": "a63d184d8504ae2dce67358d4eadc189a3c7456934c5d4527c685941587eacce",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 2754.26,
+      "duration_ms": 5154.56,
       "output": {
         "plan": [
           {
@@ -52,7 +55,7 @@
     {
       "index": 3,
       "node": "lookup_incident",
-      "duration_ms": 3.46,
+      "duration_ms": 63.25,
       "output": {
         "tool_results": [
           {
@@ -78,8 +81,9 @@
               ]
             },
             "error_type": null,
-            "timeout_s": 3.0,
-            "duration_ms": 2.3
+            "via": "mcp",
+            "timeout_s": 5.0,
+            "duration_ms": 62.88
           }
         ],
         "completed_sources": [
@@ -90,7 +94,7 @@
     {
       "index": 4,
       "node": "retrieve",
-      "duration_ms": 1041.61,
+      "duration_ms": 252.95,
       "output": {
         "context": [
           {
@@ -114,10 +118,12 @@
     {
       "index": 5,
       "node": "generate",
-      "duration_ms": 2650.92,
+      "duration_ms": 13096.46,
       "output": {
-        "answer": "El ticket 7 está descartado.\n\nAl ser un paciente de pago privado en Florida y tratarse de un no-show, el cargo es de 50 USD.\n\nFuente: gestor-de-incidencias, Incidencia #7; appointment-policy, Política de cancelación.",
-        "outcome": "answered"
+        "answer": "El ticket 7 (incidencia #7) está en estado \"descartada\" (discarded). Según la política de cancelación, para un paciente de pago privado el cargo por no-show es de 50 USD. Sin embargo, el ticket está registrado en la sede Savannah, no en Florida. Si el paciente es de Florida, el equipo de facturación debe verificar si aplica alguna diferencia. Fuente: gestor-de-incidencias (Incidencia #7) y appointment-policy (Política de cancelación).",
+        "outcome": "answered",
+        "memory_proposal": null,
+        "user_requested_memory": false
       }
     }
   ],
@@ -147,7 +153,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b8385-0a3c-6026-bfff-f98a3ed5dfca",
+      "checkpoint_id": "1f1bb74a-7bf7-6712-bfff-1c9d715c1762",
       "step": -1,
       "source": "input",
       "next": [
@@ -155,7 +161,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-0a3d-66ce-8000-406cec6d7953",
+      "checkpoint_id": "1f1bb74a-7bf8-60ea-8000-f7c1c44bb839",
       "step": 0,
       "source": "loop",
       "next": [
@@ -163,7 +169,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-0a40-69aa-8001-c3bb795942d9",
+      "checkpoint_id": "1f1bb74a-7bf8-6d4c-8001-73492c17f124",
       "step": 1,
       "source": "loop",
       "next": [
@@ -171,7 +177,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-2484-6460-8002-892934ef5b24",
+      "checkpoint_id": "1f1bb74a-ad20-6370-8002-ae47fbd84d1a",
       "step": 2,
       "source": "loop",
       "next": [
@@ -179,7 +185,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-248c-6c0a-8003-956656c43486",
+      "checkpoint_id": "1f1bb74a-adbb-6424-8003-e33027732283",
       "step": 3,
       "source": "loop",
       "next": [
@@ -187,7 +193,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-2e7b-6a5e-8004-f1de27487996",
+      "checkpoint_id": "1f1bb74a-b023-681a-8004-e18a92f2f0c1",
       "step": 4,
       "source": "loop",
       "next": [
@@ -195,13 +201,17 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-47c2-6f26-8005-1ec78dd941bc",
+      "checkpoint_id": "1f1bb74b-2d05-6f7c-8005-0dbe3960551b",
       "step": 5,
       "source": "loop",
       "next": []
     }
   ],
   "outcome": "answered",
-  "answer": "El ticket 7 está descartado.\n\nAl ser un paciente de pago privado en Florida y tratarse de un no-show, el cargo es de 50 USD.\n\nFuente: gestor-de-incidencias, Incidencia #7; appointment-policy, Política de cancelación.",
+  "answer": "El ticket 7 (incidencia #7) está en estado \"descartada\" (discarded). Según la política de cancelación, para un paciente de pago privado el cargo por no-show es de 50 USD. Sin embargo, el ticket está registrado en la sede Savannah, no en Florida. Si el paciente es de Florida, el equipo de facturación debe verificar si aplica alguna diferencia. Fuente: gestor-de-incidencias (Incidencia #7) y appointment-policy (Política de cancelación).",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

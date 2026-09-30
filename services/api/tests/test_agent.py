@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from data.pipelines import rag
 from data.process.rag import RagConfigError
 from services.agent import planner
+from services.agent.memory import reply
 from services.agent.planner import Plan, PlannedCall
 
 CHUNK = {
@@ -43,13 +44,14 @@ def use_plan(monkeypatch, *calls: PlannedCall) -> None:
 def test_agent_answers_through_the_graph_and_leaves_a_trace(client: TestClient, auth_headers, monkeypatch, trace_dir) -> None:
     calls = []
     monkeypatch.setattr(rag, "retrieve", lambda q, *, k, min_score: calls.append(("retrieve", q)) or [CHUNK])
-    monkeypatch.setattr(rag, "generate_answer", lambda q, c: calls.append(("generate", len(c))) or "Sin cargo.")
+    monkeypatch.setattr(reply, "generate_reply", lambda q, c: calls.append(("generate", len(c))) or "Sin cargo.")
 
     response = client.post("/agent/query", json={"question": " ¿Cobran por cancelar con 30 horas? "}, headers=auth_headers)
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"answer", "trace_id", "outcome"}
+    assert set(body) == {"answer", "trace_id", "outcome", "memory"}
+    assert body["memory"] == {"resolved": None, "offered": None}
     assert body["answer"] == "Sin cargo."
     assert body["outcome"] == "answered"
     assert calls == [("retrieve", "¿Cobran por cancelar con 30 horas?"), ("generate", 1)]
@@ -64,7 +66,7 @@ def test_agent_answers_through_the_graph_and_leaves_a_trace(client: TestClient, 
 
 def test_agent_answers_honestly_without_context(client: TestClient, auth_headers, monkeypatch) -> None:
     monkeypatch.setattr(rag, "retrieve", lambda q, *, k, min_score: [])
-    monkeypatch.setattr(rag, "generate_answer", lambda q, c: pytest.fail("no debe generar sin contexto"))
+    monkeypatch.setattr(reply, "generate_reply", lambda q, c: pytest.fail("no debe generar sin contexto"))
 
     response = client.post("/agent/query", json={"question": "¿Receta de paella?"}, headers=auth_headers)
 
@@ -126,7 +128,7 @@ def test_agent_reads_the_live_incident_manager(client: TestClient, auth_headers,
 
     seen = {}
     monkeypatch.setattr(rag, "retrieve", lambda *a, **k: pytest.fail("una pregunta de ticket no debe ir al RAG"))
-    monkeypatch.setattr(rag, "generate_answer", lambda q, c: seen.setdefault("context", c) and "En curso.")
+    monkeypatch.setattr(reply, "generate_reply", lambda q, c: seen.setdefault("context", c) and "En curso.")
     use_plan(monkeypatch, PlannedCall(source="incidents", args={"ticket_id": created["id"]}))
 
     response = client.post("/agent/query", json={"question": f"¿Estado del ticket {created['id']}?"}, headers=auth_headers)
@@ -147,7 +149,7 @@ def test_agent_unknown_ticket_is_an_honest_answer_not_an_error(client: TestClien
     from services.agent.tools import incidents as incident_tool
 
     monkeypatch.setattr(incident_tool, "_default_mcp_call", agent_mcp_call(make_token(["incidents:read"])))
-    monkeypatch.setattr(rag, "generate_answer", lambda q, c: pytest.fail("no debe generar sin el dato"))
+    monkeypatch.setattr(reply, "generate_reply", lambda q, c: pytest.fail("no debe generar sin el dato"))
     use_plan(monkeypatch, PlannedCall(source="incidents", args={"ticket_id": 99999}))
 
     response = client.post("/agent/query", json={"question": "¿Estado del ticket 99999?"}, headers=auth_headers)

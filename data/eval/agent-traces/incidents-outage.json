@@ -2,9 +2,9 @@
   "trace_id": "eval-incidents-outage",
   "schema_version": 2,
   "graph": "healthcore_support_agent",
-  "started_at": "2026-09-24T16:52:30.034145+00:00",
-  "finished_at": "2026-09-24T16:52:34.048382+00:00",
-  "duration_ms": 4014.36,
+  "started_at": "2026-09-28T19:42:11.586157+00:00",
+  "finished_at": "2026-09-28T19:42:22.693231+00:00",
+  "duration_ms": 11107.2,
   "status": "completed",
   "input": {
     "question": {
@@ -16,7 +16,7 @@
     {
       "index": 1,
       "node": "receive_question",
-      "duration_ms": 2.49,
+      "duration_ms": 3.16,
       "output": {
         "question": {
           "sha256": "640b3f194833e0821751ad6d86c0d182654912ed21ea17628eceeb00970a9d02",
@@ -25,6 +25,9 @@
         "plan": [],
         "plan_status": null,
         "context": [],
+        "memory_context": [],
+        "memory_proposal": null,
+        "user_requested_memory": false,
         "answer": null,
         "outcome": null
       }
@@ -32,7 +35,7 @@
     {
       "index": 2,
       "node": "plan_sources",
-      "duration_ms": 1003.46,
+      "duration_ms": 6092.82,
       "output": {
         "plan": [
           {
@@ -48,7 +51,7 @@
     {
       "index": 3,
       "node": "lookup_incident",
-      "duration_ms": 3005.67,
+      "duration_ms": 5007.7,
       "output": {
         "tool_results": [
           {
@@ -59,8 +62,9 @@
             },
             "data": null,
             "error_type": "TimeoutError",
-            "timeout_s": 3.0,
-            "duration_ms": 3004.51
+            "via": "mcp",
+            "timeout_s": 5.0,
+            "duration_ms": 5005.32
           }
         ],
         "completed_sources": [
@@ -71,7 +75,7 @@
     {
       "index": 4,
       "node": "tool_fallback",
-      "duration_ms": 1.12,
+      "duration_ms": 1.48,
       "output": {
         "answer": "No pude confirmar el estado de la incidencia #12 ahora mismo: el gestor de incidencias no respondió. Inténtalo de nuevo en unos minutos y no des un estado sin confirmarlo.",
         "outcome": "tool_fallback"
@@ -98,7 +102,7 @@
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "1f1b8385-47ce-6808-bfff-d05c8047b012",
+      "checkpoint_id": "1f1bb74b-2d18-6668-bfff-37000cbb1f91",
       "step": -1,
       "source": "input",
       "next": [
@@ -106,7 +110,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-47d0-6284-8000-e530d7b69bfb",
+      "checkpoint_id": "1f1bb74b-2d1a-61d4-8000-1199936673b8",
       "step": 0,
       "source": "loop",
       "next": [
@@ -114,7 +118,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-47d2-6ac0-8001-a03c08dfa5ca",
+      "checkpoint_id": "1f1bb74b-2d1c-6ca4-8001-eaa878f0dcc2",
       "step": 1,
       "source": "loop",
       "next": [
@@ -122,7 +126,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-5164-6390-8002-00d8bf6d9b85",
+      "checkpoint_id": "1f1bb74b-6736-664c-8002-56a2c18b247a",
       "step": 2,
       "source": "loop",
       "next": [
@@ -130,7 +134,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-6e0e-60ea-8003-262cdfe54f59",
+      "checkpoint_id": "1f1bb74b-96f7-69e4-8003-22032927251d",
       "step": 3,
       "source": "loop",
       "next": [
@@ -138,7 +142,7 @@
       ]
     },
     {
-      "checkpoint_id": "1f1b8385-6e10-6746-8004-04c938403334",
+      "checkpoint_id": "1f1bb74b-96fb-6742-8004-8a9553f28f18",
       "step": 4,
       "source": "loop",
       "next": []
@@ -146,5 +150,9 @@
   ],
   "outcome": "tool_fallback",
   "answer": "No pude confirmar el estado de la incidencia #12 ahora mismo: el gestor de incidencias no respondió. Inténtalo de nuevo en unos minutos y no des un estado sin confirmarlo.",
+  "memory": {
+    "available": [],
+    "proposal": null
+  },
   "error": null
 }

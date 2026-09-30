@@ -26,6 +26,7 @@ from services.agent.graph import (
     GENERATE,
     LOOKUP_INCIDENT,
     PLAN_SOURCES,
+    RECALL_MEMORY,
     TOOL_FALLBACK,
     NO_INFORMATION,
     NO_INFORMATION_ANSWER,
@@ -111,7 +112,7 @@ def test_graph_compiles_with_conditional_edges_after_every_decision():
 
     assert set(drawable.nodes) == {
         START, END, RECEIVE_QUESTION, REJECT_QUESTION, PLAN_SOURCES, LOOKUP_INCIDENT,
-        CHECK_INVENTORY_STOCK, RETRIEVE, TOOL_FALLBACK, NO_INFORMATION, GENERATE,
+        CHECK_INVENTORY_STOCK, RECALL_MEMORY, RETRIEVE, TOOL_FALLBACK, NO_INFORMATION, GENERATE,
     }
     conditional = {(e.source, e.target) for e in drawable.edges if e.conditional}
     assert conditional == {
@@ -119,13 +120,18 @@ def test_graph_compiles_with_conditional_edges_after_every_decision():
         (RECEIVE_QUESTION, REJECT_QUESTION),
         (PLAN_SOURCES, LOOKUP_INCIDENT),
         (PLAN_SOURCES, CHECK_INVENTORY_STOCK),
+        (PLAN_SOURCES, RECALL_MEMORY),
         (PLAN_SOURCES, RETRIEVE),
         (LOOKUP_INCIDENT, CHECK_INVENTORY_STOCK),
+        (LOOKUP_INCIDENT, RECALL_MEMORY),
         (LOOKUP_INCIDENT, RETRIEVE),
         (LOOKUP_INCIDENT, TOOL_FALLBACK),
         (LOOKUP_INCIDENT, GENERATE),
+        (CHECK_INVENTORY_STOCK, RECALL_MEMORY),
         (CHECK_INVENTORY_STOCK, RETRIEVE),
         (CHECK_INVENTORY_STOCK, TOOL_FALLBACK),
+        (RECALL_MEMORY, RETRIEVE),
+        (RECALL_MEMORY, GENERATE),
         (CHECK_INVENTORY_STOCK, GENERATE),
         (RETRIEVE, GENERATE),
         (RETRIEVE, NO_INFORMATION),
@@ -326,15 +332,21 @@ def test_trace_write_failure_does_not_lose_the_answer(tmp_path):
 
 
 def test_default_nodes_delegate_to_the_rag_pipeline(monkeypatch, tmp_path, no_monolithic_query):
-    """Sin dobles inyectados, los nodos llaman a data/pipelines/rag.py (no a una copia)."""
+    """Sin dobles inyectados, los nodos llaman a data/pipelines/rag.py (no a una copia).
+
+    Desde el Ticket #MEM-092 la generación va por memory.reply.generate_reply
+    (respuesta + propuesta de memoria en una llamada), que construye el prompt
+    con rag.build_messages: el prompt del RAG sigue sin copiarse."""
+    from services.agent.memory import reply
+
     calls: List[str] = []
     monkeypatch.setattr(rag, "retrieve", lambda q, *, k, min_score: calls.append("retrieve") or [CHUNK])
-    monkeypatch.setattr(rag, "generate_answer", lambda q, c: calls.append("generate_answer") or "ok")
+    monkeypatch.setattr(reply, "generate_reply", lambda q, c: calls.append("generate_reply") or reply.AgentReply(answer="ok"))
     monkeypatch.setattr(rag, "get_min_score", lambda: 0.38)
     monkeypatch.setattr(planner, "plan_sources", lambda q: Plan(calls=[PlannedCall(source="knowledge_base")], status="model"))
 
     result = run_agent(compile_agent_graph(), QUESTION, trace_dir=tmp_path)
 
-    assert calls == ["retrieve", "generate_answer"]
+    assert calls == ["retrieve", "generate_reply"]
     assert result.answer == "ok"
     assert agent_graph.AgentNodes().k == rag.DEFAULT_K
