@@ -92,7 +92,9 @@ function extractErrorMessage(status: number, payload: unknown): string {
 
 export async function requestJson<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(init?.headers || {});
-  if (!headers.has("Content-Type") && init?.body) {
+  // FormData (subida de archivos, /rfps): el navegador pone él mismo
+  // multipart/form-data con su boundary; forzar JSON rompería la subida.
+  if (!headers.has("Content-Type") && init?.body && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 

@@ -38,3 +38,9 @@ langgraph==0.6.11
 mcp>=1.24,<2
 mcpauth==0.2.0b1
 langchain-mcp-adapters==0.3.2
+# Recepción de RFPs (Hito 9, Parte 1): PDF -> Markdown antes de cualquier
+# agente y métricas de legibilidad como estimador de coste. readability usa
+# NLTK y necesita el tokenizador punkt_tab (data/pipelines/rfp_intake/
+# readability.py lo descarga una vez dentro del venv).
+markitdown[pdf]==0.1.8
+py-readability-metrics==1.4.5
