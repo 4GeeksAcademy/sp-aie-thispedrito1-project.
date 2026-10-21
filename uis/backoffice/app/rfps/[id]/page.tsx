@@ -9,13 +9,18 @@ import { usePolling } from "../../../hooks/usePolling";
 import { getRfpTicket } from "../../../services/rfpApi";
 import {
   POLL_INTERVAL_MS,
+  SECTION_STATUS_CLASS,
+  SECTION_STATUS_LABELS,
   STATUS_CLASS,
   STATUS_LABELS,
+  describeEvaluation,
   describeOutcome,
   formatPhiCategories,
   formatPopulation,
   formatProgramTypes,
-  isInProgress,
+  isProvisional,
+  shouldPoll,
+  type RfpDepartmentSection,
   type RfpTicketDetail,
 } from "../../../types/rfp";
 
@@ -24,6 +29,51 @@ function Field({ label, value }: { label: string; value: string | number | null 
     <div>
       <div style={{ color: "var(--muted)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
       <div style={{ fontWeight: 600 }}>{value === null || value === undefined || value === "" ? "—" : value}</div>
+    </div>
+  );
+}
+
+/** Parte 2: borrador de la sección + sus tres evaluaciones. */
+function DraftBlock({ section }: { section: RfpDepartmentSection }) {
+  if (!section.draft_status) return null;
+  const provisional = isProvisional(section);
+  const evaluation = section.evaluation_results;
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <strong>Borrador</strong>
+        <span className={`status-badge ${SECTION_STATUS_CLASS[section.draft_status]}`}>
+          {SECTION_STATUS_LABELS[section.draft_status]}
+        </span>
+        {section.draft_iterations > 0 && (
+          <span className="mono" style={{ color: "var(--muted)", fontSize: 12 }}>
+            {section.draft_iterations === 1 ? "1 iteración" : `${section.draft_iterations} iteraciones`}
+          </span>
+        )}
+      </div>
+      {provisional && evaluation && (
+        <p className="rfp-check-fail" style={{ fontSize: 13 }}>
+          Borrador provisional: no superó la evaluación tras {section.draft_iterations} intentos. No usarlo sin revisar
+          estos puntos:
+          <br />
+          <span style={{ whiteSpace: "pre-wrap" }}>{evaluation.feedback_for_generator}</span>
+        </p>
+      )}
+      {evaluation && (
+        <ul className="rfp-list" style={{ fontSize: 13 }}>
+          {describeEvaluation(evaluation).map((check) => (
+            <li key={check.label}>
+              <span className={check.passed ? "rfp-check-pass" : "rfp-check-fail"}>
+                {check.passed ? "✓" : "✗"} {check.label}
+              </span>
+              <span style={{ color: "var(--muted)" }}> — {check.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {section.draft_content && (
+        <div className={`rfp-draft${provisional ? " rfp-draft-provisional" : ""}`}>{section.draft_content}</div>
+      )}
     </div>
   );
 }
@@ -104,6 +154,7 @@ function TicketView({ ticket }: { ticket: RfpTicketDetail }) {
                     : `Se descartaron ${section.unsupported_claims_removed} afirmaciones con cifras que no aparecen en la RFP.`}
                 </p>
               )}
+              <DraftBlock section={section} />
             </section>
           ))}
         </div>
@@ -172,7 +223,7 @@ export default function RfpTicketPage({ params }: { params: Promise<{ id: string
       // Refresco silencioso: un fallo puntual no tapa el último estado bueno.
     }
   }, [id]);
-  usePolling(refresh, ticket ? isInProgress(ticket.status) : false, POLL_INTERVAL_MS);
+  usePolling(refresh, ticket ? shouldPoll(ticket.status) : false, POLL_INTERVAL_MS);
 
   return (
     <main className="shell" style={{ padding: "24px 0 48px" }}>

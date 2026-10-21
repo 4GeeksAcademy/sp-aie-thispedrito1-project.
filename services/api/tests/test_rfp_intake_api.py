@@ -140,3 +140,68 @@ def test_completed_ticket_exposes_sections_contacts_and_handoff(client, auth_hea
     assert handoff.status_code == 200
     assert handoff.json()["next_stage"] == "generando_borrador"
     assert handoff.json()["payload"]["ticket_id"] == str(ticket_id)
+
+
+# --- Parte 2: borradores, evaluación y handoff a la Parte 3 -----------------
+
+EVALUATION = {
+    "section_id": "t:compliance", "department_id": "compliance", "iteration": 3,
+    "readability": {"pass": True, "score": 55.0, "details": {"problems": []}},
+    "relevance": {"pass": True, "missing_aspects": []},
+    "compliance": {"pass": False, "rule_ids": ["baa-us"], "violations": [{"rule_id": "baa-us", "message": "Incluye BAA."}],
+                   "contains_phi": False},
+    "overall_pass": False, "feedback_for_generator": "1. [baa-us] Incluye BAA.", "retryable": True,
+    "evaluated_at": "2026-10-21T10:00:00+00:00",
+}
+
+
+def _ticket_after_part_2(client, auth_headers, inventory_engine, *, status: str) -> uuid.UUID:
+    ticket_id = uuid.UUID(upload(client, auth_headers).json()["ticket_id"])
+    with Session(inventory_engine) as session:
+        ticket = repository.get_ticket(session, ticket_id)
+        repository.save_result(
+            session, ticket,
+            ticket_fields={"status": "analisis_completo", "next_stage": "generando_borrador",
+                           "handoff_payload": {"handoff_version": 1, "next_stage": "generando_borrador", "workstreams": []}},
+            metadata_fields={"client_name": "Meridian Manufacturing, Inc.", "client_country": "US"},
+            sections=[{"department_id": "compliance", "owner": "Claire Whitfield", "key_aspects": ["BAA"]}],
+        )
+        result = {"department_id": "compliance", "draft_content": "Borrador provisional.", "evaluation": EVALUATION,
+                  "history": [EVALUATION], "status": "needs_human_review", "iterations": 3}
+        repository.save_response(
+            session, ticket, status=status, sections=[result],
+            handoff={"handoff_version": 1, "sections": [{"department_id": "compliance", "provisional": True}]},
+            requires_compliance_review=False,
+        )
+    return ticket_id
+
+
+def test_detail_exposes_draft_and_structured_evaluation(client, auth_headers, raw_dir, enqueued, inventory_engine):
+    ticket_id = _ticket_after_part_2(client, auth_headers, inventory_engine, status="needs_human_review")
+    detail = client.get(f"/rfp-tickets/{ticket_id}", headers=auth_headers).json()
+    assert detail["status"] == "needs_human_review" and detail["next_stage"] == "esperando_aprobación"
+    section = detail["sections"][0]
+    assert section["draft_status"] == "needs_human_review" and section["draft_iterations"] == 3
+    assert section["draft_content"] == "Borrador provisional."
+    assert section["evaluation_results"]["compliance"]["pass"] is False
+    assert len(section["evaluation_history"]) == 1
+
+
+def test_part_1_handoff_stays_available_after_part_2_starts(client, auth_headers, raw_dir, enqueued, inventory_engine):
+    ticket_id = _ticket_after_part_2(client, auth_headers, inventory_engine, status="evaluacion_completa")
+    handoff = client.get(f"/rfp-tickets/{ticket_id}/handoff", headers=auth_headers)
+    assert handoff.status_code == 200 and handoff.json()["next_stage"] == "generando_borrador"
+
+
+def test_response_handoff_is_409_until_part_2_finishes_then_carries_provisional_sections(
+    client, auth_headers, raw_dir, enqueued, inventory_engine
+):
+    pending = upload(client, auth_headers).json()["ticket_id"]
+    assert client.get(f"/rfp-tickets/{pending}/response-handoff", headers=auth_headers).status_code == 409
+
+    ticket_id = _ticket_after_part_2(client, auth_headers, inventory_engine, status="needs_human_review")
+    response = client.get(f"/rfp-tickets/{ticket_id}/response-handoff", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "needs_human_review" and body["next_stage"] == "esperando_aprobación"
+    assert body["payload"]["sections"][0]["provisional"] is True

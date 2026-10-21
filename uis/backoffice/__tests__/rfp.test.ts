@@ -9,8 +9,12 @@ import {
   formatPhiCategories,
   formatPopulation,
   formatProgramTypes,
+  describeEvaluation,
   isInProgress,
+  isProvisional,
+  shouldPoll,
   validatePdfFile,
+  type EvaluationResult,
 } from "../types/rfp";
 
 function fileOf(name: string, type: string, size: number): File {
@@ -67,9 +71,65 @@ describe("formateadores", () => {
     expect(formatPhiCategories(["patient_name", "date_of_birth"])).toBe("nombre de paciente, fecha de nacimiento");
   });
 
-  it("solo `analizando` sigue haciendo poll", () => {
-    expect(isInProgress("analizando")).toBe(true);
-    expect(["descartado", "analisis_completo", "error"].map((s) => isInProgress(s as never))).toEqual([false, false, false]);
+  it("los estados de trabajo de las Partes 1 y 2 están en curso; los finales no", () => {
+    expect(["analizando", "generando_borrador", "en_evaluación"].map((s) => isInProgress(s as never))).toEqual([true, true, true]);
+    expect(
+      ["descartado", "analisis_completo", "error", "needs_human_review", "evaluacion_completa"].map((s) => isInProgress(s as never)),
+    ).toEqual([false, false, false, false, false]);
+  });
+
+  it("analisis_completo sigue haciendo poll porque la Parte 2 arranca sola", () => {
+    expect(shouldPoll("analisis_completo")).toBe(true);
+    expect(shouldPoll("needs_human_review")).toBe(false);
+    expect(shouldPoll("evaluacion_completa")).toBe(false);
+  });
+});
+
+describe("Parte 2: borradores y evaluación", () => {
+  const failing: EvaluationResult = {
+    section_id: "t:compliance",
+    department_id: "compliance",
+    iteration: 3,
+    readability: { pass: true, score: 62.4, details: { problems: [] } },
+    relevance: { pass: false, missing_aspects: ["Minimización de datos"] },
+    compliance: {
+      pass: false,
+      rule_ids: ["no-phi", "no-invented-figures", "currency-by-country", "baa-us"],
+      violations: [{ rule_id: "baa-us", message: "Incluye una cláusula BAA (HIPAA)." }],
+      contains_phi: false,
+    },
+    overall_pass: false,
+    feedback_for_generator: "1. [baa-us] Incluye una cláusula BAA (HIPAA).",
+    retryable: true,
+    evaluated_at: "2026-10-21T10:00:00Z",
+  };
+
+  it("describe los tres evaluadores en lenguaje de negocio", () => {
+    const checks = describeEvaluation(failing);
+    expect(checks.map((c) => [c.label, c.passed])).toEqual([
+      ["Legibilidad", true],
+      ["Pertinencia", false],
+      ["Cumplimiento", false],
+    ]);
+    expect(checks[0].detail).toBe("Fernández Huerta 62");
+    expect(checks[1].detail).toContain("Minimización de datos");
+    expect(checks[2].detail).toBe("Incluye una cláusula BAA (HIPAA).");
+  });
+
+  it("una sección aprobada lista las reglas verificadas", () => {
+    const passing = { ...failing, compliance: { ...failing.compliance, pass: true, violations: [] } };
+    expect(describeEvaluation(passing)[2].detail).toBe("Reglas verificadas: no-phi, no-invented-figures, currency-by-country, baa-us");
+  });
+
+  it("solo needs_human_review es provisional", () => {
+    expect(isProvisional({ draft_status: "needs_human_review" })).toBe(true);
+    expect(isProvisional({ draft_status: "aprobada_por_evaluadores" })).toBe(false);
+    expect(isProvisional({ draft_status: null })).toBe(false);
+  });
+
+  it("explica needs_human_review sin tecnicismos", () => {
+    const text = describeOutcome({ status: "needs_human_review", discard_reason: null, classifier_reason: null, error_message: null });
+    expect(text).toContain("provisional");
   });
 });
 

@@ -12,7 +12,7 @@ import {
   POLL_INTERVAL_MS,
   STATUS_CLASS,
   STATUS_LABELS,
-  isInProgress,
+  shouldPoll,
   validatePdfFile,
   type RfpTicketListItem,
 } from "../../types/rfp";
@@ -39,7 +39,7 @@ export default function RfpTicketsPage() {
       // Refresco silencioso: si falla, se mantiene la última lista buena.
     }
   }, []);
-  usePolling(refresh, tickets.some((ticket) => isInProgress(ticket.status)), POLL_INTERVAL_MS);
+  usePolling(refresh, tickets.some((ticket) => shouldPoll(ticket.status)), POLL_INTERVAL_MS);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

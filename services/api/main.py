@@ -43,6 +43,7 @@ from services.rfp_intake.router import router as rfp_intake_router  # noqa: E402
 from services.tasks.router import router as tasks_router  # noqa: E402
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
 from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
+from data.pipelines.rfp_intake.models import ensure_rfp_response_columns  # noqa: E402
 
 app = FastAPI(title="HealthCore Incidents API", version="1.0.0")
 
@@ -122,6 +123,8 @@ def init_inventory_schema() -> None:
     try:
         ensure_reporting_schema(get_inventory_engine())
         SQLModel.metadata.create_all(get_inventory_engine())
+        # rfp_* already existed before Part 2 of the RFP milestone added columns.
+        ensure_rfp_response_columns(get_inventory_engine())
     except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
         print(f"[inventory] skipping schema init: {exc}", file=sys.stderr)
 

@@ -287,6 +287,32 @@ button.primary:hover {
   color: var(--critical);
 }
 
+/* Parte 2: borrador provisional (agotó las iteraciones sin pasar la evaluación). */
+.rfp-status-review {
+  background: color-mix(in srgb, var(--critical) 10%, transparent);
+  color: var(--critical);
+  border: 1px dashed var(--critical);
+}
+
+.rfp-draft {
+  white-space: pre-wrap;
+  border-left: 3px solid var(--line);
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.rfp-draft-provisional {
+  border-left-color: var(--critical);
+}
+
+.rfp-check-pass {
+  color: var(--ok);
+}
+
+.rfp-check-fail {
+  color: var(--critical);
+}
+
 .rfp-departments {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -1,9 +1,25 @@
 /**
  * Contrato de /rfp-tickets (services/rfp_intake/schemas.py) y ayudas puras
- * de la pantalla /rfps. Estados de la Parte 1 del Hito 9 + `error`.
+ * de la pantalla /rfps. Estados de las Partes 1 y 2 del Hito 9, más `error`
+ * y `evaluacion_completa` (añadidos por decisión del usuario).
  */
 
-export type RfpStatus = "analizando" | "descartado" | "analisis_completo" | "error";
+export type RfpStatus =
+  | "analizando"
+  | "descartado"
+  | "analisis_completo"
+  | "error"
+  | "generando_borrador"
+  | "en_evaluación"
+  | "needs_human_review"
+  | "evaluacion_completa";
+
+export type SectionDraftStatus =
+  | "pendiente"
+  | "generando_borrador"
+  | "en_evaluación"
+  | "aprobada_por_evaluadores"
+  | "needs_human_review";
 export type DiscardReason = "not_rfp" | "phi_detected";
 
 export interface RfpTicketQueued {
@@ -63,6 +79,25 @@ export interface RfpMetadata {
   conflicts: RfpConflict[];
 }
 
+/** EvaluationResult (README de la Parte 2; data/pipelines/rfp_intake/evaluators.py). */
+export interface EvaluationResult {
+  section_id: string;
+  department_id: string;
+  iteration: number;
+  readability: { pass: boolean; score: number | null; details: { problems?: string[]; words?: number; words_per_sentence?: number } };
+  relevance: { pass: boolean; missing_aspects: string[] };
+  compliance: {
+    pass: boolean;
+    rule_ids: string[];
+    violations: { rule_id: string; message: string }[];
+    contains_phi: boolean;
+  };
+  overall_pass: boolean;
+  feedback_for_generator: string;
+  retryable: boolean;
+  evaluated_at: string;
+}
+
 export interface RfpDepartmentSection {
   department_id: string;
   department: string;
@@ -70,6 +105,12 @@ export interface RfpDepartmentSection {
   key_aspects: string[];
   open_questions: string[];
   unsupported_claims_removed: number;
+  draft_status: SectionDraftStatus | null;
+  draft_iterations: number;
+  draft_content: string | null;
+  drafted_at: string | null;
+  evaluation_results: EvaluationResult | null;
+  evaluation_history: EvaluationResult[];
 }
 
 export interface RfpTicketDetail extends RfpTicketListItem {
@@ -92,6 +133,10 @@ export const STATUS_LABELS: Record<RfpStatus, string> = {
   descartado: "Descartado",
   analisis_completo: "Análisis completo",
   error: "Error",
+  generando_borrador: "Generando borrador",
+  "en_evaluación": "En evaluación",
+  needs_human_review: "Revisión humana",
+  evaluacion_completa: "Borradores aprobados",
 };
 
 /** Clase CSS del badge (definidas en globals.css con tokens del tema). */
@@ -100,6 +145,26 @@ export const STATUS_CLASS: Record<RfpStatus, string> = {
   descartado: "rfp-status-discarded",
   analisis_completo: "rfp-status-complete",
   error: "rfp-status-error",
+  generando_borrador: "rfp-status-analyzing",
+  "en_evaluación": "rfp-status-analyzing",
+  needs_human_review: "rfp-status-review",
+  evaluacion_completa: "rfp-status-complete",
+};
+
+export const SECTION_STATUS_LABELS: Record<SectionDraftStatus, string> = {
+  pendiente: "Pendiente",
+  generando_borrador: "Redactando",
+  "en_evaluación": "En evaluación",
+  aprobada_por_evaluadores: "Aprobada por los evaluadores",
+  needs_human_review: "Provisional · revisión humana",
+};
+
+export const SECTION_STATUS_CLASS: Record<SectionDraftStatus, string> = {
+  pendiente: "rfp-status-discarded",
+  generando_borrador: "rfp-status-analyzing",
+  "en_evaluación": "rfp-status-analyzing",
+  aprobada_por_evaluadores: "rfp-status-complete",
+  needs_human_review: "rfp-status-review",
 };
 
 const PROGRAM_LABELS: Record<string, string> = {
@@ -125,8 +190,16 @@ const PHI_LABELS: Record<string, string> = {
   clinical_content: "información clínica",
 };
 
+const WORKING_STATUSES: RfpStatus[] = ["analizando", "generando_borrador", "en_evaluación"];
+
 export function isInProgress(status: RfpStatus): boolean {
-  return status === "analizando";
+  return WORKING_STATUSES.includes(status);
+}
+
+/** La pantalla sigue consultando mientras hay trabajo en curso y también en
+ *  `analisis_completo`: la Parte 2 arranca sola justo después. */
+export function shouldPoll(status: RfpStatus): boolean {
+  return isInProgress(status) || status === "analisis_completo";
 }
 
 /** Validación en el navegador, antes de enviar nada (el servidor repite la
@@ -145,9 +218,17 @@ export function describeOutcome(ticket: Pick<RfpTicketDetail, "status" | "discar
     case "analizando":
       return "Convirtiendo el PDF y analizando la RFP. Esta página se actualiza sola.";
     case "analisis_completo":
-      return "Análisis terminado: abajo está qué pedir a cada departamento.";
+      return "Análisis terminado: abajo está qué pedir a cada departamento. La redacción de borradores arranca sola en unos segundos.";
+    case "generando_borrador":
+      return "Redactando un borrador por departamento a partir del análisis. Esta página se actualiza sola.";
+    case "en_evaluación":
+      return "Revisando cada borrador (legibilidad, pertinencia y cumplimiento) y corrigiendo los que fallan.";
+    case "evaluacion_completa":
+      return "Las tres secciones superaron la evaluación. Pendiente de aprobación por cada responsable.";
+    case "needs_human_review":
+      return "Alguna sección no superó la evaluación tras el máximo de intentos: su borrador es provisional y debe revisarse antes de usarse.";
     case "error":
-      return ticket.error_message ?? "El análisis falló por un problema técnico.";
+      return ticket.error_message ?? "El proceso falló por un problema técnico.";
     case "descartado":
       if (ticket.discard_reason === "phi_detected") {
         return "El documento contiene datos de pacientes. Se ha detenido sin analizarlo y queda pendiente de revisión por Compliance (Claire Whitfield).";
@@ -170,4 +251,41 @@ export function formatPopulation(count: number | null, unit: string | null): str
   if (count === null) return "Sin confirmar";
   const unitLabel = unit ? POPULATION_UNITS[unit] ?? unit : "";
   return `${count.toLocaleString("es-ES")} ${unitLabel}`.trim();
+}
+
+export interface EvaluationCheck {
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+/** Los tres evaluadores en lenguaje de negocio, para la tarjeta de la sección. */
+export function describeEvaluation(result: EvaluationResult): EvaluationCheck[] {
+  const problems = result.readability.details.problems ?? [];
+  const score = result.readability.score;
+  return [
+    {
+      label: "Legibilidad",
+      passed: result.readability.pass,
+      detail: [score === null ? "Sin nota" : `Fernández Huerta ${score.toFixed(0)}`, ...problems].join(" · "),
+    },
+    {
+      label: "Pertinencia",
+      passed: result.relevance.pass,
+      detail: result.relevance.missing_aspects.length
+        ? `Falta: ${result.relevance.missing_aspects.join("; ")}`
+        : "Cubre los aspectos clave de la RFP",
+    },
+    {
+      label: "Cumplimiento",
+      passed: result.compliance.pass,
+      detail: result.compliance.violations.length
+        ? result.compliance.violations.map((v) => v.message).join(" ")
+        : `Reglas verificadas: ${result.compliance.rule_ids.join(", ")}`,
+    },
+  ];
+}
+
+export function isProvisional(section: Pick<RfpDepartmentSection, "draft_status">): boolean {
+  return section.draft_status === "needs_human_review";
 }
