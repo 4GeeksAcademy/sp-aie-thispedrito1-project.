@@ -128,6 +128,9 @@ Se guarda en `rfp_department_sections.evaluation_results` con las claves del REA
 | Meridian (US), tras los arreglos | `evaluacion_completa` | 1 / 3 / 2 | 100 s |
 | Thames Valley (UK), 2 corridas | `error` por `APITimeoutError` del proxy (sin reintento con `--inline`) | — | — |
 | Thames Valley (UK), tras los arreglos | `evaluacion_completa` (GBP; DPA + UK GDPR) | 2 / 2 / 1 | ~2 min |
+| Meridian (US), **cadena completa por la UI** | `evaluacion_completa` | 2 / 3 / 2 | Parte 1: 83 s + Parte 2: 81 s |
+
+**Cadena completa en Chrome** (mismo día; Redis en Docker y worker nativo con `--pool=solo`, más API y backoffice): subida de `healthcore-request-1.pdf` en `/rfps` → ticket nuevo `RFP-20261021-0C726A`. La Parte 1 terminó en 83 s y la propia tarea encoló `rfp_response.generate_ticket` 14 ms después. La pantalla pasó sola por "Analizando" → "Generando borrador" (las secciones mostraban "En evaluación · 1 iteración" mientras tanto) → "Borradores aprobados", con los tres ✓ y el borrador de cada tarjeta. `GET /rfp-tickets/{id}/response-handoff` respondió 200 con `next_stage = esperando_aprobación`. Sin errores en la consola del navegador. Sesión con un token local de `create_access_token` (sin login ni `login_succeeded` en Supabase).
 
 Lo que solo encontró la prueba real (corregido, con test de regresión que falla sin el arreglo):
 - **Cifras escritas con letras.** deepseek escribió "ochocientos empleados" y "doce meses": la regla anti-invención solo veía dígitos, así que "novecientos cincuenta empleados" inventado habría pasado. `spoken_numbers_es` las convierte (desde 10: por debajo son expresiones como "las dos partes"; "por ciento" no es 100).
