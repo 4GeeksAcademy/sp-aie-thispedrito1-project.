@@ -74,8 +74,18 @@ class RfpDepartmentSectionRead(BaseModel):
     drafted_at: Optional[datetime] = None
     evaluation_results: Optional[Dict[str, Any]] = None
     evaluation_history: List[Dict[str, Any]] = []
+    # Parte 3: aprobación humana. `approval_request` es lo que el responsable
+    # necesita para decidir; `approval_history`, quién decidió qué y cuándo
+    # (sin el texto de los comentarios).
+    approval_status: Optional[str] = None
+    approval_request: Optional[Dict[str, Any]] = None
+    approval_round: int = 0
+    approval_history: List[Dict[str, Any]] = []
+    approver: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    confirmed_capacity: Optional[int] = None
 
-    @field_validator("evaluation_history", mode="before")
+    @field_validator("evaluation_history", "approval_history", mode="before")
     @classmethod
     def _null_history(cls, value: Any) -> Any:
         # Filas de la Parte 1 anteriores a la migración: la columna llega NULL.
@@ -91,6 +101,10 @@ class RfpTicketDetail(RfpTicketListItem):
     completed_at: Optional[datetime]
     metadata: Optional[RfpMetadataRead]
     sections: List[RfpDepartmentSectionRead]
+    # Parte 3: arbitraje en curso / último (trigger, árbitro, petición) y si
+    # el documento final ya existe.
+    arbitration: Optional[Dict[str, Any]] = None
+    has_final_document: bool = False
 
 
 class RfpHandoff(BaseModel):
@@ -105,3 +119,50 @@ class RfpResponseHandoff(BaseModel):
     status: str
     next_stage: str
     payload: Dict[str, Any]
+
+
+class SectionDecisionRequest(BaseModel):
+    """Lo que envía el responsable de un departamento. La validación de
+    negocio (motivo obligatorio, rondas, capacidad, PHI) la hace
+    data/pipelines/rfp_intake/decisions.py contra la petición del grafo."""
+    decision: str
+    comments: Optional[str] = None
+    confirmed_capacity: Optional[int] = None
+    # Huella del borrador que se estaba leyendo: si el grafo lo cambió
+    # entre medias, la decisión no se aplica a una versión que nadie vio.
+    draft_digest: Optional[str] = None
+
+
+class ArbitrationDecisionRequest(BaseModel):
+    option: str
+    new_population: Optional[int] = None
+    note: Optional[str] = None
+
+
+class RfpDecisionQueued(BaseModel):
+    ticket_id: uuid.UUID
+    department_id: Optional[str] = None
+    approval_status: str
+
+
+class RfpFinalDocumentRead(BaseModel):
+    """FinalDocument del BRIEFING §2.3 + el Markdown listo para descargar."""
+    ticket_id: uuid.UUID
+    rfp_id: str
+    sections: List[Dict[str, Any]]
+    currency: Optional[str]
+    client_country: Optional[str]
+    approvals: List[Dict[str, Any]]
+    content_markdown: str
+    generated_at: datetime
+
+
+class RfpTraceEventRead(BaseModel):
+    event_id: str
+    part: int
+    node: str
+    agent: str
+    department_id: Optional[str]
+    input: Dict[str, Any]
+    output: Dict[str, Any]
+    timestamp: datetime

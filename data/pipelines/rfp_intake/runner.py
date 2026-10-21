@@ -28,6 +28,8 @@ from data.pipelines import ROOT_DIR
 from data.pipelines.rfp_intake import repository
 from data.pipelines.rfp_intake.departments import DEPARTMENTS, country_rules
 from data.pipelines.rfp_intake.graph import OUTCOME_COMPLETE, OUTCOME_PHI, compile_rfp_intake_graph
+from data.pipelines.rfp_intake.trace import entry as trace_entry
+from data.pipelines.rfp_intake.trace import text_digest
 from data.pipelines.rfp_intake.models import (
     DISCARD_NOT_RFP,
     DISCARD_PHI,
@@ -85,8 +87,11 @@ def run_intake(session: Session, ticket_id: uuid.UUID, *, graph: Optional[Any] =
 
     repository.start_attempt(session, ticket)
     started = time.monotonic()
-    state = (graph or _default_graph()).invoke(
-        {"ticket_id": str(ticket_id), "pdf_path": str(_resolve(ticket.raw_pdf_path)), "worker_results": []}
+    state = _run_with_trace(
+        graph or _default_graph(),
+        {"ticket_id": str(ticket_id), "pdf_path": str(_resolve(ticket.raw_pdf_path)), "worker_results": []},
+        session,
+        ticket,
     )
     markdown_path = _resolve(ticket.raw_pdf_path).with_suffix(".md")
     markdown_path.write_text(state.get("markdown", ""), encoding="utf-8")  # siempre la versión redactada
@@ -101,6 +106,70 @@ def run_intake(session: Session, ticket_id: uuid.UUID, *, graph: Optional[Any] =
         ticket_id, outcome, (time.monotonic() - started) * 1000,
     )
     return ticket.status
+
+
+# Agente que ejecuta cada nodo, para el trace (docs/rfp-approval.md).
+_INTAKE_AGENTS = {
+    "convert": "markitdown",
+    "phi_screen": "phi_screen",
+    "classify": "classifier",
+    "orchestrate": "orchestrator",
+    "synthesize": "synthesizer",
+    "discard": "intake_router",
+}
+
+
+def _intake_summary(node: str, update: Dict[str, Any]) -> Dict[str, Any]:
+    """Salida de cada nodo de la Parte 1 resumida para el trace: nunca el
+    texto de la RFP (podría traer PHI antes de `phi_screen`)."""
+    if node == "convert":
+        return {"markdown": text_digest(update.get("markdown"))}
+    if node == "phi_screen":
+        return {"contains_phi": bool(update.get("phi_categories")), "categories": update.get("phi_categories", []),
+                "blocks": len(update.get("sections", []))}
+    if node == "classify":
+        c = update.get("classification") or {}
+        return {"accepted": c.get("accepted"), "document_kind": c.get("document_kind"), "confidence": c.get("confidence")}
+    if node == "orchestrate":
+        m = update.get("metadata") or {}
+        return {"departments": update.get("departments"), "client_country": m.get("client_country"),
+                "covered_population_known": m.get("covered_population") is not None,
+                "open_questions": len(update.get("open_questions", []))}
+    if node == "department_worker":
+        r = (update.get("worker_results") or [{}])[0]
+        return {"key_aspects": len(r.get("key_aspects", [])), "open_questions": len(r.get("open_questions", [])),
+                "unsupported_claims_removed": r.get("unsupported_claims_removed", 0)}
+    if node == "synthesize":
+        s = update.get("synthesis") or {}
+        return {"who_to_ask": len(s.get("who_to_ask", [])), "conflicts": len(s.get("conflicts", []))}
+    return {"outcome": update.get("outcome")}
+
+
+def _run_with_trace(graph: Any, payload: Dict[str, Any], session: Session, ticket) -> Dict[str, Any]:
+    """`stream` en vez de `invoke`: mismo resultado final, y además cada nodo
+    deja su paso en `rfp_trace_events` al terminar (con su hora real)."""
+    state: Dict[str, Any] = {}
+    entries = []
+    for mode, chunk in graph.stream(payload, stream_mode=["updates", "values"]):
+        if mode == "values":
+            state = chunk
+            continue
+        for node, update in chunk.items():
+            update = update or {}
+            department_id = ((update.get("worker_results") or [{}])[0].get("department_id")
+                             if node == "department_worker" else None)
+            entries.append(trace_entry(
+                key=(str(ticket.ticket_id), "p1", ticket.attempts, node, department_id),
+                part=1, node=node, department_id=department_id,
+                agent=f"worker:{department_id}" if department_id else _INTAKE_AGENTS.get(node, node),
+                input={"attempt": ticket.attempts}, output=_intake_summary(node, update),
+            ))
+    try:
+        repository.insert_trace_events(session, ticket.ticket_id, entries)
+    except Exception as exc:  # noqa: BLE001 — sin trace, el análisis sigue valiendo
+        session.rollback()
+        logger.warning("rfp_intake_trace_failed ticket=%s error_type=%s", ticket.ticket_id, type(exc).__name__)
+    return state
 
 
 def _save_discarded(session: Session, ticket, state: Dict[str, Any], *, phi: bool) -> None:

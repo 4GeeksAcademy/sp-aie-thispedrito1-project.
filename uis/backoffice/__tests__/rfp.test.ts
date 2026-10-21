@@ -78,10 +78,13 @@ describe("formateadores", () => {
     ).toEqual([false, false, false, false, false]);
   });
 
-  it("analisis_completo sigue haciendo poll porque la Parte 2 arranca sola", () => {
+  it("los estados de entrega siguen haciendo poll porque la parte siguiente arranca sola", () => {
     expect(shouldPoll("analisis_completo")).toBe(true);
-    expect(shouldPoll("needs_human_review")).toBe(false);
-    expect(shouldPoll("evaluacion_completa")).toBe(false);
+    // Parte 3: tras la Parte 2 arranca la aprobación sin que nadie pulse nada.
+    expect(shouldPoll("needs_human_review")).toBe(true);
+    expect(shouldPoll("evaluacion_completa")).toBe(true);
+    expect(shouldPoll("terminado")).toBe(false);
+    expect(shouldPoll("esperando_aprobación")).toBe(false);
   });
 });
 
