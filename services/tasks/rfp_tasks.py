@@ -1,4 +1,4 @@
-"""Tareas asíncronas del flujo de RFPs (Hito 9, Partes 1 y 2).
+"""Tareas asíncronas del flujo de RFPs (Hito 9, Partes 1, 2 y 3).
 
 `POST /rfp-tickets` crea el ticket `analizando`, guarda el PDF y encola esta
 tarea; el worker de Celery ejecuta el grafo `rfp_intake` (5 llamadas al
@@ -22,6 +22,12 @@ falla en ese instante, el ticket queda `analisis_completo` con
 `next_stage = generando_borrador` y se relanza con
 scripts/generate_rfp_response.py. Sus fallos siguen el mismo camino que los
 de la Parte 1 (reintentos → `error` + DLQ).
+
+Parte 3: al terminar la Parte 2 (`evaluacion_completa` o `needs_human_review`)
+se encola `rfp_approval.advance_ticket`, que arranca el grafo de aprobación
+hasta las pausas humanas. Cada decisión que registra la API vuelve a encolar
+la misma tarea: `advance` es idempotente y aplica lo que haya pendiente. Solo
+viaja el `ticket_id`; la decisión (y su comentario) está en Supabase.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ from celery import Task
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlmodel import Session
 
+from data.pipelines.rfp_intake.approval_runner import ApprovalHandoffError
+from data.pipelines.rfp_intake.checkpointer import CheckpointerConfigError
 from data.pipelines.rfp_intake.conversion import ConversionError
 from data.pipelines.rfp_intake.response_runner import HandoffError
 from services.celery_app import celery_app
@@ -50,6 +58,9 @@ RFP_RETRY_BACKOFF_SECONDS = 15
 # La Parte 2 hace hasta 2 llamadas × 3 iteraciones × 3 departamentos: un solo
 # reintento cubre un pico del proxy sin duplicar un fallo persistente.
 RFP_RESPONSE_MAX_RETRIES = 1
+RFP_APPROVAL_TASK_NAME = "rfp_approval.advance_ticket"
+# Una reanudación puede incluir una revisión (2-4 llamadas al modelo).
+RFP_APPROVAL_MAX_RETRIES = 1
 
 
 def _error_message(exc: BaseException, stage: str = "el análisis") -> str:
@@ -63,6 +74,10 @@ def _error_message(exc: BaseException, stage: str = "el análisis") -> str:
         return f"El modelo no respondió correctamente ({exc})."
     if isinstance(exc, HandoffError):
         return "El análisis de la Parte 1 no tiene un handoff válido. Reprocesar el análisis."
+    if isinstance(exc, ApprovalHandoffError):
+        return "Los borradores de la Parte 2 no tienen un handoff válido. Relanzar la generación."
+    if isinstance(exc, CheckpointerConfigError):
+        return "No hay base de datos para guardar la pausa de aprobación (DATABASE_URL)."
     if isinstance(exc, SoftTimeLimitExceeded):
         return f"{stage[0].upper()}{stage[1:]} superó el tiempo máximo."
     return f"Error técnico durante {stage} ({type(exc).__name__})."
@@ -149,8 +164,56 @@ def generate_rfp_response(self: Task, ticket_id: str) -> Dict[str, Any]:
             session.add(ticket)
             session.commit()
         status = run_response(session, uuid.UUID(ticket_id))
+    from data.pipelines.rfp_intake.models import APPROVAL_ENTRY_STATUSES
+
+    if status in APPROVAL_ENTRY_STATUSES:
+        _chain_approval(ticket_id)
     return {"ticket_id": ticket_id, "status": status}
 
 
 def enqueue_rfp_response(ticket_id: uuid.UUID) -> str:
     return generate_rfp_response.apply_async(kwargs={"ticket_id": str(ticket_id)}, retry=False).id
+
+
+def _chain_approval(ticket_id: str) -> None:
+    """Handoff a la Parte 3. Igual que el de la Parte 2: si Redis falla aquí,
+    el ticket queda con `next_stage = esperando_aprobación` y se relanza con
+    scripts/advance_rfp_approval.py."""
+    try:
+        enqueue_rfp_approval(uuid.UUID(ticket_id))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("rfp_approval_enqueue_failed ticket=%s error_type=%s", ticket_id, type(exc).__name__)
+
+
+class RfpApprovalTask(RfpIntakeTask):
+    stage = "la aprobación"
+
+
+@celery_app.task(
+    bind=True,
+    base=RfpApprovalTask,
+    name=RFP_APPROVAL_TASK_NAME,
+    autoretry_for=(Exception,),
+    # Handoff inválido o sin Postgres: repetir no lo arregla.
+    dont_autoretry_for=(SoftTimeLimitExceeded, ApprovalHandoffError, CheckpointerConfigError),
+    max_retries=RFP_APPROVAL_MAX_RETRIES,
+    retry_backoff=RFP_RETRY_BACKOFF_SECONDS,
+    retry_jitter=False,
+)
+def advance_rfp_approval(self: Task, ticket_id: str) -> Dict[str, Any]:
+    from data.pipelines.rfp_intake import repository
+    from data.pipelines.rfp_intake.approval_runner import advance
+    from data.pipelines.rfp_intake.checkpointer import open_checkpointer
+
+    with Session(_engine()) as session, open_checkpointer() as checkpointer:
+        ticket = repository.get_ticket(session, uuid.UUID(ticket_id))
+        if ticket is not None and self.request.id:
+            ticket.approval_task_id = self.request.id
+            session.add(ticket)
+            session.commit()
+        status = advance(session, uuid.UUID(ticket_id), checkpointer=checkpointer)
+    return {"ticket_id": ticket_id, "status": status}
+
+
+def enqueue_rfp_approval(ticket_id: uuid.UUID) -> str:
+    return advance_rfp_approval.apply_async(kwargs={"ticket_id": str(ticket_id)}, retry=False).id
