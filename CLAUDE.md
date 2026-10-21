@@ -177,7 +177,10 @@ cd services/api && .venv/bin/uvicorn main:app --port 8000                       
 cd uis/backoffice && npm run dev -- --port 3001                                               # pantalla /rfps
 services/api/.venv/bin/python scripts/make_phi_test_rfp.py                                    # PDF del caso 4 (PHI ficticia)
 services/api/.venv/bin/python scripts/reprocess_rfp.py <ticket_id> [--inline]                 # reprocesar un ticket
+services/api/.venv/bin/python scripts/generate_rfp_response.py <ticket_id> [--inline]          # (re)lanzar la Parte 2 (borradores)
 ```
+
+La Parte 2 (borradores + evaluación) arranca sola en el worker cuando un ticket llega a `analisis_completo`. Las columnas nuevas de `rfp_*` las crea la API al arrancar (`ensure_rfp_response_columns`).
 
 Los PDF de muestra están en el repo del currículo (`content/contexts/09-agentic-workflows/rfp-requests/healthcore/`). Requiere `markitdown[pdf]` y `py-readability-metrics` (en `services/api/requirements.txt`); el tokenizador `punkt_tab` de NLTK se descarga solo dentro del venv la primera vez. Detalle en `docs/rfp-intake.md`.
 
@@ -202,14 +205,17 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py test
 # Tests de la recepción de RFPs (49: clasificador, orquestador, workers, synthesizer, PHI, conversión real con MarkItDown, grafo, persistencia en SQLite): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_intake.py
 
+# Tests de la generación y evaluación de respuestas a RFP (49: generadores, 3 evaluadores, reglas del BRIEFING, ciclo con límite, progreso en vivo, encadenamiento Celery): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_response.py
+
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (255 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 9 de /rfp-tickets): desde services/api, con el venv activado
+# Backend (258 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 12 de /rfp-tickets): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (105 tests): desde uis/backoffice
+# Frontend (110 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -643,6 +649,31 @@ Gotchas reales:
 - **MarkItDown**: viñetas como `(cid:127)` (una regex con `\s*` se comía las líneas en blanco y fundía las viñetas con el título) y tablas desemparejadas. `py-readability-metrics` exige ≥100 palabras (si no, métricas `null` + `readability_note`) y `punkt_tab` de NLTK.
 - **Supabase gratuito se pausa** tras ~7 días sin uso: el pooler responde `tenant/user … not found`. Se reactiva desde el dashboard (Restore project).
 - **Claude in Chrome solo sube archivos del scratchpad** de la sesión, no del repo.
+
+### Generación y evaluación de respuestas a RFP — `docs/rfp-response.md`
+
+Hito 9 (Parte 2 de 3), rama `feature/rfp-response-generation` apilada sobre `feature/rfp-intake`, 2026-10-21. Desde el handoff de la Parte 1, un generador por departamento redacta su sección de la propuesta económica (en español), tres evaluadores en paralelo la revisan y, si falla, vuelve a su generador con feedback concreto, con un máximo de 3 iteraciones.
+
+Mapa del código (todo en `data/pipelines/rfp_intake/` salvo lo indicado):
+- `generators.py`: `REVENUE_GENERATOR`, `CLINICAL_GENERATOR`, `COMPLIANCE_GENERATOR` (un `SectionGenerator` con encargo propio cada uno). Entrada `GeneratorInput` = metadatos + workstream de SU departamento + resumen; nunca el PDF.
+- `evaluators.py`: `EvaluationResult` (claves `pass` del README vía alias), legibilidad (recuentos de `py-readability-metrics` + Fernández Huerta con contador de sílabas español), pertinencia (modelo) y cumplimiento (reglas deterministas con `rule_id`: `no-phi`, `baa-us`, `dpa-uk`, `currency-by-country`, `no-invented-figures`, `client-country-known`). `build_feedback` ordena cumplimiento → pertinencia → legibilidad.
+- `response_graph.py`: grafo `rfp_response` (Send por workstream) + subgrafo `rfp_section` (`generate` → 3 evaluadores en paralelo, cada uno con su clave → `judge` → vuelta o END).
+- `response_runner.py`: `run_response` (lee el handoff, `TicketProgress` escribe el progreso en vivo, `save_response` en una transacción) y `build_response_handoff` (contrato v1 hacia la Parte 3).
+- `services/tasks/rfp_tasks.py`: `rfp_response.generate_ticket`, encadenada desde la tarea de la Parte 1. `services/rfp_intake/`: secciones con borrador/evaluación y `GET /rfp-tickets/{id}/response-handoff`. Backoffice: `DraftBlock` en `/rfps/[id]`.
+
+Decisiones que conviene no romper:
+- **Estados**: `generando_borrador` → `en_evaluación` → `needs_human_review` | `evaluacion_completa` (este último añadido por decisión del usuario; los de la Parte 3 están vetados). `next_stage = esperando_aprobación` es la bandera para la Parte 3. `handoff_payload` (Parte 1) nunca se pisa: el de la Parte 2 va en `response_handoff`.
+- **Cumplimiento es código; pertinencia es modelo.** El silencio del modelo no aprueba un aspecto. `client-country-known` no es arreglable: la sección va a revisión humana sin gastar iteraciones.
+- **Umbrales de legibilidad** (`readability_verdict`, Learn by Doing delegado): ≥100 y ≤450 palabras, ≤25 palabras/frase, Fernández Huerta ≥50. El texto legal de Compliance ronda 51-53 bien escrito: subir a 60 lo haría suspender siempre.
+- **El grafo no toca la BD**; el progreso entra por `on_progress` (sesión propia + candado, renueva `updated_at`). `recover_stale` vigila también `generando_borrador`/`en_evaluación`.
+- **Columnas nuevas por migración idempotente** (`ensure_rfp_response_columns`, `ADD COLUMN IF NOT EXISTS`, solo Postgres), llamada en el arranque de la API.
+- Sin RAG en el generador (decisión del usuario: opcional y fuera de alcance).
+
+Gotchas reales (solo los destapó el modelo real, con test de regresión):
+- deepseek escribe cifras **con letras** ("ochocientos empleados"): `spoken_numbers_es` las lee (desde 10; "por ciento" no es 100).
+- **"3.000" español** se marcaba como cifra inventada frente al "3,000" de la RFP y el generador borraba un dato verdadero: se normaliza antes de comparar (sin tocar `numbers_in` de la Parte 1).
+- Efecto "tapar un agujero, abrir otro" en Clinical (sus `key_aspects` son tareas internas): lo absorbe el límite + `needs_human_review`.
+- El proxy corta llamadas a los 60 s (`APITimeoutError`): con `--inline` no hay reintento y el ticket queda `error`.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

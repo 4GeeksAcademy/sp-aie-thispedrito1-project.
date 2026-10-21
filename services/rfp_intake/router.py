@@ -22,7 +22,14 @@ from sqlmodel import Session
 
 from data.pipelines.rfp_intake import repository
 from data.pipelines.rfp_intake.departments import DEPARTMENTS
-from data.pipelines.rfp_intake.models import STATUS_COMPLETE
+from data.pipelines.rfp_intake.models import (
+    NEXT_STAGE_DRAFTING,
+    STATUS_ANALYZING,
+    STATUS_DISCARDED,
+    STATUS_ERROR,
+    STATUS_EVALUATED,
+    STATUS_NEEDS_REVIEW,
+)
 from data.pipelines.rfp_intake.runner import pdf_path_for, relative_to_root
 from database import get_inventory_db
 from security import get_current_user
@@ -30,6 +37,7 @@ from services.rfp_intake.schemas import (
     RfpDepartmentSectionRead,
     RfpHandoff,
     RfpMetadataRead,
+    RfpResponseHandoff,
     RfpTicketDetail,
     RfpTicketListItem,
     RfpTicketQueued,
@@ -131,8 +139,28 @@ def get_rfp_ticket(ticket_id: uuid.UUID, session: Session = Depends(get_inventor
 
 @router.get("/{ticket_id}/handoff", response_model=RfpHandoff)
 def get_rfp_handoff(ticket_id: uuid.UUID, session: Session = Depends(get_inventory_db)) -> RfpHandoff:
-    """Contrato de entrada de la Parte 2 (docs/rfp-intake.md)."""
+    """Contrato de entrada de la Parte 2 (docs/rfp-intake.md). Sigue
+    disponible cuando la Parte 2 ya avanzó el estado del ticket: el análisis
+    no deja de existir por haber empezado a redactar."""
     ticket = _get_or_404(session, ticket_id)
-    if ticket.status != STATUS_COMPLETE or not ticket.handoff_payload:
+    if ticket.status in (STATUS_ANALYZING, STATUS_DISCARDED) or not ticket.handoff_payload:
         raise HTTPException(status_code=409, detail="The RFP analysis is not complete.")
-    return RfpHandoff(ticket_id=ticket.ticket_id, next_stage=ticket.next_stage, payload=ticket.handoff_payload)
+    return RfpHandoff(
+        ticket_id=ticket.ticket_id,
+        next_stage=ticket.handoff_payload.get("next_stage", NEXT_STAGE_DRAFTING),
+        payload=ticket.handoff_payload,
+    )
+
+
+@router.get("/{ticket_id}/response-handoff", response_model=RfpResponseHandoff)
+def get_rfp_response_handoff(ticket_id: uuid.UUID, session: Session = Depends(get_inventory_db)) -> RfpResponseHandoff:
+    """Contrato de entrada de la Parte 3 (docs/rfp-response.md): borrador +
+    EvaluationResult por departamento; las secciones `needs_human_review`
+    van incluidas y marcadas `provisional`."""
+    ticket = _get_or_404(session, ticket_id)
+    if ticket.status not in (STATUS_EVALUATED, STATUS_NEEDS_REVIEW) or not ticket.response_handoff:
+        detail = "Draft generation failed." if ticket.status == STATUS_ERROR else "Draft generation is not complete."
+        raise HTTPException(status_code=409, detail=detail)
+    return RfpResponseHandoff(
+        ticket_id=ticket.ticket_id, status=ticket.status, next_stage=ticket.next_stage, payload=ticket.response_handoff
+    )

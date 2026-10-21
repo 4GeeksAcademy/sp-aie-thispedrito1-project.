@@ -12,7 +12,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class RfpTicketQueued(BaseModel):
@@ -67,6 +67,19 @@ class RfpDepartmentSectionRead(BaseModel):
     key_aspects: List[str]
     open_questions: List[str]
     unsupported_claims_removed: int
+    # Parte 2: borrador y su evaluación (None/[] mientras no ha empezado).
+    draft_status: Optional[str] = None
+    draft_iterations: int = 0
+    draft_content: Optional[str] = None
+    drafted_at: Optional[datetime] = None
+    evaluation_results: Optional[Dict[str, Any]] = None
+    evaluation_history: List[Dict[str, Any]] = []
+
+    @field_validator("evaluation_history", mode="before")
+    @classmethod
+    def _null_history(cls, value: Any) -> Any:
+        # Filas de la Parte 1 anteriores a la migración: la columna llega NULL.
+        return value or []
 
 
 class RfpTicketDetail(RfpTicketListItem):
@@ -82,5 +95,13 @@ class RfpTicketDetail(RfpTicketListItem):
 
 class RfpHandoff(BaseModel):
     ticket_id: uuid.UUID
+    next_stage: str
+    payload: Dict[str, Any]
+
+
+class RfpResponseHandoff(BaseModel):
+    """Contrato de entrada de la Parte 3 (docs/rfp-response.md)."""
+    ticket_id: uuid.UUID
+    status: str
     next_stage: str
     payload: Dict[str, Any]
