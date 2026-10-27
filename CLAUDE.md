@@ -187,6 +187,17 @@ La Parte 2 (borradores + evaluación) arranca sola en el worker cuando un ticket
 
 Los PDF de muestra están en el repo del currículo (`content/contexts/09-agentic-workflows/rfp-requests/healthcore/`). Requiere `markitdown[pdf]` y `py-readability-metrics` (en `services/api/requirements.txt`); el tokenizador `punkt_tab` de NLTK se descarga solo dentro del venv la primera vez. Detalle en `docs/rfp-intake.md`.
 
+### Notificaciones SSE de RFPs (Sistemas en Tiempo Real, Parte 1)
+
+```bash
+docker compose up -d redis                                     # canal pub/sub (el mismo Redis de Celery)
+cd services/api && .venv/bin/uvicorn main:app --port 8000      # GET /rfp-tickets/events
+cd uis/backoffice && npm run dev -- --port 3001                # /rfps se actualiza sola
+curl -N -H "Authorization: Bearer <jwt>" localhost:8000/rfp-tickets/events   # ver el stream a mano
+```
+
+El aviso lo publica el worker de la Parte 1 al terminar el nodo `orchestrate`; para probar sin worker ni modelo, publicar con `data.pipelines.rfp_intake.notifications.publish_event(...)`. Detalle en `docs/sse-notifications.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -205,7 +216,7 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_eval
 # Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49) + harness/guardrails (112, sin LLM): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py tests/pipelines/test_agent_guardrails.py
 
-# Tests de la recepción de RFPs (49: clasificador, orquestador, workers, synthesizer, PHI, conversión real con MarkItDown, grafo, persistencia en SQLite): desde la RAÍZ
+# Tests de la recepción de RFPs (54, 5 del aviso en tiempo real: clasificador, orquestador, workers, synthesizer, PHI, conversión real con MarkItDown, grafo, persistencia en SQLite): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_intake.py
 
 # Tests de la generación y evaluación de respuestas a RFP (49: generadores, 3 evaluadores, reglas del BRIEFING, ciclo con límite, progreso en vivo, encadenamiento Celery): desde la RAÍZ
@@ -217,11 +228,11 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (264 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets): desde services/api, con el venv activado
+# Backend (275 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (119 tests): desde uis/backoffice
+# Frontend (141 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -706,6 +717,28 @@ Gotchas reales:
 - **La pantalla dejaba de consultar durante un reintento de Celery** (el ticket pasa por `error`): `shouldPollTicket` sigue si hay una sección "en revisión". Lo detectó el recorrido en Chrome.
 - **Token local para verificar en Chrome**: `create_access_token(subject=<id UUID del usuario>)`, no la clave "1" de la TinyDB (da 401).
 - **Los fixtures SQLite de las Partes 1 y 2 crean ya todo el esquema RFP** (`rfp_fixtures.RFP_TABLES`): el reproceso limpia también el documento final.
+
+### Notificaciones en tiempo real de RFPs (SSE) — `docs/sse-notifications.md`
+
+Sistemas en Tiempo Real (Parte 1 de 2), rama `feature/sse-notifications` apilada sobre `feature/rfp-approval-completion`, 2026-10-27. `/rfps` muestra sola cada RFP nueva y se reconecta sola si cae la conexión. Sin modelos ni agentes.
+
+Mapa del código:
+- **Emisor**: `data/pipelines/rfp_intake/notifications.py`. `runner._run_with_trace` llama a `notify_ticket_created` al terminar el nodo `orchestrate` (solo corre si el clasificador aceptó: no avisa de no-RFP ni de PHI). Publica en Redis (`healthcore:rfp-events`) y **nunca lanza**.
+- **API**: `services/rfp_intake/events.py` (`RfpEventHub`: una suscripción a Redis por proceso + una cola por navegador; framing SSE; keep-alive 15 s) y `GET /rfp-tickets/events` en `router.py`, **declarada antes de `/{ticket_id}`** y con el JWT heredado del router.
+- **Backoffice**: `types/rfpEvents.ts` (parser SSE incremental, `reconnectDelay`, `mergeArrivals`, `findMissedTickets`), `services/rfpEvents.ts` (`fetch` + `ReadableStream` con `Authorization: Bearer`; vigilante de 45 s), `hooks/useRfpEvents.ts` y `app/rfps/page.tsx`. `http.ts` exporta ahora `apiUrl` y `redirectToLogin`.
+
+Decisiones que conviene no romper:
+- **Evento `rfp_ticket_created`** con JSON plano de 7 campos (`ticket_id`, `rfp_id`, `client_name`, `client_country`, `program_type`, `status`, `created_at`) y los valores del sistema de RFPs: `status` = `analizando` (BRIEFING §5: no inventar nombres nuevos). Lista cerrada en el emisor **y** otra vez en la API (`parse_message`).
+- **Recuperación = refetch de la lista + SSE para lo posterior** (no `Last-Event-ID`), comparando con `known` (lista al cargar + avisos; el polling no lo amplía) **al reconectar y en cada refresco del polling**. `findMissedTickets` excluye `descartado`, `error` y `analizando` sin cliente (criterio delegado). Avisos en un `Map` por `ticket_id`: nunca duplicados.
+- **Polling de 3 s mantenido solo para estados** (decisión del usuario); la llegada de tickets va por SSE. Sin caso opcional (`kpi_threshold_alert`): no hay datos de no-show ni rechazos de facturación.
+- **Cliente lento → stream cerrado** (cola de 100), nunca eventos descartados en silencio.
+- `tests/pipelines/conftest.py` sustituye la publicación en Redis por una lista (`published_rfp_events`, autouse): sin él, con un Redis local encendido, los tests del runner mandarían avisos falsos al backoffice.
+
+Gotchas reales (los encontró la verificación manual, no los tests):
+- **La API no se apagaba con un stream abierto**: uvicorn espera a que se cierren todas las conexiones antes del shutdown, y un SSE no se cierra solo. Se quedaba zombi en "Waiting for connections to close" (y fuera del `LISTEN`: `lsof -sTCP:LISTEN` no la encuentra; matar por PID). `install_shutdown_signal_hook()` en el **startup** envuelve el manejador de SIGINT/SIGTERM. Parchear `uvicorn.Server.handle_exit` al importar NO sirve: uvicorn instala sus manejadores antes de importar la app.
+- **El proxy de Next.js no cierra la respuesta al navegador si la API muere de golpe** (`kill -9`): sin el vigilante de 45 s la pantalla seguía "En directo" sin recibir nada.
+- `Cache-Control: no-transform` hace falta para que la compresión de Next.js no acumule el stream; con él el stream funciona por `/api-proxy`.
+- jsdom no trae `TextDecoder` ni `ReadableStream`: los tests usan el de `util` y un `body.getReader()` falso.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
