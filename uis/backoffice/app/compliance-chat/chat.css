@@ -1,0 +1,159 @@
+/* Chat de compliance (Tiempo Real, Parte 2). Archivo propio de la ruta, no
+   globals.css ni <style jsx>: Next.js lo extrae en build y llega en el <head>
+   (regla del proyecto tras el CLS de /application, ver AUDIT.md). Solo tokens
+   del tema: funciona en claro y en oscuro. */
+
+.chat-page {
+  padding: 24px 0 48px;
+  max-width: 900px;
+}
+
+.chat-header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.chat-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.chat-intro {
+  color: var(--muted);
+  max-width: 640px;
+}
+
+.chat-warning {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warning);
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.chat-panel {
+  min-height: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.chat-empty {
+  color: var(--muted);
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.chat-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.chat-message {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  max-width: 85%;
+}
+
+.chat-user {
+  justify-self: end;
+  border-color: var(--brand);
+}
+
+.chat-assistant {
+  justify-self: start;
+}
+
+.chat-author {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.chat-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-status-interrupted .chat-text,
+.chat-status-redacted .chat-text {
+  color: var(--muted);
+}
+
+.chat-status-interrupted {
+  border-style: dashed;
+}
+
+.chat-badge {
+  justify-self: start;
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 1px 6px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+}
+
+.chat-status-blocked .chat-badge,
+.chat-status-failed .chat-badge {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+.chat-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--brand);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-cursor {
+    animation: chat-blink 1s steps(1) infinite;
+  }
+}
+
+@keyframes chat-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.chat-form {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chat-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}

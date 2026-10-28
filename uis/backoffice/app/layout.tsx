@@ -72,6 +72,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                 <Link href="/knowledge" className="nav-link">
                   Asistente
                 </Link>
+                <Link href="/compliance-chat" className="nav-link">
+                  Chat de compliance
+                </Link>
                 <Link href="/rfps" className="nav-link">
                   RFPs
                 </Link>
