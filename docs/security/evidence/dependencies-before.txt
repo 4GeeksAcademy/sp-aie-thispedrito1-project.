@@ -1,0 +1,44 @@
+# Escaneo de dependencias ANTES de la auditoría (2026-10-28)
+# Python: uvx pip-audit --path services/api/.venv/lib/python3.12/site-packages
+# Node:   npm audit (uis/backoffice, uis/website)
+
+Python: 197 paquetes, 73 avisos únicos en 15 paquetes
+  certifi 2026.7.22                          1 avisos  · corregido en 2026.10.19
+  dnspython 2.8.0                            1 avisos  · corregido en 2.9.0
+  ecdsa 0.19.2                               1 avisos  · corregido en sin versión corregida
+  langgraph 0.6.11                           1 avisos  · corregido en 1.0.10rc1
+  langgraph-checkpoint 3.0.1                 2 avisos  · corregido en 4.1.1
+  langgraph-checkpoint-postgres 3.0.5        2 avisos  · corregido en 3.1.3
+  langgraph-sdk 0.2.15                       3 avisos  · corregido en 0.4.4
+  nltk 3.10.3                                1 avisos  · corregido en sin versión corregida
+  oauthlib 3.3.1                             2 avisos  · corregido en 4.0.0
+  opentelemetry-api 1.45.0                   1 avisos  · corregido en 1.45.1
+  pillow 12.3.0                             39 avisos  · corregido en 13.0.0
+  python-dotenv 1.0.1                        1 avisos  · corregido en 1.2.2
+  python-jose 3.3.0                          4 avisos  · corregido en 3.4.0
+  python-multipart 0.0.17                    7 avisos  · corregido en 0.0.31
+  starlette 0.46.2                           7 avisos  · corregido en 1.3.1
+
+uis/backoffice: {'info': 0, 'low': 6, 'moderate': 0, 'high': 6, 'critical': 2, 'total': 14}
+  handlebars                   critical  directa=False
+  next                         critical  directa=True
+  brace-expansion              high      directa=False
+  js-yaml                      high      directa=False
+  nanoid                       high      directa=False
+  postcss                      high      directa=False
+  sharp                        high      directa=False
+  source-map-js                high      directa=False
+  @jest/core                   low       directa=False
+  deepmerge                    low       directa=False
+  jest                         low       directa=True
+  jest-cli                     low       directa=False
+  jest-config                  low       directa=False
+  ts-jest                      low       directa=True
+
+uis/website: {'info': 0, 'low': 0, 'moderate': 1, 'high': 4, 'critical': 1, 'total': 6}
+  next                         critical  directa=True
+  nanoid                       high      directa=False
+  postcss                      high      directa=False
+  sharp                        high      directa=False
+  source-map-js                high      directa=False
+  baseline-browser-mapping     moderate  directa=False

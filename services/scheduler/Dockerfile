@@ -43,4 +43,10 @@ WORKDIR /app
 # funcione también sin montajes.
 COPY services/scheduler/crontab /app/services/scheduler/crontab
 
+# Sin root (auditoría OWASP A05): supercronic no lo necesita. Mismo usuario
+# y UID que services/api/Dockerfile.
+ARG APP_UID=1000
+RUN useradd --uid "${APP_UID}" --create-home --shell /usr/sbin/nologin healthcore
+USER healthcore
+
 CMD ["supercronic", "/app/services/scheduler/crontab"]

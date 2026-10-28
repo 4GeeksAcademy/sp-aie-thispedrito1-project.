@@ -12,6 +12,7 @@ import telemetry_service
 from cache import cache
 from database import get_inventory_db
 from models import TelemetryEvent, TelemetryIngestResponse, TelemetryReport
+from security import get_current_user
 from services.telemetry.analysis import (
     auth_failure_rate,
     error_rate_by_day,
@@ -115,7 +116,10 @@ def _report_cache_key(start_date: Optional[str], end_date: Optional[str]) -> str
     return f"telemetry_report:{start_part}:{end_part}"
 
 
-@router.get("/report", response_model=TelemetryReport)
+# OWASP A01: era público (tasa de fallos de login y actividad de la
+# plataforma para cualquiera). POST /events sigue sin auth a propósito:
+# sendBeacon no puede llevar cabecera Authorization.
+@router.get("/report", response_model=TelemetryReport, dependencies=[Depends(get_current_user)])
 def get_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
