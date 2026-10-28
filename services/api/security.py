@@ -104,19 +104,31 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
     return user
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+def user_from_token(token: str | None) -> dict[str, Any] | None:
+    """The active user a bearer token belongs to, or None if it is not valid.
+
+    Shared by `get_current_user` (Authorization header) and the chat
+    WebSocket, which can't send that header from a browser and authenticates
+    with `?token=` or a first `auth` frame instead: same JWT, same rules."""
+    if not token:
+        return None
     try:
         payload = jwt.decode(token, _get_secret_key(), algorithms=[_get_algorithm()])
-        user_id: str | None = payload.get("sub")
-        if not user_id:
-            raise _credentials_exception()
-    except JWTError as exc:
-        raise _credentials_exception() from exc
-
+    except JWTError:
+        return None
+    user_id: str | None = payload.get("sub")
+    if not user_id:
+        return None
     user = auth_repo.get_user_by_id(user_id)
     if not user or not user.get("is_active", True):
-        raise _credentials_exception()
+        return None
+    return user
 
+
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+    user = user_from_token(token)
+    if user is None:
+        raise _credentials_exception()
     return user
 
 

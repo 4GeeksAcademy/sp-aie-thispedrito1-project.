@@ -56,6 +56,7 @@ from langgraph.graph import END, START, StateGraph
 from services.agent.evidence import fallback_message, tool_evidence
 from services.agent.memory.reply import AgentReply
 from services.agent.planner import SOURCE_AGENT_MEMORY, SOURCE_INCIDENTS, SOURCE_INVENTORY, SOURCE_KNOWLEDGE_BASE, Plan
+from services.agent.streaming import current_answer_stream
 from services.agent.tools.base import ToolResult
 from services.agent.tools.incidents import IncidentLookupInput
 from services.agent.tools.inventory import InventoryLookupInput
@@ -157,6 +158,12 @@ def _default_retrieve(question: str, *, k: int, min_score: float) -> List[Dict[s
 def _default_generate(question: str, context: List[Dict[str, Any]]) -> AgentReply:
     from services.agent.memory import reply
 
+    # Chat por WebSocket: la misma llamada, pero emitiendo la respuesta a
+    # trozos (modo `custom`) y atenta a la orden de parar. Sin consumidor,
+    # la llamada de siempre (POST /agent/query no cambia).
+    answer_stream = current_answer_stream()
+    if answer_stream is not None:
+        return reply.generate_reply(question, context, answer_stream=answer_stream)
     return reply.generate_reply(question, context)
 
 

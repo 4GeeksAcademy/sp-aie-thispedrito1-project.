@@ -198,6 +198,16 @@ curl -N -H "Authorization: Bearer <jwt>" localhost:8000/rfp-tickets/events   # v
 
 El aviso lo publica el worker de la Parte 1 al terminar el nodo `orchestrate`; para probar sin worker ni modelo, publicar con `data.pipelines.rfp_intake.notifications.publish_event(...)`. Detalle en `docs/sse-notifications.md`.
 
+### Chat de compliance por WebSocket (Sistemas en Tiempo Real, Parte 2)
+
+```bash
+docker compose up -d qdrant                                    # el agente consulta el RAG
+cd services/api && .venv/bin/uvicorn main:app --port 8000      # WS /agent/chat/ws/{session_id}; crea chat_sessions/chat_messages al arrancar
+cd uis/backoffice && npm run dev -- --port 3001                # pantalla /compliance-chat
+```
+
+Sin Redis ni Celery: el pub/sub es en memoria (un proceso). El navegador conecta directo a `ws://localhost:8000` (`NEXT_PUBLIC_CHAT_WS_URL`), no por `/api-proxy`. Necesita `LLM_API_KEY` vigente y Supabase despierto. Detalle en `docs/websocket-chat.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -213,8 +223,8 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast.py
 # Tests de la evaluación del modelo (21: orden cronológico de los pliegues, métricas, diagnóstico): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_evaluation.py
 
-# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49) + harness/guardrails (112, sin LLM): desde la RAÍZ
-services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py tests/pipelines/test_agent_guardrails.py
+# Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49) + harness/guardrails (112, sin LLM) + contrato del chat WebSocket (26): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py tests/pipelines/test_agent_guardrails.py tests/pipelines/test_agent_chat_contract.py
 
 # Tests de la recepción de RFPs (54, 5 del aviso en tiempo real: clasificador, orquestador, workers, synthesizer, PHI, conversión real con MarkItDown, grafo, persistencia en SQLite): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_intake.py
@@ -228,11 +238,11 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (275 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE): desde services/api, con el venv activado
+# Backend (289 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 14 del chat WebSocket): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (141 tests): desde uis/backoffice
+# Frontend (157 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -739,6 +749,34 @@ Gotchas reales (los encontró la verificación manual, no los tests):
 - **El proxy de Next.js no cierra la respuesta al navegador si la API muere de golpe** (`kill -9`): sin el vigilante de 45 s la pantalla seguía "En directo" sin recibir nada.
 - `Cache-Control: no-transform` hace falta para que la compresión de Next.js no acumule el stream; con él el stream funciona por `/api-proxy`.
 - jsdom no trae `TextDecoder` ni `ReadableStream`: los tests usan el de `util` y un `body.getReader()` falso.
+
+### Chat de compliance en tiempo real (WebSocket) — `docs/websocket-chat.md`
+
+Sistemas en Tiempo Real (Parte 2 de 2), rama `feature/websocket-chat` apilada sobre `feature/sse-notifications`, 2026-10-28. El MISMO agente de `/agent/query` (el "Compliance assistant" de Claire Whitfield, BRIEFING §2) por WebSocket: respuesta palabra a palabra e interrupción a mitad con abort real. Sin tocar su lógica, herramientas ni memoria; `POST /agent/query` no cambia.
+
+Mapa del código:
+- **Agente (cambios mínimos)**: `services/agent/streaming.py` (`AnswerStream`, `GenerationAborted`, `STOP_CONFIG_KEY`); `memory/reply.py` (`AnswerDeltaExtractor` + `_stream_reply` con `stream=True`); `graph._default_generate` usa `current_answer_stream()`; `tracing.run_agent(on_token=, should_stop=)` recorre con `stream_mode=["updates","custom"]` y deja el trace `aborted`.
+- **`services/agent/chat/`**: `models.py` (`chat_sessions` con los campos literales del BRIEFING §3, `chat_messages`), `events.py` (contrato y códigos de cierre), `hub.py` (pub/sub en memoria, canal `chat.<session_id>`), `store.py` (repositorio + `redact_user_text`), `service.py` (`ChatService`: productor, abort, guardarraíl palabra a palabra), `router.py` (`POST/GET /agent/chat/sessions`, `POST …/close`, `WS /agent/chat/ws/{session_id}`).
+- **Backoffice**: `/compliance-chat` (`app/compliance-chat/page.tsx` + `chat.css`), `hooks/useChatSocket.ts`, `types/chat.ts` (reductor `applyChatEvent`), `services/chatApi.ts`.
+
+Decisiones que conviene no romper:
+- **Modo `custom` de LangGraph, no `messages`**: el modelo se llama con el SDK `openai`, no con LangChain. Comprobado: en 0.6.11 los eventos `custom` llegan en tiempo real. `should_stop` viaja en `configurable` (no en el estado: no entra en los checkpoints).
+- **Abort real en dos puntos**: `_stream_reply` comprueba `stop` antes de cada trozo y cierra la respuesta HTTP (`finally: stream.close()`); `run_agent` corta entre nodos. Sin `interrupt()` HITL.
+- **La puerta de los tokens**: se publica bajo `runtime.lock` y solo si la generación sigue siendo la actual; la interrupción la quita con el mismo candado ANTES de publicar `generation_interrupted`, y el hub entrega siempre con `call_soon_threadsafe` (orden de publicación). Así no puede llegar ningún token tras el aviso.
+- **Parcial `interrupted` nunca sobrescrito**; la respuesta redirigida es otra fila con otro `message_id` (`replies_to` = su pregunta). `handle_turn` no ofrece memoria de una respuesta cortada.
+- **Guardarraíl palabra a palabra** (decisión del usuario): `check_output` sobre todo lo acumulado antes de publicar cada trozo; `split_ready_text` (Learn by Doing delegado) solo libera palabras completas. Si salta → abort + `generation_blocked` con el texto fijo.
+- **Historial en Supabase** (decisión del usuario) para rehidratar; mensaje del usuario con PHI → guardado y retransmitido SIN texto (`redacted`). `session_id` no es el `thread_id` de LangGraph: cada corrida sigue siendo independiente.
+- **Auth**: `security.user_from_token` (compartido con `get_current_user`). El backoffice usa el primer frame `auth` (el token no va en la URL ni en el log de uvicorn); `?token=` también vale y se valida antes de aceptar. Solo el dueño escribe; un admin puede observar (solo lectura).
+- **Rehidratación**: suscribirse ANTES de leer historial + `in_progress`; `_pump` descarta tokens con `sequence` ya en el snapshot. La pantalla solo pasa a "En directo" tras `session_snapshot`. Reconexión 1 s → 30 s (`reconnectDelay` de la Parte 1). La pantalla reabre la última sesión no cerrada.
+- **WS directo a la API** (`NEXT_PUBLIC_CHAT_WS_URL`, por defecto `ws://<host>:8000`): los docs de Next 16 no garantizan WebSocket por el rewrite `/api-proxy`.
+
+Gotchas reales:
+- **`TestClient` de Starlette: un event loop por `websocket_connect`**, y cerrarlo espera a los hilos lanzados desde él (el turno). Con uvicorn hay un loop. El test de reconexión a mitad abre el socket nuevo antes de cerrar el viejo.
+- Un doble de modelo sin pausa termina antes de recibir la orden de parar (otro hilo): 20 ms por palabra en los tests.
+- `services/agent/chat/service.py` importa `database` dentro de la función: así los tests de la raíz lo importan sin `services/api` en el path.
+- **deepseek con `response_format=json_object` retiene toda la salida hasta el final** (93 trozos en 0,1 s): el modo streaming de `generate_reply` no lo pide (test `test_streaming_does_not_ask_for_json_mode`); `POST /agent/query` sí. Aun así, el reparto varía por petición (OpenRouter): a veces 8 s repartidos, a veces una ráfaga tras 10-18 s.
+- **La espera larga está dentro de `create()`** y cerrar el stream de httpx desde otro hilo no corta (se cuelga hasta el timeout): el abort se comprueba en el hilo del turno. Cortar durante esa espera exigiría el cliente asíncrono.
+- **Verificado en Chrome con el modelo real (2026-10-28)**: escritura en vivo, interrupción a mitad (trace `aborted` en `generate`, parcial `interrupted`, turno nuevo), caída de la API con backoff y rehidratación, y recarga de página. Tabla en `docs/websocket-chat.md` §10. `glm-5.3-flash` da 403 para el equipo.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
