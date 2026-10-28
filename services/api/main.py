@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -58,12 +59,36 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # "HTTP Request: POST .../logs/" por corrida que taparian los logs de timing.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# OWASP A05 (docs/security/owasp-top10-audit.md): antes allow_origins=["*"]
+# con allow_credentials=True, es decir, cualquier web podía llamar a la API
+# desde el navegador de un usuario. Ahora, lista explícita por entorno. El
+# backoffice va casi todo por su proxy /api-proxy (mismo origen); lo que llega
+# directo desde el navegador es la telemetría (NEXT_PUBLIC_TELEMETRY_ENDPOINT).
+# El WebSocket del chat no pasa por CORS: valida su token en el primer frame.
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:3001"
+
+
+def parse_cors_origins(raw: str) -> list[str]:
+    """`CORS_ALLOWED_ORIGINS` ("a,b,c") → lista de orígenes permitidos.
+
+    (Learn by Doing delegado al asistente.) Un "*" para el arranque en vez de
+    ignorarse: con allow_credentials=True reabriría la vulnerabilidad, y fallar
+    al arrancar es lo que ya hace security.py si falta JWT_SECRET_KEY. La barra
+    final se quita porque el navegador nunca la envía en la cabecera Origin.
+    """
+    origins = [origin.strip().rstrip("/") for origin in raw.split(",")]
+    origins = [origin for origin in origins if origin]
+    if "*" in origins:
+        raise RuntimeError("CORS_ALLOWED_ORIGINS no admite '*': lista los orígenes del frontend")
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=parse_cors_origins(os.getenv("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ORIGINS)),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(suppliers_router)

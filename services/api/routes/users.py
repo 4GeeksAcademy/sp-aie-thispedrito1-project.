@@ -52,7 +52,9 @@ def list_users(current_user: dict[str, Any] = Depends(get_current_user)) -> list
 
 @router.get("/{user_id}", response_model=UserPublic)
 def get_user(user_id: str, current_user: dict[str, Any] = Depends(get_current_user)) -> UserPublic:
-    _ = current_user
+    # OWASP A01 (docs/security/owasp-top10-audit.md): antes cualquier
+    # autenticado leía el email de cualquier cuenta. Mismo control que PUT.
+    ensure_self_or_admin(user_id, current_user)
     found = auth_repo.get_user_by_id(user_id)
     if not found:
         raise HTTPException(status_code=404, detail="User not found")

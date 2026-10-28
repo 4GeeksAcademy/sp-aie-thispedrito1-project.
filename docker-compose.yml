@@ -12,7 +12,11 @@ services:
       # Base de conocimiento RAG (Hito 7): Qdrant por nombre de servicio.
       - QDRANT_URL=http://qdrant:6333
     ports:
-      - "8000:8000"
+      # Solo loopback (auditoría OWASP A05, como redis/flower/qdrant): sin
+      # prefijo, Docker publica en todas las interfaces y la API quedaba
+      # accesible desde cualquier equipo de la misma red. En un servidor real
+      # la entrada es el proxy HTTPS (infra/hardening), no este puerto.
+      - "127.0.0.1:8000:8000"
     volumes:
       # Live source for --reload; packages/ carries the shared Python
       # package (packages/shared/incidents_validation) main.py imports via
@@ -43,8 +47,9 @@ services:
       # comment there for why (virtiofs bind mounts + webpack watcher).
       - DOCKER_DEV=true
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      # Solo loopback, mismo motivo que api (auditoría OWASP A05).
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     volumes:
       - ./uis:/app/uis
       # Same packages/ mount as api, at the same relative depth backoffice

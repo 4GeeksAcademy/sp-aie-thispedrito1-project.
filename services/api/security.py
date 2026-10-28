@@ -16,6 +16,8 @@ from auth_repository import AuthRepository
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+ACCESS_TOKEN_TYPE = "access"
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 auth_repo = AuthRepository()
@@ -66,7 +68,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=_get_expiry_minutes())
-    payload = {"sub": subject, "role": role, "exp": expire}
+    payload = {"sub": subject, "role": role, "type": ACCESS_TOKEN_TYPE, "exp": expire}
     return jwt.encode(payload, _get_secret_key(), algorithm=_get_algorithm())
 
 
@@ -115,6 +117,12 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     try:
         payload = jwt.decode(token, _get_secret_key(), algorithms=[_get_algorithm()])
     except JWTError:
+        return None
+    # OWASP A07: el token de reset (type="reset", llega por email) está firmado
+    # con el mismo secreto y también lleva `sub`; sin esta comprobación abría
+    # sesión 30 min, incluso después de usarlo. Lista de permitidos: los
+    # tokens sin `type` son de sesión emitidos antes de la auditoría.
+    if payload.get("type", ACCESS_TOKEN_TYPE) != ACCESS_TOKEN_TYPE:
         return None
     user_id: str | None = payload.get("sub")
     if not user_id:

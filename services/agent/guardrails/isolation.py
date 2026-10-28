@@ -49,7 +49,10 @@ _SENTENCE = re.compile(r"[^.!?\n]+[.!?]?|\n")
 
 
 def _is_instruction(sentence: str) -> str:
-    return patterns.first_match(patterns.JAILBREAK_RULES, patterns.normalize(sentence))
+    normalized = patterns.normalize(sentence)
+    return patterns.first_match(patterns.JAILBREAK_RULES, normalized) or patterns.first_match(
+        patterns.EMBEDDED_INSTRUCTION_RULES, normalized
+    )
 
 
 def sanitize_text(text: str) -> "tuple[str, List[str]]":

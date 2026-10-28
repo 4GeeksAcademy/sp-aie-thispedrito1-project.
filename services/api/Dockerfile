@@ -21,6 +21,17 @@ RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY . .
 
+# Usuario sin privilegios (auditoría OWASP A05: el agente, el RAG y el
+# cliente MCP corren dentro de este proceso). Las dependencias ya quedaron
+# instaladas como root, así que la app no puede modificarlas. UID 1000 = el
+# dueño habitual de los bind mounts en Linux (Codespaces, servidor), para que
+# la TinyDB y data/ sigan siendo escribibles. Sin montajes, solo data/.
+ARG APP_UID=1000
+RUN useradd --uid "${APP_UID}" --create-home --shell /usr/sbin/nologin healthcore \
+    && mkdir -p /app/services/api/data \
+    && chown -R healthcore:healthcore /app/services/api/data
+USER healthcore
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
