@@ -18,8 +18,8 @@ const OrderDetailPanel = dynamic(
 );
 
 const ORDER_TYPE_BADGE_STYLES: Record<OrderType, React.CSSProperties> = {
-  inbound: { background: "rgba(74, 222, 128, 0.14)", color: "var(--ok)" },
-  outbound: { background: "rgba(255, 194, 75, 0.14)", color: "var(--warning)" },
+  inbound: { background: "color-mix(in srgb, var(--ok) 14%, transparent)", color: "var(--ok)" },
+  outbound: { background: "color-mix(in srgb, var(--warning) 14%, transparent)", color: "var(--warning)" },
 };
 
 const ORDER_TYPE_LABELS: Record<OrderType, string> = {

@@ -149,7 +149,7 @@ export default function ReportIncidentPage() {
           <label
             style={
               branchHighlighted
-                ? { background: "rgba(255, 138, 61, 0.08)", border: "1px solid var(--brand)", borderRadius: 10, padding: 8 }
+                ? { background: "color-mix(in srgb, var(--brand) 8%, transparent)", border: "1px solid var(--brand)", borderRadius: 10, padding: 8 }
                 : undefined
             }
           >
@@ -188,7 +188,7 @@ export default function ReportIncidentPage() {
           style={{
             marginTop: 14,
             border: "2px solid var(--warning)",
-            background: "rgba(255, 194, 75, 0.1)",
+            background: "color-mix(in srgb, var(--warning) 10%, transparent)",
             color: "var(--warning)",
             borderRadius: 10,
             padding: "10px 12px",
