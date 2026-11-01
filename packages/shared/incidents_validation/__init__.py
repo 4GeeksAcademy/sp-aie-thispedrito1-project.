@@ -19,8 +19,10 @@ from .incident_rules import (
     INCIDENT_STATUSES,
     REQUIRED_INCIDENT_FIELDS,
     STATUS_TRANSITIONS,
+    TERMINAL_STATUSES,
     TITLE_MAX_LENGTH,
     validate_incident_payload,
+    validate_status_confirmation,
     validate_status_transition,
 )
 
@@ -43,7 +45,9 @@ __all__ = [
     "INCIDENT_STATUSES",
     "REQUIRED_INCIDENT_FIELDS",
     "STATUS_TRANSITIONS",
+    "TERMINAL_STATUSES",
     "TITLE_MAX_LENGTH",
     "validate_incident_payload",
+    "validate_status_confirmation",
     "validate_status_transition",
 ]

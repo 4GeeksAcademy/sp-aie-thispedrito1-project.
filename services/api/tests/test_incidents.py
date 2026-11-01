@@ -62,7 +62,7 @@ def test_lifecycle_valid_transitions(client: TestClient, auth_headers: dict[str,
         f"/api/incidents/{incident['id']}/status", json={"status": "in_progress"}, headers=auth_headers
     )
     resolved = client.patch(
-        f"/api/incidents/{incident['id']}/status", json={"status": "resolved"}, headers=auth_headers
+        f"/api/incidents/{incident['id']}/status", json={"status": "resolved", "confirm": True}, headers=auth_headers
     )
 
     assert in_progress.status_code == 200
@@ -83,7 +83,7 @@ def test_lifecycle_rejects_skipping_stages(client: TestClient, auth_headers: dic
 
 def test_lifecycle_final_states_are_immutable(client: TestClient, auth_headers: dict[str, str]) -> None:
     incident = _create(client, auth_headers)
-    client.patch(f"/api/incidents/{incident['id']}/status", json={"status": "discarded"}, headers=auth_headers)
+    client.patch(f"/api/incidents/{incident['id']}/status", json={"status": "discarded", "confirm": True}, headers=auth_headers)
 
     response = client.patch(
         f"/api/incidents/{incident['id']}/status", json={"status": "open"}, headers=auth_headers

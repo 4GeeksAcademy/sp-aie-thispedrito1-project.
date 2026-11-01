@@ -71,7 +71,7 @@ Cada tool publica título, una descripción que incluye el scope que necesita, `
 | `incidents_get` | estado y datos operativos de un ticket + `allowed_next_statuses` | `GET /api/incidents/{id}` |
 | `incidents_search` | filtra por estado/categoría/sede/origen; `total` + hasta `limit` | `GET /api/incidents` |
 | `incidents_create` | abre un ticket (siempre `open`) | `POST /api/incidents` |
-| `incidents_update_status` | ciclo de vida open → in_progress → resolved/discarded | `PATCH /api/incidents/{id}/status` |
+| `incidents_update_status` | ciclo de vida open → in_progress → resolved/discarded. Cerrar (resolved/discarded) es irreversible: exige `confirm: true` y la herramienta se anuncia con `destructiveHint` (clase NIST, `docs/security/nist-ai-security-report.md`) | `PATCH /api/incidents/{id}/status` |
 | `inventory_query` | `list_supplies` / `get_supply` con stock calculado; rechaza escrituras | `GET /inventory/products[/{id}]` |
 
 ## 3. Códigos de error

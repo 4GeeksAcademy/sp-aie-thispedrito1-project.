@@ -421,6 +421,34 @@ def test_invalid_frames_get_a_named_error_and_the_socket_stays_open(client, auth
         assert receive(ws)["data"]["code"] == "empty_input"
 
 
+def test_messages_over_the_llm_quota_get_rate_limited_without_running_the_agent(
+    client, auth_headers, model, inventory_engine, monkeypatch
+) -> None:
+    """Clase NIST: el chat comparte el cupo de /agent/query y /knowledge/query.
+    Con cupo 1, el segundo mensaje no llega al agente ni se guarda."""
+    import rate_limit
+
+    monkeypatch.setattr(rate_limit, "LLM_LIMITER", rate_limit.SlidingWindowLimiter(1, 60))
+    model.script("30 horas", ["Sin ", "cargo."])
+    session_id = new_session(client, auth_headers)
+    with client.websocket_connect(f"/agent/chat/ws/{session_id}?token={token_of(auth_headers)}") as ws:
+        receive(ws)  # snapshot
+        send(ws, events.USER_MESSAGE, session_id, text=FIRST_QUESTION)
+        receive_until(ws, events.GENERATION_COMPLETED)
+        wait_idle(session_id)
+        send(ws, events.USER_MESSAGE, session_id, text=FIRST_QUESTION)
+        refused = receive(ws)
+
+    assert refused["event"] == events.CHAT_ERROR
+    assert refused["data"]["code"] == "rate_limited"
+    assert "Espera" in refused["data"]["message"]
+    # Solo el primer turno quedó en el historial.
+    assert [(m.role, m.status) for m in stored_messages(inventory_engine, session_id)] == [
+        ("user", "completed"),
+        ("assistant", "completed"),
+    ]
+
+
 def test_closed_session_rejects_new_connections(client, auth_headers, model, inventory_engine) -> None:
     session_id = new_session(client, auth_headers)
     response = client.post(f"/agent/chat/sessions/{session_id}/close", headers=auth_headers)

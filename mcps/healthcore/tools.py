@@ -295,19 +295,31 @@ def register_tools(mcp: FastMCP, api: HealthCoreApi) -> None:
             "Mueve una incidencia por su ciclo de vida usando el endpoint del Incidents Manager "
             "PATCH /api/incidents/{id}/status. Transiciones válidas: open → in_progress | discarded; "
             "in_progress → resolved | discarded; resolved y discarded son finales. Una transición no permitida "
-            "da `validation_error`; una incidencia inexistente, `not_found`." + _scopes_note("incidents_update_status")
+            "da `validation_error`; una incidencia inexistente, `not_found`. Pasar a resolved o discarded es "
+            "IRREVERSIBLE: exige `confirm: true`, y solo debes enviarlo cuando una persona lo haya confirmado "
+            "explícitamente; sin él responde `validation_error`." + _scopes_note("incidents_update_status")
         ),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+        # destructiveHint=True (clase NIST): cerrar una incidencia no tiene vuelta
+        # atrás, y los clientes MCP usan esta marca para pedir confirmación a la
+        # persona antes de ejecutar la herramienta.
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     )
     async def incidents_update_status(
         incident_id: Annotated[int, Field(ge=1, description="Número de la incidencia (ticket)")],
         status: Annotated[str, Field(description="Estado nuevo", json_schema_extra=_enum(INCIDENT_STATUSES))],
         ctx: Context,
+        confirm: Annotated[
+            bool,
+            Field(description="true solo si una persona confirmó explícitamente un cierre (resolved/discarded)"),
+        ] = False,
     ) -> IncidentRecord:
         async def run() -> IncidentRecord:
-            return _incident(await api.request("PATCH", f"/api/incidents/{incident_id}/status", json={"status": status}))
+            body = {"status": status, "confirm": confirm}
+            return _incident(await api.request("PATCH", f"/api/incidents/{incident_id}/status", json=body))
 
-        return await _invoke("incidents_update_status", ctx, {"incident_id": incident_id, "status": status}, run)
+        return await _invoke(
+            "incidents_update_status", ctx, {"incident_id": incident_id, "status": status, "confirm": confirm}, run
+        )
 
     @mcp.tool(
         name="inventory_query",
