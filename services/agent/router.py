@@ -30,6 +30,7 @@ from sqlmodel import Session
 
 from data.process.rag import RagConfigError
 from database import get_inventory_db, get_inventory_db_optional
+from rate_limit import enforce_llm_rate_limit
 from security import get_current_user, require_admin
 from services.agent.graph import OUTCOME_INVALID_QUESTION, compile_agent_graph
 from services.agent.guardrails.monitor import MONITOR, GuardEvent
@@ -74,7 +75,9 @@ def _guardrail(event: Optional[GuardEvent]) -> Optional[Dict[str, Any]]:
     return {"guard": event.guard, "action": event.action, "failure_type": event.failure_type, "reason": event.reason}
 
 
-@router.post("/query", response_model=AgentQueryResponse)
+# Rate limiting (clase NIST): el cupo se comprueba antes del handler, así que un
+# 429 nunca llega al grafo ni al modelo. Ver services/api/rate_limit.py.
+@router.post("/query", response_model=AgentQueryResponse, dependencies=[Depends(enforce_llm_rate_limit)])
 def query_agent(
     payload: AgentQueryRequest,
     agent: Any = Depends(get_agent),

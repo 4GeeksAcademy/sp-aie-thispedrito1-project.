@@ -216,7 +216,7 @@ def test_ticket_lifecycle_goes_through_the_real_incident_manager(client, auth_he
 
     moved = h.call(api_app, token, "incidents_update_status", {"incident_id": ticket["id"], "status": "in_progress"})
     assert moved.structuredContent["status"] == "in_progress"
-    done = h.call(api_app, token, "incidents_update_status", {"incident_id": ticket["id"], "status": "resolved"})
+    done = h.call(api_app, token, "incidents_update_status", {"incident_id": ticket["id"], "status": "resolved", "confirm": True})
     assert done.structuredContent["allowed_next_statuses"] == []
 
     fetched = h.call(api_app, token, "incidents_get", {"incident_id": ticket["id"]})
@@ -234,7 +234,7 @@ def test_status_changes_use_the_lifecycle_endpoint(client, auth_headers, service
 
     monkeypatch.setattr(HealthCoreApi, "request", spy)
     ticket = h.call(api_app, h.make_token(), "incidents_create", INCIDENT_PAYLOAD).structuredContent
-    h.call(api_app, h.make_token(), "incidents_update_status", {"incident_id": ticket["id"], "status": "discarded"})
+    h.call(api_app, h.make_token(), "incidents_update_status", {"incident_id": ticket["id"], "status": "discarded", "confirm": True})
 
     assert ("PATCH", f"/api/incidents/{ticket['id']}/status") in seen
     assert not any(method == "PATCH" and path == f"/api/incidents/{ticket['id']}" for method, path in seen)

@@ -16,6 +16,7 @@ import {
   STATUS_LABELS,
   STATUS_OPTIONS,
   STATUS_TRANSITIONS,
+  isTerminalStatus,
   type IncidentListItem,
   type IncidentFilters,
   type IncidentStatus,
@@ -32,6 +33,10 @@ export default function IncidentsPage() {
   const [filters, setFilters] = useState<IncidentFilters>({ status: "", origin: "", branch: "" });
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+  // Cierre pendiente de confirmar (clase NIST, acciones irreversibles): elegir
+  // "Resuelta" o "Descartada" no llama a la API; primero se pide confirmación
+  // en la propia fila y solo "Confirmar" envía `confirm: true`.
+  const [pendingClose, setPendingClose] = useState<{ id: number; status: IncidentStatus } | null>(null);
 
   // `filters` es la dependencia real: el hook relanza la lectura cada vez que
   // el usuario cambia un desplegable. Es tambien el motivo por el que
@@ -58,8 +63,18 @@ export default function IncidentsPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const changeStatus = async (incident: IncidentListItem, nextStatus: IncidentStatus) => {
+  const requestStatusChange = (incident: IncidentListItem, nextStatus: IncidentStatus) => {
+    if (isTerminalStatus(nextStatus)) {
+      setUpdateNotice(null);
+      setPendingClose({ id: incident.id, status: nextStatus });
+      return;
+    }
+    void changeStatus(incident, nextStatus, false);
+  };
+
+  const changeStatus = async (incident: IncidentListItem, nextStatus: IncidentStatus, confirmed: boolean) => {
     const previousStatus = incident.status;
+    setPendingClose(null);
     setUpdateNotice(null);
     setUpdatingId(incident.id);
     setIncidents((prev) =>
@@ -67,7 +82,7 @@ export default function IncidentsPage() {
     );
 
     try {
-      const updated = await updateIncidentStatus(incident.id, nextStatus);
+      const updated = await updateIncidentStatus(incident.id, nextStatus, confirmed);
       setIncidents((prev) => prev.map((item) => (item.id === incident.id ? updated : item)));
     } catch (error) {
       setIncidents((prev) =>
@@ -186,13 +201,31 @@ export default function IncidentsPage() {
                     <td>
                       {transitions.length === 0 ? (
                         <span style={{ color: "var(--muted)", fontSize: 13 }}>Definitivo</span>
+                      ) : pendingClose?.id === incident.id ? (
+                        <div role="alert" style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+                          <span style={{ color: "var(--warning)", fontSize: 13 }}>
+                            Pasar a «{STATUS_LABELS[pendingClose.status]}» es definitivo: no se podrá reabrir.
+                          </span>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              type="button"
+                              className="primary"
+                              onClick={() => void changeStatus(incident, pendingClose.status, true)}
+                            >
+                              Confirmar
+                            </button>
+                            <button type="button" onClick={() => setPendingClose(null)}>
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <select
                           value=""
                           disabled={updatingId === incident.id}
                           onChange={(event) => {
                             const nextStatus = event.target.value as IncidentStatus;
-                            if (nextStatus) void changeStatus(incident, nextStatus);
+                            if (nextStatus) requestStatusChange(incident, nextStatus);
                           }}
                         >
                           <option value="">{updatingId === incident.id ? "Actualizando…" : "Mover a…"}</option>

@@ -1,4 +1,5 @@
 import type { Incident, IncidentCreateInput, IncidentFilters, IncidentListItem, IncidentStatus, IncidentSummary } from "../types/incident";
+import { statusChangeBody } from "../types/incident";
 import { requestJson } from "./http";
 
 export function getIncidents(filters: IncidentFilters): Promise<IncidentListItem[]> {
@@ -19,10 +20,12 @@ export function createIncident(payload: IncidentCreateInput): Promise<Incident> 
   }, { authRequired: true });
 }
 
-export function updateIncidentStatus(id: number, status: IncidentStatus): Promise<Incident> {
+/** `confirmed` solo debe ser true tras la confirmación explícita de la persona:
+ * cerrar una incidencia (resolved/discarded) es irreversible y la API lo exige. */
+export function updateIncidentStatus(id: number, status: IncidentStatus, confirmed = false): Promise<Incident> {
   return requestJson<Incident>(`/api/incidents/${id}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(statusChangeBody(status, confirmed)),
   }, { authRequired: true });
 }
 

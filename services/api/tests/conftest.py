@@ -61,7 +61,10 @@ def offline_agent_harness(monkeypatch):
 
     El modo general (small talk, "Gracias") llamaría al modelo real con la
     clave del `.env`: aquí responde solo con la reconducción fija. El monitor
-    y las ventanas de brecha son singletons del proceso, como la caché."""
+    y las ventanas de brecha son singletons del proceso, como la caché.
+    El rate limiting de las llamadas al modelo (clase NIST) también: sin
+    vaciarlo, un test que consulta 10 veces dejaría sin cupo al siguiente."""
+    from rate_limit import LLM_LIMITER
     from services.agent.guardrails import general
     from services.agent.guardrails.input_guard import BREACH_WINDOWS
     from services.agent.guardrails.monitor import MONITOR
@@ -72,9 +75,11 @@ def offline_agent_harness(monkeypatch):
     )
     MONITOR.reset()
     BREACH_WINDOWS.clear()
+    LLM_LIMITER.reset()
     yield
     MONITOR.reset()
     BREACH_WINDOWS.clear()
+    LLM_LIMITER.reset()
 
 
 @pytest.fixture()

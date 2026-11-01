@@ -122,6 +122,21 @@ export const STATUS_TRANSITIONS: Record<IncidentStatus, IncidentStatus[]> = {
   discarded: [],
 };
 
+/**
+ * Estado final = sin transición de salida, así que llegar a él no tiene vuelta
+ * atrás. La API exige `confirm: true` para estos (clase NIST, acciones
+ * irreversibles) y la pantalla pide confirmación en línea antes de enviarlo.
+ * Se deriva de STATUS_TRANSITIONS, igual que TERMINAL_STATUSES en Python.
+ */
+export function isTerminalStatus(status: IncidentStatus): boolean {
+  return (STATUS_TRANSITIONS[status] ?? []).length === 0;
+}
+
+/** Cuerpo del PATCH de estado. `confirm` solo viaja cuando la persona confirmó. */
+export function statusChangeBody(status: IncidentStatus, confirmed: boolean): { status: IncidentStatus; confirm?: true } {
+  return confirmed ? { status, confirm: true } : { status };
+}
+
 function toLabelMap<T extends string>(options: Option<T>[]): Record<string, string> {
   return Object.fromEntries(options.map((option) => [option.value, option.label]));
 }
