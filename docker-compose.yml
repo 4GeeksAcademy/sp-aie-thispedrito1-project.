@@ -80,6 +80,8 @@ services:
     environment:
       # La expresión cron del crontab se interpreta en UTC.
       - TZ=UTC
+      # El disparador del cierre financiero encola en la misma cola que la API.
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       # El script importa services/job_runner y services/api (database,
       # telemetry_models), lanza data/pipelines/pipeline.py y escribe los CSV

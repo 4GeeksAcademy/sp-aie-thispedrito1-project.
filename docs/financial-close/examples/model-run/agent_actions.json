@@ -1,0 +1,137 @@
+[
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "ingest_period",
+    "tool": null,
+    "outcome": "ok",
+    "details": {
+      "ledger": 53,
+      "period": "2026-10-01",
+      "doubtful": 1,
+      "compliance_notifications": 0
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "read_period_data",
+    "outcome": "ok",
+    "details": {
+      "access": "read_only",
+      "period": "2026-10-01"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "compute_line_totals",
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "compare_to_budget",
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "consolidate_usd",
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "find_relevant_deviations",
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01",
+      "threshold_pct": "5"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "data_quality_report",
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "plan_drivers",
+    "tool": null,
+    "outcome": "fallback",
+    "details": {
+      "source": "rules",
+      "error_type": "APITimeoutError"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "payer_claims_drivers",
+    "outcome": "ok",
+    "details": {
+      "plan": "rules",
+      "line_key": "US.medicare_medicaid.patient_services"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "tool_call",
+    "tool": "unit_cost_drivers",
+    "outcome": "ok",
+    "details": {
+      "plan": "rules",
+      "line_key": "US.n/a.laboratory"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "draft_narrative",
+    "tool": null,
+    "outcome": "ok",
+    "details": {
+      "source": "model",
+      "prompt_sha256": "93646bdb053a817e237efa11ccf945451b01624a08fdd56730a5aea82ddbebf6"
+    }
+  },
+  {
+    "actor": "process:agent:financial-close",
+    "actor_type": "automated_process",
+    "action": "prepare_report",
+    "tool": null,
+    "outcome": "ok",
+    "details": {
+      "period": "2026-10-01",
+      "sent_to": "Tom Callahan",
+      "trigger": "manual",
+      "version": 2,
+      "report_id": "95df6b3b-3182-4790-a53c-1f3717c0c536",
+      "figures_sha256": "53aeb5ef61ceedcf73825c0ffef0a433d3ce3aac7c8cc68c6795069d8183fcc1",
+      "narrative_source": "model"
+    }
+  }
+]

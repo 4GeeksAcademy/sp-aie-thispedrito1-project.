@@ -231,6 +231,18 @@ services/api/.venv/bin/python -m pytest tests/supplier_contracts           # 121
 
 Desde la raíz. Cuentas (Marcus, Claire, Sandra) en `data/supplier_contracts/demo-users.db.json`: API con `SUPPLIERS_DB_PATH` apuntando ahí. Pantalla `/supplier-contracts`. `SUPPLIER_CONTRACTS_USE_MODEL=0` = plan por reglas y borradores de plantilla. Detalle en `docs/supplier-contracts/supplier-contracts.md`.
 
+### Cierre financiero mensual (Agentic Engineering, un agente con herramientas)
+
+```bash
+services/api/.venv/bin/python scripts/seed_financial_close.py [--incomplete]          # CSV del mes de cierre + ingesta en fc_* + 7 cuentas demo
+services/api/.venv/bin/python scripts/run_financial_close.py --month 2026-10 --inline # cierre en este proceso (sin --inline: encola en Celery)
+services/api/.venv/bin/python scripts/run_financial_close.py --offline --out docs/financial-close/examples/complete [--incomplete]   # ejemplo sin red
+services/api/.venv/bin/python -m pytest tests/financial_close                         # sin red
+(cd services/api && .venv/bin/python -m pytest tests/test_financial_close_api.py -o addopts="")   # 10
+```
+
+Desde la raíz. Cuentas en `data/financial_close/demo-users.db.json` (Tom es el revisor): API con `SUPPLIERS_DB_PATH` apuntando ahí. Pantalla `/financial-close`. El servicio `scheduler` lanza `scripts/financial_close_scheduled.py` cada hora. Detalle en `docs/financial-close/financial-close.md`.
+
 ### Auditoría OWASP Top 10 y endurecimiento del servidor
 
 ```bash
@@ -913,6 +925,32 @@ Gotchas:
 - **`from conftest import ...` en tests de la raíz es frágil**: con la batería completa Python entrega el `conftest.py` de otra carpeta. Los tests nuevos no lo usan; `tests/onboarding/test_onboarding_resume.py::test_reopening_the_checkpointer_resumes_the_same_stage` sí, y falla en `pytest tests` (pasa solo) desde antes de esta rama.
 - pdfplumber parte las cláusulas largas en varias líneas: se reconstruyen antes de extraer. Una mención de pasada ("before the Expiry Date") no contradice a la cláusula exacta (`_single` se queda con las de mayor confianza).
 - Verificado contra Supabase real y con el modelo real (deepseek, ~8 s el plan): la prueba real destapó la doble consulta del BAA (test de regresión).
+
+### Cierre financiero mensual — `docs/financial-close/financial-close.md`
+
+Agentic Engineering "Cierre Financiero Mensual", rama `feature/financial-close` apilada sobre `feature/supplier-contracts`, 2026-11-07. Stakeholder Dra. Sandra Okonkwo; revisor Tom Callahan. BRIEFING descargado del repo del currículo (`content/contexts/financial-close/`): el de Descargas era el del onboarding. Un ÚNICO agente con herramientas deterministas; el modelo solo elige qué explicación calcular y redacta.
+
+Mapa del código (`services/financial_close/`):
+- `catalog.py`: el BRIEFING como datos (14 partidas con presupuesto y real, indicadores, umbral 5 %, 1 GBP = 1,27 USD, revisor, 7 destinatarios, `AGENT_TOOLS`, calendario). Fuente única.
+- `seed_data.py` (3 CSV del mes de cierre; varios registros por partida que suman EXACTO; el registro con paciente ficticio; escenario `incomplete`), `ingestion.py` (formato común con `source_file`/`source_row`/`entry_id`; registros dudosos con motivos), `sensitive.py` (`phi_guard` + salarios individuales + datos bancarios).
+- `calculations.py` y `drivers.py`: las herramientas (puras, `Decimal`). `runtime.py`: `ActionLog` (`actor_type` automated_process/human), `AgentRuntime` (lista cerrada) y `read_only_session`.
+- `narrative.py` (plan con function calling + redacción validada + plantillas EN/ES), `agent.py` (`CloseAgent`), `report.py` (`build_figures` con fuentes + render de las 7 secciones), `workflow.py` (ingesta, `run_close`, `decide`, `revise`, `distribute`), `schedule.py`, `models.py` (10 tablas `fc_*`), `repository.py`, `router.py` + `schemas.py` (`/financial-close`).
+- `services/tasks/financial_close_tasks.py` (`financial_close.run_close`, `financial_close.revise_report`). Backoffice `/financial-close` ("Cierre financiero" en Informes): `types/financialClose.ts` (incluye `parseReport`: el markdown se pinta como bloques de React, sin inyectar HTML), `services/financialCloseApi.ts`.
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** informe EN + ES; modelo con plantilla de respaldo; distribución por bandeja interna (sin correo).
+- **El modelo nunca calcula ni ve descripciones del ledger.** Cada número de su texto debe existir en los hechos (formato EN o ES), si no plantilla. Solo recibe el presupuesto **comparable**: con el completo delante emparejó mal cifras ciertas (prueba real).
+- **Faltante ≠ 0**: partida presupuestada sin registros → `missing`, sin desviación; el consolidado se mide contra el presupuesto comparable y se marca `*`. Registros dudosos fuera de los totales.
+- **Umbral sobre el valor exacto** (4,96 % no es relevante aunque se muestre "5,0 %").
+- **Mismos datos → mismas cifras**: `figures_sha256` idéntico entre ejecuciones (comprobado en Supabase con v1 y v2). Una revisión cambia el texto, nunca las cifras.
+- **Solo `revenue_cycle_director` decide**; rechazar exige comentarios sin PHI; aprobar distribuye en la misma transacción a `DISTRIBUTION_ROLES`, tras revalidar el texto saliente con `sensitive.screen`.
+- Registro con PHI: dudoso, `description = NULL` en BD, citado solo por `entry_id` (sin importe), aviso a Claire con clave determinista.
+- Calendario: el scheduler lanza cada hora y `schedule.is_close_due` decide en hora de Austin (`zoneinfo`), días hábiles L-V sin Año Nuevo, 4-jul (observados) ni Labor Day. `nth_business_day` (Learn by Doing **delegado**) lanza `ValueError` si `n < 1` o si el mes no tiene `n` días hábiles, en vez de saltar al mes siguiente.
+
+Gotchas:
+- **Formato de `entry_id` = `JE-2026OCT-0001`**: con `JE-202610-0001` (forma de NHS number) o `JE-2026-10-0001` (10 dígitos con guiones = teléfono), `phi_guard` marcaba el informe y bloqueaba la distribución. Cualquier identificador nuevo que vaya en un texto saliente: sin series largas de dígitos.
+- **Tests de la raíz con nombre único** (`test_fc_*.py`): las carpetas `tests/*` no son paquetes y `test_calculations.py` chocaba con el de proveedores. Ayudantes en `tests/financial_close/fc_helpers.py`, nunca `from conftest import`.
+- `operations.csv` solo tiene `value`: el presupuesto de cada indicador va como `<indicador>_budget`.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

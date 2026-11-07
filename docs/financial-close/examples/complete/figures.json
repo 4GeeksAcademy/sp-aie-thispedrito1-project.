@@ -1,0 +1,1429 @@
+{
+  "consolidated:expense:actual": {
+    "incomplete": true,
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0024",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0025",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0026",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0027",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0028",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0029",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0030",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0031",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0032",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0033",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0034",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0035",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0036",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0037",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0038",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0039",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0040",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0041",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0042",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0043",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0044",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0045",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0046",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0047",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0048",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0049",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0050",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0051",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0052",
+        "kind": "ledger"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "1709135.81"
+  },
+  "consolidated:expense:budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "1705142.00"
+  },
+  "consolidated:expense:comparable_budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv without lines that have no records"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "1694982.00"
+  },
+  "consolidated:expense:variance_pct": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "consolidated:expense:actual",
+          "consolidated:expense:comparable_budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.8"
+  },
+  "consolidated:result:actual": {
+    "incomplete": true,
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0001",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0002",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0003",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0004",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0005",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0006",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0007",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0008",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0009",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0010",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0011",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0012",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0013",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0014",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0015",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0016",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0017",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0018",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0019",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0020",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0021",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0022",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0023",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0024",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0025",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0026",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0027",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0028",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0029",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0030",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0031",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0032",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0033",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0034",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0035",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0036",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0037",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0038",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0039",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0040",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0041",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0042",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0043",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0044",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0045",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0046",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0047",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0048",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0049",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0050",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0051",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0052",
+        "kind": "ledger"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "318284.19"
+  },
+  "consolidated:result:budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "390308.00"
+  },
+  "consolidated:result:comparable_budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv without lines that have no records"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "400468.00"
+  },
+  "consolidated:result:variance_pct": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "consolidated:result:actual",
+          "consolidated:result:comparable_budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "-20.5"
+  },
+  "consolidated:revenue:actual": {
+    "incomplete": false,
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0001",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0002",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0003",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0004",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0005",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0006",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0007",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0008",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0009",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0010",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0011",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0012",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0013",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0014",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0015",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0016",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0017",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0018",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0019",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0020",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0021",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0022",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0023",
+        "kind": "ledger"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "2027420.00"
+  },
+  "consolidated:revenue:budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "2095450.00"
+  },
+  "consolidated:revenue:comparable_budget": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "budget.csv without lines that have no records"
+      },
+      {
+        "kind": "fx",
+        "reference": "BRIEFING: 1 GBP = 1.27 USD"
+      }
+    ],
+    "unit": "USD",
+    "value": "2095450.00"
+  },
+  "consolidated:revenue:variance_pct": {
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "consolidated:revenue:actual",
+          "consolidated:revenue:comparable_budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "-3.2"
+  },
+  "driver:US.medicare_medicaid.patient_services:claims_change_pct": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "payer_claims_drivers"
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "driver:US.medicare_medicaid.patient_services:claims_submitted": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "operations",
+        "source_file": "operations.csv",
+        "source_row": 2
+      }
+    ],
+    "unit": "count",
+    "value": "4000.0000"
+  },
+  "driver:US.medicare_medicaid.patient_services:claims_submitted_budget": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "operations",
+        "source_file": "operations.csv",
+        "source_row": 3
+      }
+    ],
+    "unit": "count",
+    "value": "4000.0000"
+  },
+  "driver:US.medicare_medicaid.patient_services:denial_rate_change_pp": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "payer_claims_drivers"
+      }
+    ],
+    "unit": "pp",
+    "value": "8.6000"
+  },
+  "driver:US.medicare_medicaid.patient_services:denial_rate_pct": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "operations",
+        "source_file": "operations.csv",
+        "source_row": 4
+      }
+    ],
+    "unit": "rate",
+    "value": "22.6000"
+  },
+  "driver:US.medicare_medicaid.patient_services:denial_rate_pct_budget": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "operations",
+        "source_file": "operations.csv",
+        "source_row": 5
+      }
+    ],
+    "unit": "rate",
+    "value": "14.0000"
+  },
+  "driver:US.medicare_medicaid.patient_services:paid_claims": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "payer_claims_drivers"
+      }
+    ],
+    "unit": "count",
+    "value": "3096"
+  },
+  "driver:US.medicare_medicaid.patient_services:paid_claims_budget": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "payer_claims_drivers"
+      }
+    ],
+    "unit": "count",
+    "value": "3440"
+  },
+  "driver:US.medicare_medicaid.patient_services:paid_claims_change_pct": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "payer_claims_drivers"
+      }
+    ],
+    "unit": "pct",
+    "value": "-10.0"
+  },
+  "driver:US.n/a.laboratory:unit_price": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0027",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0028",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0029",
+        "kind": "ledger"
+      }
+    ],
+    "unit": "USD",
+    "value": "32.10"
+  },
+  "driver:US.n/a.laboratory:unit_price_budget": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "unit_cost_drivers"
+      }
+    ],
+    "unit": "USD",
+    "value": "30.00"
+  },
+  "driver:US.n/a.laboratory:unit_price_change_pct": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "unit_cost_drivers"
+      }
+    ],
+    "unit": "pct",
+    "value": "7.0"
+  },
+  "driver:US.n/a.laboratory:units": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0027",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0028",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0029",
+        "kind": "ledger"
+      }
+    ],
+    "unit": "count",
+    "value": "1500.0000"
+  },
+  "driver:US.n/a.laboratory:units_budget": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "operations",
+        "source_file": "operations.csv",
+        "source_row": 13
+      }
+    ],
+    "unit": "count",
+    "value": "1500.0000"
+  },
+  "driver:US.n/a.laboratory:units_change_pct": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": "unit_cost_drivers"
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:UK.n/a.clinic_rent:actual": {
+    "line_key": "UK.n/a.clinic_rent",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0050",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0051",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0052",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "52000.00"
+  },
+  "line:UK.n/a.clinic_rent:budget": {
+    "line_key": "UK.n/a.clinic_rent",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 14
+      }
+    ],
+    "unit": "GBP",
+    "value": "52000.00"
+  },
+  "line:UK.n/a.clinic_rent:variance_pct": {
+    "line_key": "UK.n/a.clinic_rent",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.n/a.clinic_rent:actual",
+          "line:UK.n/a.clinic_rent:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:UK.n/a.clinical_software_licences:actual": {
+    "line_key": "UK.n/a.clinical_software_licences",
+    "sources": [],
+    "status": "missing",
+    "unit": "GBP",
+    "value": null
+  },
+  "line:UK.n/a.clinical_software_licences:budget": {
+    "line_key": "UK.n/a.clinical_software_licences",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 15
+      }
+    ],
+    "unit": "GBP",
+    "value": "8000.00"
+  },
+  "line:UK.n/a.clinical_supplies:actual": {
+    "line_key": "UK.n/a.clinical_supplies",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0043",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0044",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0045",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "9450.00"
+  },
+  "line:UK.n/a.clinical_supplies:budget": {
+    "line_key": "UK.n/a.clinical_supplies",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 11
+      }
+    ],
+    "unit": "GBP",
+    "value": "9450.00"
+  },
+  "line:UK.n/a.clinical_supplies:variance_pct": {
+    "line_key": "UK.n/a.clinical_supplies",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.n/a.clinical_supplies:actual",
+          "line:UK.n/a.clinical_supplies:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:UK.n/a.laboratory:actual": {
+    "line_key": "UK.n/a.laboratory",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0046",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0047",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "10353.00"
+  },
+  "line:UK.n/a.laboratory:budget": {
+    "line_key": "UK.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 12
+      }
+    ],
+    "unit": "GBP",
+    "value": "10150.00"
+  },
+  "line:UK.n/a.laboratory:variance_pct": {
+    "line_key": "UK.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.n/a.laboratory:actual",
+          "line:UK.n/a.laboratory:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "2.0"
+  },
+  "line:UK.n/a.payroll:actual": {
+    "line_key": "UK.n/a.payroll",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0048",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0049",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "209000.00"
+  },
+  "line:UK.n/a.payroll:budget": {
+    "line_key": "UK.n/a.payroll",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 13
+      }
+    ],
+    "unit": "GBP",
+    "value": "210000.00"
+  },
+  "line:UK.n/a.payroll:variance_pct": {
+    "line_key": "UK.n/a.payroll",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.n/a.payroll:actual",
+          "line:UK.n/a.payroll:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "-0.5"
+  },
+  "line:UK.nhs_contract.patient_services:actual": {
+    "line_key": "UK.nhs_contract.patient_services",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0022",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0023",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "75000.00"
+  },
+  "line:UK.nhs_contract.patient_services:budget": {
+    "line_key": "UK.nhs_contract.patient_services",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 5
+      }
+    ],
+    "unit": "GBP",
+    "value": "75000.00"
+  },
+  "line:UK.nhs_contract.patient_services:variance_pct": {
+    "line_key": "UK.nhs_contract.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.nhs_contract.patient_services:actual",
+          "line:UK.nhs_contract.patient_services:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:UK.private.patient_services:actual": {
+    "line_key": "UK.private.patient_services",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0019",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0020",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0021",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "GBP",
+    "value": "271000.00"
+  },
+  "line:UK.private.patient_services:budget": {
+    "line_key": "UK.private.patient_services",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 4
+      }
+    ],
+    "unit": "GBP",
+    "value": "260000.00"
+  },
+  "line:UK.private.patient_services:variance_pct": {
+    "line_key": "UK.private.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:UK.private.patient_services:actual",
+          "line:UK.private.patient_services:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "4.2"
+  },
+  "line:US.commercial_insurance.patient_services:actual": {
+    "line_key": "US.commercial_insurance.patient_services",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0001",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0002",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0003",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0004",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0005",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0006",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0007",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0008",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0009",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "1120000.00"
+  },
+  "line:US.commercial_insurance.patient_services:budget": {
+    "line_key": "US.commercial_insurance.patient_services",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 2
+      }
+    ],
+    "unit": "USD",
+    "value": "1150000.00"
+  },
+  "line:US.commercial_insurance.patient_services:variance_pct": {
+    "line_key": "US.commercial_insurance.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.commercial_insurance.patient_services:actual",
+          "line:US.commercial_insurance.patient_services:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "-2.6"
+  },
+  "line:US.medicare_medicaid.patient_services:actual": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0010",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0011",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0012",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0013",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0014",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0015",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0016",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0017",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0018",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "468000.00"
+  },
+  "line:US.medicare_medicaid.patient_services:budget": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 3
+      }
+    ],
+    "unit": "USD",
+    "value": "520000.00"
+  },
+  "line:US.medicare_medicaid.patient_services:variance_pct": {
+    "line_key": "US.medicare_medicaid.patient_services",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.medicare_medicaid.patient_services:actual",
+          "line:US.medicare_medicaid.patient_services:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "-10.0"
+  },
+  "line:US.n/a.clinic_rent:actual": {
+    "line_key": "US.n/a.clinic_rent",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0034",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0035",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0036",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0037",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0038",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0039",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0040",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0041",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0042",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "180000.00"
+  },
+  "line:US.n/a.clinic_rent:budget": {
+    "line_key": "US.n/a.clinic_rent",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 10
+      }
+    ],
+    "unit": "USD",
+    "value": "180000.00"
+  },
+  "line:US.n/a.clinic_rent:variance_pct": {
+    "line_key": "US.n/a.clinic_rent",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.n/a.clinic_rent:actual",
+          "line:US.n/a.clinic_rent:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:US.n/a.clinical_supplies:actual": {
+    "line_key": "US.n/a.clinical_supplies",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0024",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0025",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0026",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "46816.00"
+  },
+  "line:US.n/a.clinical_supplies:budget": {
+    "line_key": "US.n/a.clinical_supplies",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 6
+      }
+    ],
+    "unit": "USD",
+    "value": "44800.00"
+  },
+  "line:US.n/a.clinical_supplies:variance_pct": {
+    "line_key": "US.n/a.clinical_supplies",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.n/a.clinical_supplies:actual",
+          "line:US.n/a.clinical_supplies:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "4.5"
+  },
+  "line:US.n/a.laboratory:actual": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0027",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0028",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0029",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "48150.00"
+  },
+  "line:US.n/a.laboratory:budget": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 7
+      }
+    ],
+    "unit": "USD",
+    "value": "45000.00"
+  },
+  "line:US.n/a.laboratory:variance_pct": {
+    "line_key": "US.n/a.laboratory",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.n/a.laboratory:actual",
+          "line:US.n/a.laboratory:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "7.0"
+  },
+  "line:US.n/a.medical_interpreting:actual": {
+    "line_key": "US.n/a.medical_interpreting",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0030",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0031",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "17550.00"
+  },
+  "line:US.n/a.medical_interpreting:budget": {
+    "line_key": "US.n/a.medical_interpreting",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 8
+      }
+    ],
+    "unit": "USD",
+    "value": "17550.00"
+  },
+  "line:US.n/a.medical_interpreting:variance_pct": {
+    "line_key": "US.n/a.medical_interpreting",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.n/a.medical_interpreting:actual",
+          "line:US.n/a.medical_interpreting:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "0.0"
+  },
+  "line:US.n/a.payroll:actual": {
+    "line_key": "US.n/a.payroll",
+    "sources": [
+      {
+        "entry_id": "JE-2026OCT-0032",
+        "kind": "ledger"
+      },
+      {
+        "entry_id": "JE-2026OCT-0033",
+        "kind": "ledger"
+      }
+    ],
+    "status": "ok",
+    "unit": "USD",
+    "value": "1060000.00"
+  },
+  "line:US.n/a.payroll:budget": {
+    "line_key": "US.n/a.payroll",
+    "sources": [
+      {
+        "kind": "budget",
+        "source_file": "budget.csv",
+        "source_row": 9
+      }
+    ],
+    "unit": "USD",
+    "value": "1050000.00"
+  },
+  "line:US.n/a.payroll:variance_pct": {
+    "line_key": "US.n/a.payroll",
+    "sources": [
+      {
+        "kind": "calculation",
+        "of": [
+          "line:US.n/a.payroll:actual",
+          "line:US.n/a.payroll:budget"
+        ]
+      }
+    ],
+    "unit": "pct",
+    "value": "1.0"
+  }
+}

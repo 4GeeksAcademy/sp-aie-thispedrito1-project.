@@ -37,6 +37,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Informes",
     items: [
       { href: "/reporting", label: "Informe mensual" },
+      { href: "/financial-close", label: "Cierre financiero" },
       { href: "/telemetry", label: "Telemetría" },
     ],
   },
