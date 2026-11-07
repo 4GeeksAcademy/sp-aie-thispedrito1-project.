@@ -37,6 +37,8 @@ from routes.telemetry import router as telemetry_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
 from security import get_current_user  # noqa: E402
 from services.agent.router import router as agent_router  # noqa: E402
+from services.agent.chat.router import router as agent_chat_router  # noqa: E402  (registra chat_sessions/chat_messages)
+from services.agent.chat.service import CHAT as agent_chat_service  # noqa: E402
 from services.knowledge.router import router as knowledge_router  # noqa: E402
 from services.reporting.router import router as reporting_router  # noqa: E402
 from services.rfp_intake.router import router as rfp_intake_router  # noqa: E402  (registra las tablas rfp_*)
@@ -75,6 +77,7 @@ app.include_router(reporting_router)
 app.include_router(tasks_router)
 app.include_router(knowledge_router)
 app.include_router(agent_router)
+app.include_router(agent_chat_router)
 app.include_router(rfp_intake_router)
 
 timing_logger = logging.getLogger("api.timing")
@@ -157,6 +160,14 @@ def hook_rfp_streams_into_shutdown_signals() -> None:
 async def close_rfp_event_stream() -> None:
     """Cierra los streams SSE abiertos y la suscripción a Redis del hub."""
     await shutdown_rfp_event_hub()
+
+
+@app.on_event("shutdown")
+def stop_agent_chat_generations() -> None:
+    """Que ninguna respuesta del chat siga pidiendo tokens al proveedor tras
+    apagar la API (uvicorn ya cerró los WebSocket con 1012; los navegadores
+    reconectan con su backoff)."""
+    agent_chat_service.stop_all()
 
 
 @app.exception_handler(Exception)

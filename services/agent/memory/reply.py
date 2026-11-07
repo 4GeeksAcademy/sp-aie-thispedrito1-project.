@@ -14,6 +14,13 @@ proponerse y qué no. El contexto llega aislado en bloques `<fuente_externa>`.
 Falla cerrado para la memoria: si la salida no es un JSON válido, el texto se
 usa como respuesta y NO hay propuesta. Una propuesta mal formada (tipo fuera
 de las tres familias, texto vacío) también se descarta.
+
+Streaming (Sistemas en Tiempo Real, Parte 2): con un `AnswerStream`, la
+misma llamada se hace con `stream=True`. `AnswerDeltaExtractor` saca del JSON
+a medio llegar solo el texto de `answer` (el usuario nunca ve `{"answer":`),
+y entre trozo y trozo se comprueba la orden de parar: si llega, se cierra la
+conexión con el modelo (abort real, no ignorar lo que siga llegando). La
+respuesta final pasa por el mismo `parse_reply`, con o sin streaming.
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from services.agent.guardrails.monitor import MONITOR, SANITIZE, STRUCTURAL, GuardEvent
 from services.agent.guardrails.prompt import build_agent_messages
 from services.agent.memory.models import MEMORY_KINDS
+from services.agent.streaming import AnswerStream
 
 logger = logging.getLogger(__name__)
 
@@ -132,21 +140,127 @@ def build_reply_messages(question: str, context: Sequence[Dict[str, Any]]) -> Li
     return build_agent_messages(question, context, MEMORY_RULES)
 
 
+_ANSWER_KEY = re.compile(r'"answer"\s*:\s*"')
+_SIMPLE_ESCAPES = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
+
+
+class AnswerDeltaExtractor:
+    """JSON del modelo llegando a trozos → texto nuevo del campo `answer`.
+
+    Solo sigue ese campo: lo demás (`memory_proposal`...) se ignora aquí y lo
+    lee `parse_reply` al final. Un escape partido entre dos trozos (`\\` en
+    uno y `n` en el siguiente, o un `\\u00e9` a medias) espera al siguiente
+    trozo en vez de emitirse roto. Si el modelo no devuelve JSON, no emite
+    nada y la respuesta llega entera al terminar."""
+
+    def __init__(self) -> None:
+        self._pending = ""  # lo recibido y aún no interpretado
+        self._inside = False  # ya dentro del valor de "answer"
+        self._done = False
+        self._high_surrogate: Optional[int] = None
+
+    def feed(self, chunk: str) -> str:
+        if self._done or not chunk:
+            return ""
+        self._pending += chunk
+        if not self._inside:
+            match = _ANSWER_KEY.search(self._pending)
+            if match is None:
+                return ""
+            self._inside = True
+            self._pending = self._pending[match.end():]
+        return self._consume()
+
+    def _consume(self) -> str:
+        out: List[str] = []
+        text = self._pending
+        i = 0
+        while i < len(text):
+            char = text[i]
+            if char == '"':
+                self._done = True
+                self._pending = ""
+                return "".join(out)
+            if char != "\\":
+                out.append(char)
+                i += 1
+                continue
+            if i + 1 >= len(text):
+                break  # escape partido: esperar al siguiente trozo
+            code = text[i + 1]
+            if code != "u":
+                out.append(_SIMPLE_ESCAPES.get(code, code))
+                i += 2
+                continue
+            if i + 6 > len(text):
+                break
+            try:
+                value = int(text[i + 2 : i + 6], 16)
+            except ValueError:
+                value = 0xFFFD
+            i += 6
+            if 0xD800 <= value <= 0xDBFF:  # primera mitad de un emoji: esperar la segunda
+                self._high_surrogate = value
+                continue
+            if 0xDC00 <= value <= 0xDFFF and self._high_surrogate is not None:
+                value = 0x10000 + ((self._high_surrogate - 0xD800) << 10) + (value - 0xDC00)
+            self._high_surrogate = None
+            out.append(chr(value))
+        self._pending = text[i:]
+        return "".join(out)
+
+
+def _stream_reply(llm: Any, request: Dict[str, Any], answer_stream: AnswerStream) -> AgentReply:
+    answer_stream.check()  # parada pedida antes de empezar: ni se llama al modelo
+    # Sin `response_format=json_object` en streaming. Medido con deepseek a
+    # través del proxy de 4Geeks (2026-10-28): en modo JSON los 93 trozos
+    # llegaron en 0,1 s, todos al final (la salida se retiene hasta validarla);
+    # sin él, 21 llegadas repartidas. El prompt ya exige el JSON (MEMORY_RULES)
+    # y `parse_reply` ya cubre una salida que no lo sea: respuesta entera al
+    # final y sin propuesta de memoria.
+    request = {key: value for key, value in request.items() if key != "response_format"}
+    stream = llm.chat.completions.create(**request, stream=True)
+    extractor = AnswerDeltaExtractor()
+    raw: List[str] = []
+    try:
+        for chunk in stream:
+            answer_stream.check()
+            choices = getattr(chunk, "choices", None) or []
+            delta = getattr(choices[0].delta, "content", None) if choices else None
+            if not delta:
+                continue
+            raw.append(delta)
+            text = extractor.feed(delta)
+            if text:
+                answer_stream.emit(text)
+    finally:
+        # Con o sin abort: cerrar la respuesta HTTP corta la generación en el
+        # proveedor en vez de dejarla terminar en segundo plano.
+        close = getattr(stream, "close", None)
+        if callable(close):
+            close()
+    return parse_reply("".join(raw))
+
+
 def generate_reply(
     question: str,
     context: Sequence[Dict[str, Any]],
     *,
     client: Optional[Any] = None,
     model: Optional[str] = None,
+    answer_stream: Optional[AnswerStream] = None,
 ) -> AgentReply:
     from data.pipelines import rag
     from data.process.rag import get_llm_client
 
     llm = client or get_llm_client()
-    completion = llm.chat.completions.create(
-        model=model or rag.get_generation_model(),
-        messages=build_reply_messages(question, context),
-        temperature=0.2,
-        response_format={"type": "json_object"},
-    )
+    request = {
+        "model": model or rag.get_generation_model(),
+        "messages": build_reply_messages(question, context),
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+    }
+    if answer_stream is not None:
+        return _stream_reply(llm, request, answer_stream)
+    completion = llm.chat.completions.create(**request)
     return parse_reply(completion.choices[0].message.content or "")

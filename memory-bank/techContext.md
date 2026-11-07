@@ -20,6 +20,8 @@
 - Aprobacion de RFPs (2026-10-21, Hito 9 Parte 3): `langgraph-checkpoint-postgres==3.0.5` + `psycopg[binary]==3.3.6` (psycopg 3 solo para el checkpointer; el resto sigue con psycopg2) y `langgraph-checkpoint==3.0.1` fijado (la 3.2 del checkpointer exige la 4.x, que `langgraph` 0.6.11 no acepta). Checkpointer Postgres en la misma Supabase (tablas `checkpoint*` de LangGraph), con `prepare_threshold=None` por el pooler en modo transaccion. Tablas nuevas `rfp_final_documents` y `rfp_trace_events` + columnas de aprobacion por la misma migracion idempotente.
 - Servidor MCP (2026-09-25): `mcps/healthcore/` con el FastMCP del SDK oficial `mcp` (1.30, transporte Streamable HTTP sin estado) y OAuth 2.1 como resource server con MCP Auth (`mcpauth==0.2.0b1`) contra Logto Cloud (emisor OIDC). El agente lo consume con `langchain-mcp-adapters` 0.3.2. Por estas librerias el venv de la API paso de Python 3.9 a 3.12 (lo que ya decian `pyproject.toml` y Docker) y `fastapi` a 0.115.14.
 
+- Chat en tiempo real (2026-10-28, Tiempo Real Parte 2): WebSocket nativo de FastAPI/Starlette (uvicorn ya trae `websockets` 16.1.1), sin dependencias nuevas. Pub/sub en memoria de proceso (`services/agent/chat/hub.py`): con varios workers de uvicorn haria falta un backplane (Redis, como el SSE de la Parte 1). Tablas `chat_sessions` y `chat_messages` en Supabase por el `create_all` del arranque. El streaming del agente usa el modo `custom` de LangGraph porque el modelo se llama con el SDK `openai`, no con LangChain (el modo `messages` no ve esos tokens).
+
 ## Decisiones de arquitectura tomadas
 - Separacion por capas en la app web:
   - UI/rutas en app y components.

@@ -38,9 +38,10 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from services.agent.graph import GRAPH_NAME, NODE_SOURCES
+from services.agent.streaming import ANSWER_DELTA, STOP_CONFIG_KEY, GenerationAborted
 
 logger = logging.getLogger(__name__)
 
@@ -158,15 +159,27 @@ def run_agent(
     file_stem: Optional[str] = None,
     keep_checkpoints: bool = False,
     memories: Optional[List[Dict[str, Any]]] = None,
+    on_token: Optional[Callable[[str], None]] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> AgentRunResult:
     """Ejecuta el grafo compilado para una pregunta y deja su trace en disco.
 
     Si un nodo falla, el trace se escribe igualmente con `status="failed"` y
     el nodo culpable, y se lanza `AgentRunError`. Si lo que falla es escribir
     el trace, se registra y la respuesta se devuelve igual: un disco lleno no
-    debe tumbar la consulta del coordinador (mismo principio que telemetría)."""
+    debe tumbar la consulta del coordinador (mismo principio que telemetría).
+
+    Streaming (chat por WebSocket): con `on_token`, el grafo se recorre
+    también en modo `custom` y cada trozo de la respuesta que emite `generate`
+    se entrega a `on_token` según llega. `should_stop` se comprueba entre
+    nodos (y `generate` la comprueba entre trozos del modelo); si devuelve
+    True, la corrida termina con `status="aborted"` y `AgentRunError` cuya
+    causa es `GenerationAborted`."""
     trace_id = trace_id or str(uuid.uuid4())
-    config = {"configurable": {"thread_id": trace_id}}
+    config: Dict[str, Any] = {"configurable": {"thread_id": trace_id}}
+    streaming = on_token is not None
+    if streaming:
+        config["configurable"][STOP_CONFIG_KEY] = should_stop or (lambda: False)
     trace: Dict[str, Any] = {
         "trace_id": trace_id,
         "schema_version": TRACE_SCHEMA_VERSION,
@@ -192,7 +205,17 @@ def run_agent(
     failure: Optional[BaseException] = None
 
     try:
-        for chunk in graph.stream({"question": question, "memories": list(memories or [])}, config, stream_mode="updates"):
+        stream_mode: Any = ["updates", "custom"] if streaming else "updates"
+        for item in graph.stream({"question": question, "memories": list(memories or [])}, config, stream_mode=stream_mode):
+            if streaming:
+                mode, chunk = item
+                if mode == "custom":
+                    delta = (chunk or {}).get(ANSWER_DELTA)
+                    if delta:
+                        on_token(delta)
+                    continue
+            else:
+                chunk = item
             now = time.perf_counter()
             for node, update in chunk.items():
                 trace["steps"].append(
@@ -205,6 +228,9 @@ def run_agent(
                 )
                 trace["node_sequence"].append(node)
             last = now
+            if should_stop is not None and should_stop():
+                # Entre nodos: el siguiente (planificar, consultar o generar) ni empieza.
+                raise GenerationAborted("Agent run aborted between nodes")
     except Exception as exc:  # cualquier nodo: Qdrant, el proveedor, un bug
         failure = exc
 
@@ -223,7 +249,7 @@ def run_agent(
         trace["memory"]["proposal"] = redact_proposal(final_state.get("memory_proposal"))
     else:
         failed_node = _failed_node(graph, config)
-        trace["status"] = "failed"
+        trace["status"] = "aborted" if isinstance(failure, GenerationAborted) else "failed"
         trace["error"] = {"node": failed_node, "type": type(failure).__name__}
 
     if not keep_checkpoints:
