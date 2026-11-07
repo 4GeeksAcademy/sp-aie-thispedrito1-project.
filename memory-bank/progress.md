@@ -137,6 +137,12 @@
   - **Encontrado al implementar:** `phi_guard` marcaba como numero de poliza "seccion Cobertura" en 2 respuestas reales grabadas (corregido: limite de palabra + digito obligatorio); el canario no se detectaba sobre el texto normalizado porque el leetspeak convierte `SEC114`.
   - **Tests:** raiz 408 (nuevo `test_agent_guardrails.py`), API 246 (nuevo `test_agent_guardrails_api.py`). Se adaptaron 4 tests de memoria: los mensajes con nombre de paciente los para ahora la entrada (con auditoria intacta) y los de la segunda capa usan mensajes que la entrada deja pasar. `conftest.py` de la API deja el modo general sin red. No hay linter de Python configurado.
   - **Residual:** `POST /knowledge/query` (Hito 7) no pasa por el harness; solo lo usa la pantalla "Asistente".
+- Recepcion y enrutamiento de RFPs (rama `feature/rfp-intake` sobre `main`, 2026-10-19, Hito 9 Parte 1 de 3). Diseno, contrato de handoff y evidencia en `docs/rfp-intake.md`.
+  - **Que hace:** Revenue Cycle sube una RFP en PDF en `/rfps`; la API (`POST /rfp-tickets`, 202) crea el ticket `analizando` en Supabase, guarda el PDF en `data/raw/rfp/<ticket_id>.pdf` y encola una tarea Celery que ejecuta el grafo dedicado `rfp_intake` (MarkItDown → filtro de PHI → clasificador → orquestador → un worker por departamento en paralelo → synthesizer). Resultado: metadatos del BRIEFING, legibilidad, `key_aspects` por departamento y "que pedir a quien", mas `handoff_payload` y `next_stage = generando_borrador` para la Parte 2.
+  - **Decisiones del usuario:** Celery como ejecutor; PHI → redactar y parar (`descartado` + `phi_detected` + revision de Compliance, ningun modelo ve el documento); estado extra `error` para fallos tecnicos + `scripts/reprocess_rfp.py`. Delegada ("hazlo tu"): la regla `is_patient_phi` (identificador fuerte basta; clinico + contacto tambien; clinico o contacto solos no).
+  - **Encontrado al implementar y en la prueba real:** `phi_guard` tal cual descartaria la RFP de Meridian por su email de compras; redactar fragmento a fragmento dejaba la fecha de nacimiento y el diagnostico del caso 4 a la vista (ahora se redacta el parrafo); el orquestador real omitio `revenue` con el correo de Thames Valley (ahora obligatorio por codigo); Celery prefork falla en macOS con Python 3.12 (worker nativo con `--pool=solo`); Supabase estaba pausado por inactividad.
+  - **Verificado** por la UI en Chrome con deepseek y Supabase reales: las 2 RFP de muestra → `analisis_completo` (US/USD/BAA y UK/GBP/DPA), el pitch → `descartado`, el PDF con PHI ficticia → `descartado`/`phi_detected` sin rastro de la PHI en tablas, logs ni Markdown guardado.
+  - **Tests:** raiz 457 (`tests/pipelines` + `tests/jobs`, con 49 nuevos en `tests/pipelines/test_rfp_intake.py`), API 255 (+9 en `test_rfp_intake_api.py`), Jest 105 (+11 en `rfp.test.ts`); `npm run lint` (next build) en verde.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
@@ -162,6 +168,8 @@
 13. Cola de tareas (#DEV-55): construir y probar `docker compose up -d --build redis worker flower` cuando haya disco; valorar mover a Celery otras operaciones lentas (p. ej. `POST /api/incidents/analyze` si crece el CSV, guardando el archivo y encolando solo su ruta) y proteger Flower con `--basic-auth` si se expone fuera de localhost.
 
 ## Riesgos activos
+- Worker de Celery nativo en macOS: con el pool por defecto (prefork) cada tarea muere antes de ejecutarse (`ValueError` en `fast_trace_task`); usar `--pool=solo`. Causa no investigada.
+- Supabase gratuito se pausa tras ~7 dias sin uso (`tenant/user ... not found`): reactivarlo desde el dashboard antes de verificar.
 - Dependencia operativa de API externa para CRUD.
 - Inconsistencias de modelo entre respuestas del servicio remoto.
 - Riesgo regulatorio si no se formalizan pronto trazabilidad y controles de acceso.

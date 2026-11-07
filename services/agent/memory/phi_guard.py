@@ -131,6 +131,19 @@ def scan(*texts: str) -> PhiVerdict:
     return PhiVerdict(categories=ordered)
 
 
+def find_matches(text: str) -> List[Tuple[str, int, int]]:
+    """(categoría, inicio, fin) de cada coincidencia, para quien necesita
+    redactar y no solo saber si hay PHI (recepción de RFPs, Hito 9). Mismas
+    reglas que `scan`, una sola definición."""
+    if not text:
+        return []
+    return [
+        (category, match.start(), match.end())
+        for category, pattern in _RULES
+        for match in pattern.finditer(text)
+    ]
+
+
 # Motivo en lenguaje llano para el usuario, por categoría.
 _PLAIN_REASONS = {
     "patient_name": "el nombre de un paciente",

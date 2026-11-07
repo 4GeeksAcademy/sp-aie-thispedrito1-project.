@@ -41,3 +41,7 @@ data/raw/.telemetry_*.csv.tmp
 # respuesta generada; la pregunta va solo como huella. Los traces de los
 # evals (data/eval/agent-traces/) sí se versionan.
 data/traces/
+
+# PDFs de RFP subidos por el backoffice (Hito 9) y su Markdown redactado:
+# artefacto de runtime de la recepción, nunca se versiona (podrían traer PHI).
+data/raw/rfp/

@@ -72,6 +72,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                 <Link href="/knowledge" className="nav-link">
                   Asistente
                 </Link>
+                <Link href="/rfps" className="nav-link">
+                  RFPs
+                </Link>
                 <ThemeToggle />
                 <SessionMenu />
               </nav>

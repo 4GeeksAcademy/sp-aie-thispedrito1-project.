@@ -265,3 +265,39 @@ button.primary:hover {
   color: var(--success-text);
   font-size: 13px;
 }
+
+/* Recepción de RFPs (/rfps): badges de estado del ticket con tokens del tema. */
+.rfp-status-analyzing {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+
+.rfp-status-complete {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  color: var(--ok);
+}
+
+.rfp-status-discarded {
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+}
+
+.rfp-status-error {
+  background: color-mix(in srgb, var(--critical) 14%, transparent);
+  color: var(--critical);
+}
+
+.rfp-departments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.rfp-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.rfp-list li + li {
+  margin-top: 6px;
+}

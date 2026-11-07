@@ -162,11 +162,24 @@ Desde la raíz. Exporta `telemetry_events` del día a `data/raw/telemetry_YYYY-M
 ```bash
 docker compose up -d --build redis worker flower                                              # broker + worker + Flower (localhost:5555)
 docker compose stop worker flower redis                                                       # parar (warm shutdown)
-services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --concurrency=1  # worker nativo, desde la RAÍZ
+services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --pool=solo  # worker nativo, desde la RAÍZ (en macOS, prefork falla: ver RFPs)
 services/api/.venv/bin/celery -A services.celery_app flower --port=5555                       # Flower nativo, desde la RAÍZ
 ```
 
 `POST /reporting/pipeline-runs` encola y responde 202 con `task_id`; el estado se consulta en `GET /tasks/{task_id}` (solo admin). `REDIS_URL` por defecto `redis://localhost:6379/0` en nativo; en Docker lo fija el compose. Detalle, mediciones y demo de la DLQ en `docs/async-tasks.md`.
+
+### Recepción de RFPs (Hito 9, Parte 1)
+
+```bash
+docker compose up -d redis                                                                    # cola
+services/api/.venv/bin/celery -A services.celery_app worker --loglevel=INFO --pool=solo       # desde la RAÍZ
+cd services/api && .venv/bin/uvicorn main:app --port 8000                                     # crea las tablas rfp_* al arrancar
+cd uis/backoffice && npm run dev -- --port 3001                                               # pantalla /rfps
+services/api/.venv/bin/python scripts/make_phi_test_rfp.py                                    # PDF del caso 4 (PHI ficticia)
+services/api/.venv/bin/python scripts/reprocess_rfp.py <ticket_id> [--inline]                 # reprocesar un ticket
+```
+
+Los PDF de muestra están en el repo del currículo (`content/contexts/09-agentic-workflows/rfp-requests/healthcore/`). Requiere `markitdown[pdf]` y `py-readability-metrics` (en `services/api/requirements.txt`); el tokenizador `punkt_tab` de NLTK se descarga solo dentro del venv la primera vez. Detalle en `docs/rfp-intake.md`.
 
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
@@ -186,14 +199,17 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_sales_forecast_eval
 # Tests del agente LangGraph: grafo (17) + tools/planificador/enrutamiento (39), con dobles, + cliente OAuth del MCP (5) + evals (86, 12 casos sobre traces grabados) + memoria (49) + harness/guardrails (112, sin LLM): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_agent_graph.py tests/pipelines/test_agent_tools.py tests/pipelines/test_agent_mcp_client.py tests/pipelines/test_agent_evals.py tests/pipelines/test_agent_memory.py tests/pipelines/test_agent_guardrails.py
 
+# Tests de la recepción de RFPs (49: clasificador, orquestador, workers, synthesizer, PHI, conversión real con MarkItDown, grafo, persistencia en SQLite): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_intake.py
+
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (246 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness): desde services/api, con el venv activado
+# Backend (255 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 9 de /rfp-tickets): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (94 tests): desde uis/backoffice
+# Frontend (105 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -604,6 +620,29 @@ Gotchas y residuales:
 - `phi_guard.insurance_number` daba falsos positivos ("sección Cobertura"); ahora exige límite de palabra y un dígito. Lo detectó la calibración con los traces reales.
 - `POST /knowledge/query` (Hito 7) no pasa por el harness.
 - La ventana de brecha y el monitor viven en memoria del proceso: con varios workers de uvicorn cada uno tendría los suyos.
+
+### Recepción y enrutamiento de RFPs — `docs/rfp-intake.md`
+
+Hito 9 "Flujos de Trabajo Agénticos" (Parte 1 de 3), rama `feature/rfp-intake` sobre `main`, 2026-10-19. Revenue Cycle (Tom Callahan) sube una RFP en PDF desde `/rfps` y ve, sin leer el documento, qué pedir a cada departamento (`revenue`, `clinical`, `compliance`, BRIEFING §2.1) y a quién. Las Partes 2 y 3 continúan el MISMO ticket.
+
+Mapa del código:
+- **`data/pipelines/rfp_intake/`**: grafo dedicado `rfp_intake` (no toca el grafo del agente): `convert → phi_screen → classify → orchestrate → department_worker ×N (Send, en paralelo) → synthesize`, con salida a `discard` por PHI o por no ser RFP. `agents.py` (4 agentes, JSON validado con Pydantic, LLM inyectable), `departments.py` (catálogo y reglas por país), `phi.py`, `conversion.py` (MarkItDown), `readability.py`, `models.py` (`rfp_tickets`, `rfp_metadata`, `rfp_department_sections` en Supabase), `repository.py`, `runner.py` (persiste en una transacción + handoff).
+- **`services/rfp_intake/`**: `POST /rfp-tickets` (multipart, 202 + `ticket_id`), `GET /rfp-tickets`, `GET /rfp-tickets/{id}`, `GET /rfp-tickets/{id}/handoff`, con autenticación. **`services/tasks/rfp_tasks.py`**: tarea Celery `rfp_intake.process_ticket` sobre `ObservableTask`.
+- **Backoffice**: `app/rfps/` (subida + lista y detalle con poll cada 3 s vía `hooks/usePolling.ts`), `types/rfp.ts`, `services/rfpApi.ts`.
+
+Decisiones que conviene no romper:
+- **Estados**: `analizando` → `analisis_completo` | `descartado` | `error`. `error` es un añadido al README (decisión del usuario): un fallo técnico (modelo caído, salida no JSON, PDF ilegible) nunca se disfraza de `descartado`.
+- **PHI: redactar y parar** (decisión del usuario). `phi_screen` va antes de cualquier agente: con PHI, ningún modelo ve el documento; `descartado` + `phi_detected` + `requires_compliance_review`. Solo se guardan las CATEGORÍAS. Reutiliza las regex de `phi_guard` (nueva `find_matches`, aditiva) pero con su propia regla `is_patient_phi` (en una RFP el email de compras no es PHI) y campos etiquetados ("Patient:", "DOB:"); redacta el párrafo entero. No cambiar `phi_guard` para esto: alteraría la memoria del agente.
+- **Reglas del BRIEFING en código, no en el prompt**: `revenue` y `compliance` siempre (`required_departments`); moneda y BAA/DPA por `client_country` como "HECHOS FIJADOS" del worker; contactos del catálogo. Anti-invención: población y cifras de workers que no estén en el texto se eliminan.
+- **El grafo no toca la base de datos**; la tarea Celery solo lleva el `ticket_id`; el PDF se guarda como `data/raw/rfp/<ticket_id>.pdf` (nunca el nombre original; carpeta en `.gitignore`).
+- **Handoff a la Parte 2**: `next_stage = "generando_borrador"` + `handoff_payload` v1 (metadatos, `workstreams` con `key_aspects`, `summary`, `who_to_ask`, `conflicts`, `markdown_path` redactado). Las columnas de borrador/evaluación/aprobación de `rfp_department_sections` ya existen vacías.
+
+Gotchas reales:
+- **Celery prefork falla en macOS** (Python 3.12, billiard 4.3): `ValueError: not enough values to unpack (expected 3, got 0)` en `fast_trace_task` antes de entrar en la tarea, así que `on_failure` no corre y el ticket queda `analizando` (lo rescata `recover_stale` a los 30 min). Worker nativo con `--pool=solo`. No investigado; Docker/Linux no afectado.
+- **Lo que solo destapó el modelo real**: con el correo de Thames Valley el orquestador omitió `revenue`, y el worker de Revenue preguntaba por la moneda ya fijada. Ambos corregidos con test de regresión.
+- **MarkItDown**: viñetas como `(cid:127)` (una regex con `\s*` se comía las líneas en blanco y fundía las viñetas con el título) y tablas desemparejadas. `py-readability-metrics` exige ≥100 palabras (si no, métricas `null` + `readability_note`) y `punkt_tab` de NLTK.
+- **Supabase gratuito se pausa** tras ~7 días sin uso: el pooler responde `tenant/user … not found`. Se reactiva desde el dashboard (Restore project).
+- **Claude in Chrome solo sube archivos del scratchpad** de la sesión, no del repo.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

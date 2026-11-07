@@ -39,6 +39,7 @@ from security import get_current_user  # noqa: E402
 from services.agent.router import router as agent_router  # noqa: E402
 from services.knowledge.router import router as knowledge_router  # noqa: E402
 from services.reporting.router import router as reporting_router  # noqa: E402
+from services.rfp_intake.router import router as rfp_intake_router  # noqa: E402  (registra las tablas rfp_*)
 from services.tasks.router import router as tasks_router  # noqa: E402
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
 from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
@@ -72,6 +73,7 @@ app.include_router(reporting_router)
 app.include_router(tasks_router)
 app.include_router(knowledge_router)
 app.include_router(agent_router)
+app.include_router(rfp_intake_router)
 
 timing_logger = logging.getLogger("api.timing")
 
