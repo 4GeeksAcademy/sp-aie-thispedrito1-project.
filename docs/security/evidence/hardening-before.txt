@@ -1,0 +1,45 @@
+# Endurecimiento del servidor — ANTES (configuración por defecto del VPS)
+# 2026-10-28T19:21Z · servidor simulado Ubuntu 24.04 (infra/hardening/lab/Dockerfile)
+# Generado por: bash infra/hardening/run-lab.sh
+
+$ verify.sh   (dentro del servidor, como root, solo lectura)
+== SSH (sshd -T: configuración efectiva)
+FAIL  PermitRootLogin no
+FAIL  PasswordAuthentication no
+PASS  KbdInteractiveAuthentication no
+FAIL  AllowUsers healthcore
+FAIL  MaxAuthTries <= 3
+FAIL  AllowTcpForwarding no
+== Usuario operativo
+FAIL  healthcore existe
+FAIL  healthcore no es UID 0
+FAIL  healthcore sin contraseña usable
+FAIL  healthcore con clave autorizada
+FAIL  ~/.ssh 700
+FAIL  authorized_keys 600
+PASS  healthcore sin sudo completo
+PASS  root es la única cuenta UID 0
+== Carpetas
+FAIL  /srv/healthcore/app    healthcore:healthcore 750
+FAIL  /srv/healthcore/logs   healthcore:adm 2750
+FAIL  /srv/healthcore/config root:healthcore 750
+== Firewall (ufw)
+FAIL  ufw activo
+FAIL  entrada denegada por defecto
+FAIL  solo abiertos: 22/tcp 443/tcp
+== Puertos escuchando (informativo)
+      0.0.0.0:22
+      0.0.0.0:5432
+      0.0.0.0:8000
+      127.0.0.11:39465
+      [::]:22
+== Resultado: 17 FAIL
+
+== Pruebas desde otra máquina de la red (hc-lab-attacker → hc-lab-server)
+  SSH root con contraseña                                   ACEPTADO
+  SSH healthcore con contraseña                             rechazado
+  SSH healthcore con su clave                                rechazado
+  SSH root con la clave del operador                         rechazado
+  puerto 8000 (API FastAPI) desde otra máquina              ABIERTO
+  puerto 5432 (PostgreSQL) desde otra máquina               ABIERTO
+  puerto 22 (SSH) desde otra máquina                        ABIERTO

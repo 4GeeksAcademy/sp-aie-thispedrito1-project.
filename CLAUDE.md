@@ -208,6 +208,17 @@ cd uis/backoffice && npm run dev -- --port 3001                # pantalla /compl
 
 Sin Redis ni Celery: el pub/sub es en memoria (un proceso). El navegador conecta directo a `ws://localhost:8000` (`NEXT_PUBLIC_CHAT_WS_URL`), no por `/api-proxy`. Necesita `LLM_API_KEY` vigente y Supabase despierto. Detalle en `docs/websocket-chat.md`.
 
+### Auditoría OWASP Top 10 y endurecimiento del servidor
+
+```bash
+bash infra/hardening/run-lab.sh                                          # servidor simulado: antes → harden.sh → después (necesita Docker)
+(cd services/api && .venv/bin/python -m pytest tests/test_owasp_fixes.py -o addopts="")   # 13 tests de los arreglos
+services/api/.venv/bin/python -m pytest tests/security tests/pipelines/test_indirect_injection.py -o addopts=""   # 14
+~/.local/bin/uvx pip-audit --path services/api/.venv/lib/python3.12/site-packages        # escaneo de dependencias Python
+```
+
+Desde la raíz. En un Ubuntu real: `OPS_PUBKEY_FILE=… infra/hardening/harden.sh` y luego `infra/hardening/verify.sh` (como root). Detalle en `docs/security/owasp-top10-audit.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -238,7 +249,7 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (289 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 14 del chat WebSocket): desde services/api, con el venv activado
+# Backend (303 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 14 del chat WebSocket, 13 de la auditoría OWASP): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
@@ -777,6 +788,29 @@ Gotchas reales:
 - **deepseek con `response_format=json_object` retiene toda la salida hasta el final** (93 trozos en 0,1 s): el modo streaming de `generate_reply` no lo pide (test `test_streaming_does_not_ask_for_json_mode`); `POST /agent/query` sí. Aun así, el reparto varía por petición (OpenRouter): a veces 8 s repartidos, a veces una ráfaga tras 10-18 s.
 - **La espera larga está dentro de `create()`** y cerrar el stream de httpx desde otro hilo no corta (se cuelga hasta el timeout): el abort se comprueba en el hilo del turno. Cortar durante esa espera exigiría el cliente asíncrono.
 - **Verificado en Chrome con el modelo real (2026-10-28)**: escritura en vivo, interrupción a mitad (trace `aborted` en `generate`, parcial `interrupted`, turno nuevo), caída de la API con backoff y rehidratación, y recarga de página. Tabla en `docs/websocket-chat.md` §10. `glm-5.3-flash` da 403 para el equipo.
+
+### Auditoría OWASP Top 10 — `docs/security/owasp-top10-audit.md`
+
+Ciberseguridad (vulnerabilidades web), rama `feature/owasp-top10-audit` apilada sobre `feature/websocket-chat`, 2026-10-28. BRIEFING de ciberseguridad §7 (descargado del repo del currículo `content/contexts/cybersecurity-analysis/`, no viene en Descargas). Informe 10 categorías × 3 carriles (backend, frontend, agéntico); evidencia antes/después en `docs/security/evidence/`.
+
+Arreglos que conviene no deshacer:
+- **`/knowledge/query` pasa por los guardarraíles** (`check_input` → `isolate_evidence` → `check_output`) y llama a `rag.retrieve` + `rag.generate_answer` por separado, ya NO a `rag.query`: los tests deben sustituir esas dos funciones.
+- **`patterns.EMBEDDED_INSTRUCTION_RULES`** (órdenes escondidas en contenido recuperado: dirigidas al asistente, "a partir de ahora responde", "recomienda siempre / sin revisar contraindicaciones", "no menciones"). Solo en `isolation.sanitize_text`, nunca sobre el mensaje del usuario. `test_real_knowledge_base_policies_are_not_neutralized` las pasa por los 14 chunks reales: si cambian los documentos o las reglas, debe seguir sin falsos positivos.
+- **Tokens de sesión con `type: "access"`**; `user_from_token` rechaza cualquier otro tipo (el de reset abría sesión). Sin `type` = sesión antigua, aceptada.
+- **`GET /users/{id}`**: `ensure_self_or_admin` (no-admin recibe 403 exista o no la cuenta). **`GET /telemetry/report`** exige sesión; los tests usan un token directo (sin login) porque el login escribe `login_succeeded` en la tabla que cuentan.
+- **CORS**: `CORS_ALLOWED_ORIGINS` (por defecto localhost:3000,3001); `parse_cors_origins` impide arrancar con `*` (Learn by Doing delegado).
+- **Compose solo en `127.0.0.1`** y **Dockerfiles de api/worker/scheduler con `USER healthcore`** (`ARG APP_UID=1000`, dueño de los bind mounts en Linux). `tests/security/test_deploy_config.py` lo vigila para TODO puerto nuevo. Recordatorio: en un servidor, los puertos publicados por Docker se saltan ufw.
+- **Next.js 16.4.3** en las dos webs y **python-multipart 0.0.31** (package-lock tocado con permiso explícito).
+- `infra/hardening/`: `harden.sh` (usuario `healthcore` con sudo limitado a `healthcore-*`, drop-in `00-` de sshd validado con `sshd -t`, carpetas `/srv/healthcore/{app,logs,config}`, ufw 22 con `limit` + 443), `verify.sh` (solo lee) y `run-lab.sh` (servidor simulado Ubuntu 24.04 + atacante en red propia; lo borra todo al salir).
+
+Pendientes con plan en la §6 del informe: LangGraph 1.x (deserialización de checkpoints), límite de intentos de login, aislamiento por clínica, firma de RFP sin rol, JWT en `localStorage`/CSP, Swagger y `--reload` en la imagen, `uis` como root, Starlette/Pillow, proveedor LLM sin BAA/DPA, python-jose → PyJWT.
+
+Gotchas:
+- `test_rfp_response.py::test_ticket_shows_progress_in_real_time` es sensible al tiempo: falló una vez en la batería completa y pasa en todas las repeticiones.
+- npm 11 bloquea los scripts de instalación sin aprobación (`npm install-scripts approve`); `next build` funciona igual.
+- `uis/website` no tenía `node_modules`: se instalaron para verificar el build.
+- Laboratorio verificado (2026-10-28): `verify.sh` 17 FAIL → 0 FAIL, root por SSH ACEPTADO → rechazado, 8000/5432 ABIERTO → cerrado. **No verificado**: build de los Dockerfiles con `USER healthcore` (falta de disco).
+- Docker Desktop puede quedar colgado (`docker ps` no responde). Antes de reiniciarlo, comprobar que el runner de producción no tiene job: `pgrep -fl Runner.Worker` vacío = libre.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

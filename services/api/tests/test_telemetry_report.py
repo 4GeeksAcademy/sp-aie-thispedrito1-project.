@@ -4,11 +4,26 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
+from auth_repository import AuthRepository
+from models import UserRole
+from security import create_access_token
 from services.telemetry import analysis
 
 REPORT_WINDOW = {"start_date": "2026-06-14T00:00:00Z", "end_date": "2026-06-16T00:00:00Z"}
+
+
+@pytest.fixture(autouse=True)
+def _authenticated(client: TestClient) -> None:
+    """Desde la auditoría OWASP (A01) el reporte exige sesión. Token directo,
+    sin /auth/login: el login escribiría login_succeeded en telemetry_events,
+    que es justo lo que estos tests cuentan."""
+    user, _ = AuthRepository().create_user(
+        email="report.reader@example.com", hashed_password="unused", role=UserRole.user, profile_data={}
+    )
+    client.headers["Authorization"] = f"Bearer {create_access_token(user['id'], user['role'])}"
 
 
 def _event(event_type: str, timestamp: str, properties: dict, event_id: str) -> dict:

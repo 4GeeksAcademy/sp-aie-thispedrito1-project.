@@ -21,4 +21,11 @@ RUN uv pip install --system --no-cache -r /tmp/requirements.txt
 # se importa desde /app, igual que desde la raíz del repo en dev nativo.
 WORKDIR /app
 
+# Sin root (auditoría OWASP A05): las Partes 1-3 de RFP ejecutan agentes con
+# LLM en este proceso. Mismo usuario y UID que services/api/Dockerfile.
+# Celery además avisa (y en algunas versiones se niega) si corre como root.
+ARG APP_UID=1000
+RUN useradd --uid "${APP_UID}" --create-home --shell /usr/sbin/nologin healthcore
+USER healthcore
+
 CMD ["celery", "-A", "services.celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]

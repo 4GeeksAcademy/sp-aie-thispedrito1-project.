@@ -58,14 +58,14 @@ def test_query_returns_only_the_generated_answer(client: TestClient, auth_header
 
 
 def test_query_requires_authentication(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setattr(rag, "query", lambda question: "no debería llamarse")
+    monkeypatch.setattr(rag, "retrieve", lambda question, **_: "no debería llamarse")
     response = client.post("/knowledge/query", json={"question": "¿Qué seguros aceptan?"})
     assert response.status_code == 401
 
 
 def test_blank_question_is_rejected_before_calling_the_pipeline(client: TestClient, auth_headers, monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(rag, "query", lambda question: calls.append(question) or "x")
+    monkeypatch.setattr(rag, "retrieve", lambda question, **_: calls.append(question) or [])
     for body in ({"question": "   "}, {"question": ""}, {}, {"question": "a" * 1001}):
         response = client.post("/knowledge/query", json=body, headers=auth_headers)
         assert response.status_code == 422, body
@@ -73,10 +73,12 @@ def test_blank_question_is_rejected_before_calling_the_pipeline(client: TestClie
 
 
 def test_missing_configuration_returns_clean_503(client: TestClient, auth_headers, monkeypatch) -> None:
-    def fail(question):
+    def fail(question, **_):
         raise RagConfigError("Falta la variable de entorno LLM_API_KEY")
 
-    monkeypatch.setattr(rag, "query", fail)
+    # Desde la auditoría OWASP el router llama a retrieve/generate_answer por
+    # separado (para aislar los chunks entre medias), ya no a rag.query.
+    monkeypatch.setattr(rag, "retrieve", fail)
     response = client.post("/knowledge/query", json={"question": "¿Qué traigo?"}, headers=auth_headers)
     assert response.status_code == 503
     assert response.json() == {"detail": "Knowledge assistant is not configured."}
@@ -84,10 +86,10 @@ def test_missing_configuration_returns_clean_503(client: TestClient, auth_header
 
 
 def test_provider_failure_returns_clean_503(client: TestClient, auth_headers, monkeypatch) -> None:
-    def fail(question):
+    def fail(question, **_):
         raise ConnectionError("qdrant:6333 refused connection")
 
-    monkeypatch.setattr(rag, "query", fail)
+    monkeypatch.setattr(rag, "retrieve", fail)
     response = client.post("/knowledge/query", json={"question": "¿Qué traigo?"}, headers=auth_headers)
     assert response.status_code == 503
     assert response.json() == {"detail": "Knowledge assistant is temporarily unavailable."}

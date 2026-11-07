@@ -42,10 +42,18 @@ def test_user_list_never_exposes_emails(
         assert "email" not in user
 
 
-def test_get_missing_user_returns_404(client: TestClient, auth_headers: dict[str, str]) -> None:
-    response = client.get("/users/id-inexistente", headers=auth_headers)
+def test_get_missing_user_returns_404_for_admin(client: TestClient, admin_headers: dict[str, str]) -> None:
+    response = client.get("/users/id-inexistente", headers=admin_headers)
 
     assert response.status_code == 404
+
+
+def test_get_missing_user_is_forbidden_for_non_admin(client: TestClient, auth_headers: dict[str, str]) -> None:
+    """Auditoría OWASP A01: un usuario normal recibe 403 exista o no la cuenta,
+    así que el endpoint no sirve para enumerar ids."""
+    response = client.get("/users/id-inexistente", headers=auth_headers)
+
+    assert response.status_code == 403
 
 
 def test_user_can_update_own_email(

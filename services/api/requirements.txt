@@ -1,7 +1,7 @@
 # 0.115.14: primera de la serie 0.115 que admite la starlette>=0.46.2 de mcpauth.
 fastapi==0.115.14
 uvicorn[standard]==0.32.1
-python-multipart==0.0.17
+python-multipart==0.0.31
 tinydb==4.8.2
 email-validator==2.2.0
 python-jose[cryptography]==3.3.0

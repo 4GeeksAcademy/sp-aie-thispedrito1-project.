@@ -1,0 +1,29 @@
+# Escaneo de dependencias DESPUÉS de la auditoría (2026-10-28)
+# Mismos comandos que dependencies-before.txt
+
+Python: 66 avisos únicos en 14 paquetes (antes: 73 en 15)
+  certifi 2026.7.22                          1 avisos
+  dnspython 2.8.0                            1 avisos
+  ecdsa 0.19.2                               1 avisos
+  langgraph 0.6.11                           1 avisos
+  langgraph-checkpoint 3.0.1                 2 avisos
+  langgraph-checkpoint-postgres 3.0.5        2 avisos
+  langgraph-sdk 0.2.15                       3 avisos
+  nltk 3.10.3                                1 avisos
+  oauthlib 3.3.1                             2 avisos
+  opentelemetry-api 1.45.0                   1 avisos
+  pillow 12.3.0                             39 avisos
+  python-dotenv 1.0.1                        1 avisos
+  python-jose 3.3.0                          4 avisos
+  starlette 0.46.2                           7 avisos
+  python-multipart: 0.0.17 → 0.0.31, sin avisos
+
+uis/backoffice: {'info': 0, 'low': 6, 'moderate': 0, 'high': 0, 'critical': 0, 'total': 6}
+  @jest/core                   low
+  deepmerge                    low
+  jest                         low
+  jest-cli                     low
+  jest-config                  low
+  ts-jest                      low
+
+uis/website: {'info': 0, 'low': 0, 'moderate': 0, 'high': 0, 'critical': 0, 'total': 0}
