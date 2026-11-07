@@ -10,3 +10,8 @@
 #
 # ┌ min  ┌ hora  ┌ día del mes  ┌ mes  ┌ día de la semana
 15       2       *              *      *     cd /app && python scripts/nightly_export.py
+
+# Cierre financiero mensual (BRIEFING: tercer día hábil, 06:00 hora de Austin).
+# Cron no sabe qué es un día hábil ni sigue el horario de verano de Austin:
+# se lanza cada hora en punto y el script decide si toca (services/financial_close/schedule.py).
+0        *       *              *      *     cd /app && python scripts/financial_close_scheduled.py

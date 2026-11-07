@@ -52,3 +52,7 @@ data/onboarding/
 # (contratos con datos bancarios ficticios) y cuentas de demo.
 data/raw/supplier-contracts/
 data/supplier_contracts/
+
+# Cierre financiero: CSV generados por scripts/seed_financial_close.py y cuentas de demo.
+data/raw/financial-close/
+data/financial_close/

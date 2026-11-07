@@ -56,7 +56,8 @@ celery_app = Celery(
     "healthcore",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["services.tasks.pipeline_tasks", "services.tasks.rfp_tasks", "services.tasks.onboarding_tasks"],
+    include=["services.tasks.pipeline_tasks", "services.tasks.rfp_tasks", "services.tasks.onboarding_tasks",
+             "services.tasks.financial_close_tasks"],
 )
 
 celery_app.conf.update(

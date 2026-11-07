@@ -41,6 +41,7 @@
   - Fallback de datos de respaldo en dashboard para no bloquear visualizacion en errores de red.
 
 - Orquestador de incorporaciones (2026-11-07): un unico agente LangGraph con estado persistente (no multiagente), grafo generado desde el catalogo de etapas, el grafo no toca la BD (efectos idempotentes que persiste el runner), aprobaciones validadas con un directorio de roles organizativos (`onboarding_staff`) y no con el rol de la plataforma, entradas con posibles datos sensibles validadas a mano para no repetir valores en un 422. Dependencia nueva: `langgraph-checkpoint-sqlite==3.0.3`.
+- Cierre financiero mensual (2026-11-07): un unico agente con herramientas deterministas (no LangGraph: flujo lineal de herramientas + dos llamadas al modelo, plan y redaccion), cifras en `Decimal` como datos estructurados con sus fuentes (`figures`) y huella SHA-256; el texto se pinta desde esas cifras en EN y ES. Lectura del agente en transaccion de solo lectura forzada por la base de datos. Revision humana por directorio organizativo `fc_staff` (no el admin). Calendario con `zoneinfo` en hora de Austin; el scheduler lanza cada hora. Sin dependencias nuevas.
 
 ## Restricciones tecnicas
 - Dependencia de API externa: disponibilidad y consistencia de datos condicionadas por servicio remoto.
