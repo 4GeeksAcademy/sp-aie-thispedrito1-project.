@@ -208,6 +208,19 @@ cd uis/backoffice && npm run dev -- --port 3001                # pantalla /compl
 
 Sin Redis ni Celery: el pub/sub es en memoria (un proceso). El navegador conecta directo a `ws://localhost:8000` (`NEXT_PUBLIC_CHAT_WS_URL`), no por `/api-proxy`. Necesita `LLM_API_KEY` vigente y Supabase despierto. Detalle en `docs/websocket-chat.md`.
 
+### Orquestador de incorporaciones (Agentic Engineering)
+
+```bash
+services/api/.venv/bin/python -m pytest tests/onboarding                                    # 71, sin red (incluye reinicio con SIGKILL entre 2 procesos)
+(cd services/api && .venv/bin/python -m pytest tests/test_onboarding_api.py -o addopts="")   # 17
+docker compose up -d qdrant && services/api/.venv/bin/python scripts/index_onboarding_docs.py   # colección healthcore_onboarding (~20 min: 88 embeddings)
+services/api/.venv/bin/python scripts/evaluate_onboarding_retrieval.py                     # calibra DEFAULT_MIN_SCORE
+services/api/.venv/bin/python scripts/seed_onboarding.py --blocked-attempt                 # semilla en Supabase + cuentas en data/onboarding/demo-users.db.json
+services/api/.venv/bin/python scripts/onboarding_followup.py                               # barrido de plazos (cron horario)
+```
+
+Desde la raíz. Para entrar con las cuentas de la semilla: API con `SUPPLIERS_DB_PATH=data/onboarding/demo-users.db.json`, Redis + worker de Celery (`--pool=solo`). Detalle en `docs/onboarding/onboarding-orchestrator.md`.
+
 ### Auditoría OWASP Top 10 y endurecimiento del servidor
 
 ```bash
@@ -840,6 +853,31 @@ Decisiones que conviene no romper:
 Hallazgos:
 - `services/api/.env` estuvo versionado el 22-23 jul 2026 (`aaded8d` → `051ca1a`, publicado en origin) con un `JWT_SECRET_KEY`. Comprobado por huella SHA-256: **el actual es distinto**. `apps/.env.local` del historial solo tenía una URL.
 - Pendiente P0: proveedor LLM y Supabase gratuito sin BAA/DPA (solo datos sintéticos).
+
+### Orquestador de incorporaciones — `docs/onboarding/onboarding-orchestrator.md`
+
+Agentic Engineering "Agente de incorporaciones", rama `feature/onboarding-orchestrator` apilada sobre `feat/final-pitch`, 2026-11-07. Stakeholder Diane Foster. Un ÚNICO agente LangGraph lleva a cada incorporación corporativa por las 7 etapas del BRIEFING (trámites → empresa → operación → cumplimiento → función → cómo trabajamos → accesos y cierre).
+
+Mapa del código:
+- **`services/onboarding/`**: `catalog.py` (tabla del BRIEFING: etapas, plazos, aprobadores, departamentos, puestos, sistemas; fuente única), `graph.py` (nodos GENERADOS desde `STAGES`: `s4_compliance__check`…; `interrupt()` en trámites, comprobación y aprobación), `runner.py` (`advance` idempotente + `sync` estado→fila + efectos; checkpointer Postgres o SQLite; hilo `onboarding-<id>`), `checks.py`, `approvals.py`, `access.py`, `followup.py`, `qa.py`, `routing.py`, `sensitive.py`, `permissions.py`, `notifications.py`, `repository.py`, `models.py` (6 tablas `onboarding_*` en Supabase), `router.py` + `schemas.py` (`/onboarding`).
+- **`data/pipelines/onboarding_docs.py`**: corpus (`docs/company-onboarding/{en,es}/*.md` + `checks/*.json`), selección por perfil, presentación, Qdrant `healthcore_onboarding`.
+- **`services/tasks/onboarding_tasks.py`**: `onboarding.advance_hire` y `onboarding.followup_sweep`.
+- **Backoffice**: `/onboarding` (vista de Personas), `/onboarding/[id]`, `/onboarding/me`; `types/onboarding.ts`, `services/onboardingApi.ts`, `components/onboarding/`, sección "Personas" del menú.
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** comprobaciones con banco fijo corregido en código (no modelo); material en inglés + español (español SOLO bajo HIPAA: no existe UK GDPR en español y nunca se traduce al vuelo); avisos en bandeja interna (sin correos); apilada sobre `feat/final-pitch`.
+- **El grafo no toca la BD**: deja `effects` con id determinista (`hire:sN:rR:...`) y `runner.persist_effects` guarda los nuevos. Lo anterior a un `interrupt()` es puro.
+- **Autorización dos veces** (API 403 + dentro del grafo), con el directorio `onboarding_staff` (rol organizativo), nunca con el `admin` de la plataforma.
+- **Accesos solo por `access.issue_access_request`** (persona o agente en la etapa 7): datos de pacientes sin `compliance_approved_at` → `blocked` + evento de seguridad + aviso a Claire.
+- **Entradas validadas a mano (400 `{"errors"}`), no con Pydantic**: el 422 repetiría el valor (un SSN). Ninguna columna para datos sensibles; texto libre por `sensitive.py`.
+- `pending_answers` (check→grade) y `last_result` (nota) son claves distintas: con una sola, la nota se borraba al pasar de etapa (lo detectó un test).
+- Si cambian los documentos o el modelo de embeddings, recalibrar `DEFAULT_MIN_SCORE` con `scripts/evaluate_onboarding_retrieval.py`.
+
+Gotchas reales:
+- `langgraph-checkpoint-sqlite==3.0.3` añadido (compatible con `langgraph-checkpoint==3.0.1`): lo usa la prueba de reinicio entre procesos y el modo local sin Supabase.
+- Las aristas de `Command(goto=…)` necesitan `destinations=` en `add_node` para que `get_graph()` las dibuje (`docs/onboarding/graph.mmd` se genera del grafo compilado).
+- Tests de API: un hash bcrypt por módulo (9 por test tardaban 42 s → 1,5 s) y fechas de inicio futuras (con una pasada, las etapas salen vencidas).
+- El proxy de embeddings tardó ~14 s por llamada el 2026-11-07: indexar las 88 secciones lleva ~20 min.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

@@ -43,6 +43,7 @@ from services.agent.chat.service import CHAT as agent_chat_service  # noqa: E402
 from services.knowledge.router import router as knowledge_router  # noqa: E402
 from services.reporting.router import router as reporting_router  # noqa: E402
 from services.rfp_intake.router import router as rfp_intake_router  # noqa: E402  (registra las tablas rfp_*)
+from services.onboarding.router import router as onboarding_router  # noqa: E402  (registra las tablas onboarding_*)
 from services.rfp_intake.events import install_shutdown_signal_hook, shutdown_hub as shutdown_rfp_event_hub  # noqa: E402
 from services.tasks.router import router as tasks_router  # noqa: E402
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
@@ -104,6 +105,7 @@ app.include_router(knowledge_router)
 app.include_router(agent_router)
 app.include_router(agent_chat_router)
 app.include_router(rfp_intake_router)
+app.include_router(onboarding_router)
 
 timing_logger = logging.getLogger("api.timing")
 

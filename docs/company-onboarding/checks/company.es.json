@@ -1,0 +1,20 @@
+{
+  "doc_id": "company",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "company-a1", "section": "Nuestra historia", "question": "¿Cuándo y dónde se fundó HealthCore?", "options": ["En 2008 en Houston, Texas", "En 2011 en Austin, Texas", "En 2011 en Londres", "En 2015 en Atlanta, Georgia"], "answer": 1},
+      {"id": "company-a2", "section": "Nuestra red de clínicas", "question": "¿Cómo se reparten las clínicas entre países?", "options": ["6 en EE. UU. y 6 en Reino Unido", "12 en EE. UU.", "9 en EE. UU. y 3 en Reino Unido", "10 en EE. UU. y 2 en Reino Unido"], "answer": 2},
+      {"id": "company-a3", "section": "Nuestra propuesta de valor", "question": "¿Qué tres promesas forman la propuesta de valor de HealthCore?", "options": ["Precios más bajos, reserva online y visitas a domicilio", "Citas en el mismo día, horarios ampliados y atención bilingüe en EE. UU.", "Hospitalización, urgencias y cirugía", "Solo telemedicina, chat 24/7 y aparcamiento gratis"], "answer": 1},
+      {"id": "company-a4", "section": "Tamaño y regulación", "question": "¿Bajo qué marcos de protección de datos opera HealthCore?", "options": ["HIPAA en EE. UU. y UK GDPR en Reino Unido", "Solo HIPAA en los dos países", "Solo UK GDPR en los dos países", "Ninguno, porque es atención ambulatoria"], "answer": 0},
+      {"id": "company-a5", "section": "Dirección y equipos corporativos", "question": "¿Quién dirige Cumplimiento y Gobernanza de Datos?", "options": ["Diane Foster", "Tom Callahan", "Claire Whitfield", "Priya Nair"], "answer": 2}
+    ],
+    [
+      {"id": "company-b1", "section": "Nuestra historia", "question": "¿Por qué creó la Dra. Sandra Okonkwo HealthCore?", "options": ["Porque los clínicos dedicaban más tiempo al papeleo que a los pacientes", "Para construir una cadena de hospitales", "Para vender seguros médicos", "Para abrir clínicas solo en Reino Unido"], "answer": 0},
+      {"id": "company-b2", "section": "Líneas de servicio", "question": "¿Cuál de estas NO es una línea de servicio de HealthCore?", "options": ["Atención primaria", "Gestión de enfermedades crónicas", "Servicios de urgencias", "Programas de salud preventiva"], "answer": 2},
+      {"id": "company-b3", "section": "Nuestra red de clínicas", "question": "¿Dónde están las clínicas de Reino Unido?", "options": ["Londres y Mánchester", "Londres y Edimburgo", "Mánchester y Birmingham", "Solo Londres"], "answer": 0},
+      {"id": "company-b4", "section": "Tamaño y regulación", "question": "¿Cuántas personas emplea HealthCore y cuánto factura al año, aproximadamente?", "options": ["Unas 2.000 personas y 280 millones de dólares", "Unas 200 personas y 28 millones de dólares", "Unas 50 personas y 5 millones de dólares", "Unas 200 personas y 280 millones de dólares"], "answer": 1},
+      {"id": "company-b5", "section": "Dirección y equipos corporativos", "question": "¿Quién dirige HealthCore Digital?", "options": ["El Dr. Marcus Reid", "James Osei, el CTO", "Diane Foster", "La Dra. Sandra Okonkwo"], "answer": 1}
+    ]
+  ]
+}

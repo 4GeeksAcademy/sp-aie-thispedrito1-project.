@@ -1,0 +1,20 @@
+{
+  "doc_id": "compliance-uk-gdpr",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "ukgdpr-a1", "section": "Incident notification", "question": "Under UK GDPR, how soon must a breach that puts people at risk be reported to the ICO?", "options": ["Within 72 hours of becoming aware of it", "Within 60 days", "Within one month", "Only at the annual review"], "answer": 0},
+      {"id": "ukgdpr-a2", "section": "The minimum necessary principle", "question": "What does data minimisation mean?", "options": ["Delete all data every week", "Process only the personal data that is adequate, relevant and limited to the purpose", "Use small fonts in reports", "Store data in fewer servers"], "answer": 1},
+      {"id": "ukgdpr-a3", "section": "What UK GDPR protects", "question": "How does UK GDPR classify health data?", "options": ["As public data", "As special category data that needs extra protection", "As marketing data", "It does not cover health data"], "answer": 1},
+      {"id": "ukgdpr-a4", "section": "Where health data may and may not go", "question": "Which agreement must cover a UK vendor that processes patient data?", "options": ["A Data Processing Agreement (DPA)", "A Business Associate Agreement (BAA)", "A verbal agreement", "No agreement is needed"], "answer": 0},
+      {"id": "ukgdpr-a5", "section": "Patients' rights", "question": "You receive a subject access request. What do you do?", "options": ["Answer it yourself within a year", "Forward it to Compliance immediately", "Ignore it", "Post it in Slack"], "answer": 1}
+    ],
+    [
+      {"id": "ukgdpr-b1", "section": "Incident notification", "question": "Why can internal breach reporting not wait until Monday?", "options": ["Because the 72 hours include weekends", "Because Compliance only works on weekends", "Because the ICO closes on Mondays", "It can wait"], "answer": 0},
+      {"id": "ukgdpr-b2", "section": "Patients' rights", "question": "How long do we have to answer a subject access request?", "options": ["72 hours", "One month", "60 days", "Six months"], "answer": 1},
+      {"id": "ukgdpr-b3", "section": "Where health data may and may not go", "question": "Where may health data be pasted?", "options": ["Slack direct messages", "A Notion page", "Only Compliance-approved systems covered by a DPA", "An unapproved AI tool"], "answer": 2},
+      {"id": "ukgdpr-b4", "section": "The minimum necessary principle", "question": "Does having technical access to data mean you may look at it?", "options": ["Yes, always", "No, access alone does not mean you are allowed to look", "Only on Fridays", "Only if nobody checks the logs"], "answer": 1},
+      {"id": "ukgdpr-b5", "section": "Access logging", "question": "What does the access log record?", "options": ["Who accessed which record and when", "Only the number of patients", "Nothing", "Only printing"], "answer": 0}
+    ]
+  ]
+}

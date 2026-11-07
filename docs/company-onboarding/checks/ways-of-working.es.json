@@ -1,0 +1,20 @@
+{
+  "doc_id": "ways-of-working",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "wow-a1", "section": "Nuestras herramientas", "question": "¿Qué herramienta guarda las políticas oficiales?", "options": ["Slack", "Notion", "Jira", "El correo personal"], "answer": 1},
+      {"id": "wow-a2", "section": "Trabajar entre Austin y Londres", "question": "¿Cuál es la franja común de reuniones entre Austin y Londres?", "options": ["De 9:00 a 11:00 en Austin (15:00 a 17:00 en Londres)", "De 17:00 a 19:00 en Austin", "Cualquier hora", "Solo los viernes"], "answer": 0},
+      {"id": "wow-a3", "section": "Cómo se aprueba un nuevo sistema o integración", "question": "¿Cuál es el primer paso para aprobar un sistema nuevo?", "options": ["Registrarse con datos de la empresa", "Abrir una solicitud \"System intake\" en Jira", "Preguntar al CTO por Slack", "Empezar un piloto"], "answer": 1},
+      {"id": "wow-a4", "section": "Nuestras herramientas", "question": "¿Cuál de las cuatro herramientas está aprobada para datos de pacientes?", "options": ["Slack", "Microsoft 365", "Jira", "Ninguna"], "answer": 3},
+      {"id": "wow-a5", "section": "Cómo se aprueba un nuevo sistema o integración", "question": "¿Quién da la aprobación final de un sistema nuevo?", "options": ["El CTO", "Quien lo pidió", "Cualquier responsable", "El proveedor"], "answer": 0}
+    ],
+    [
+      {"id": "wow-b1", "section": "Cómo se aprueba un nuevo sistema o integración", "question": "¿Qué acuerdo revisa Cumplimiento para un proveedor de EE. UU.?", "options": ["Un Business Associate Agreement (BAA)", "Un Data Processing Agreement (DPA)", "Ninguno", "Solo un NDA"], "answer": 0},
+      {"id": "wow-b2", "section": "Trabajar entre Austin y Londres", "question": "¿Cómo se trabaja fuera de la franja común?", "options": ["De forma asíncrona, dejando las decisiones en Notion o Jira", "Llamando de noche", "No se trabaja", "Solo por teléfono"], "answer": 0},
+      {"id": "wow-b3", "section": "Cómo se aprueba un nuevo sistema o integración", "question": "¿Se puede saltar un paso de la aprobación para un piloto?", "options": ["Sí", "No, no se permite saltarse ningún paso", "Solo el de Cumplimiento", "Solo el del CTO"], "answer": 1},
+      {"id": "wow-b4", "section": "Nuestras herramientas", "question": "¿Para qué se usa Jira?", "options": ["Para seguir el trabajo y las solicitudes", "Para guardar datos de pacientes", "Para la nómina", "Para el correo"], "answer": 0},
+      {"id": "wow-b5", "section": "Pedir ayuda", "question": "El material oficial no responde a una duda que no es de cumplimiento. ¿A quién preguntas?", "options": ["A Personas", "A Cumplimiento", "A nadie", "A un proveedor"], "answer": 0}
+    ]
+  ]
+}

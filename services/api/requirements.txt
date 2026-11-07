@@ -35,6 +35,10 @@ langgraph==0.6.11
 # psycopg 3 (el resto de la API sigue con psycopg2).
 langgraph-checkpoint==3.0.1
 langgraph-checkpoint-postgres==3.0.5
+# Orquestador de incorporaciones: checkpointer en un archivo SQLite para la
+# prueba de reanudación entre dos procesos reales y para el modo local sin
+# Supabase. Producción sigue en Postgres. 3.0.3 acepta el checkpoint 3.0.1.
+langgraph-checkpoint-sqlite==3.0.3
 psycopg[binary]==3.3.6
 # Servidor MCP con OAuth (mcps/healthcore): SDK oficial de MCP (trae FastMCP en
 # mcp.server.fastmcp y el transporte Streamable HTTP), MCP Auth como resource

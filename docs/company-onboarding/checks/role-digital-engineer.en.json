@@ -1,0 +1,20 @@
+{
+  "doc_id": "role-digital-engineer",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "digeng-a1", "section": "Your first 90 days", "question": "Which of these is part of your first 90 days?", "options": ["Replacing both electronic health record systems", "A reliable weekly executive dashboard", "Opening a new clinic", "Negotiating with insurers"], "answer": 1},
+      {"id": "digeng-a2", "section": "How you work with patient data", "question": "Which data should you use whenever possible?", "options": ["Production patient data on your laptop", "Test or synthetic data", "Real data pasted into an AI tool", "Data from personal email"], "answer": 1},
+      {"id": "digeng-a3", "section": "Who you work with", "question": "Which team do you work with on any system that touches patient data?", "options": ["Claire Whitfield's Compliance team", "Only your own team", "The insurers", "Nobody"], "answer": 0},
+      {"id": "digeng-a4", "section": "Responsibilities", "question": "When do you design for compliance?", "options": ["After launch", "From day one", "Only if Compliance asks", "Never"], "answer": 1},
+      {"id": "digeng-a5", "section": "Your first 90 days", "question": "Who agrees your personal 90-day goals with you, and when?", "options": ["The CEO, after three months", "Your direct manager, in your first week", "Nobody", "Compliance, at the end of onboarding"], "answer": 1}
+    ],
+    [
+      {"id": "digeng-b1", "section": "Who you work with", "question": "Which team do you work with on reminders?", "options": ["Priya Nair's Patient Experience team", "Tom Callahan's Revenue Cycle team", "People", "Clinical Operations only"], "answer": 0},
+      {"id": "digeng-b2", "section": "How you work with patient data", "question": "May you copy production patient data to a test environment?", "options": ["Yes, it makes testing easier", "No, never", "Only on weekends", "Only small samples"], "answer": 1},
+      {"id": "digeng-b3", "section": "Your first 90 days", "question": "In how many markets does the first no-show pilot run?", "options": ["All markets", "One market", "Three markets", "None"], "answer": 1},
+      {"id": "digeng-b4", "section": "Responsibilities", "question": "Why do you document decisions?", "options": ["So that others can maintain your work", "Because it is optional", "To avoid writing tests", "To replace Compliance"], "answer": 0},
+      {"id": "digeng-b5", "section": "How you work with patient data", "question": "Before a new integration handles patient data, what must happen?", "options": ["Nothing", "It is approved through the process in the 'How we work' stage", "The engineer tests it with real data", "The manager mentions it in Slack"], "answer": 1}
+    ]
+  ]
+}

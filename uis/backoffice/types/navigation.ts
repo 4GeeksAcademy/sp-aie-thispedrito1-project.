@@ -40,6 +40,13 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: "Personas",
+    items: [
+      { href: "/onboarding", label: "Incorporaciones" },
+      { href: "/onboarding/me", label: "Mi incorporación" },
+    ],
+  },
+  {
     title: "Inteligencia artificial",
     items: [
       { href: "/knowledge", label: "Asistente de políticas" },

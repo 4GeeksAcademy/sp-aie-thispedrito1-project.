@@ -1,0 +1,20 @@
+{
+  "doc_id": "ways-of-working",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "wow-a1", "section": "Our tools", "question": "Which tool holds the official policies?", "options": ["Slack", "Notion", "Jira", "Personal email"], "answer": 1},
+      {"id": "wow-a2", "section": "Working between Austin and London", "question": "What is the shared meeting window between Austin and London?", "options": ["9:00 to 11:00 in Austin (15:00 to 17:00 in London)", "17:00 to 19:00 in Austin", "Any time", "Only Fridays"], "answer": 0},
+      {"id": "wow-a3", "section": "How a new system or integration is approved", "question": "What is the first step to approve a new system?", "options": ["Sign up with company data", "Open a 'System intake' request in Jira", "Ask the CTO in Slack", "Start a pilot"], "answer": 1},
+      {"id": "wow-a4", "section": "Our tools", "question": "Which of the four core tools is approved for patient data?", "options": ["Slack", "Microsoft 365", "Jira", "None of them"], "answer": 3},
+      {"id": "wow-a5", "section": "How a new system or integration is approved", "question": "Who gives the final approval for a new system?", "options": ["The CTO", "The person who requested it", "Any manager", "The vendor"], "answer": 0}
+    ],
+    [
+      {"id": "wow-b1", "section": "How a new system or integration is approved", "question": "Which agreement does Compliance check for a US vendor?", "options": ["A Business Associate Agreement (BAA)", "A Data Processing Agreement (DPA)", "None", "An NDA only"], "answer": 0},
+      {"id": "wow-b2", "section": "Working between Austin and London", "question": "How do you work outside the shared window?", "options": ["Asynchronously, writing decisions in Notion or Jira", "By calling at night", "You do not work", "Only by phone"], "answer": 0},
+      {"id": "wow-b3", "section": "How a new system or integration is approved", "question": "Can a step of the approval process be skipped for a pilot?", "options": ["Yes", "No, skipping a step is not allowed", "Only the Compliance step", "Only the CTO step"], "answer": 1},
+      {"id": "wow-b4", "section": "Our tools", "question": "What is Jira used for?", "options": ["Tracking work and requests", "Storing patient data", "Payroll", "Email"], "answer": 0},
+      {"id": "wow-b5", "section": "Asking for help", "question": "The official material does not answer a non-compliance question. Who do you ask?", "options": ["People", "Compliance", "Nobody", "A vendor"], "answer": 0}
+    ]
+  ]
+}

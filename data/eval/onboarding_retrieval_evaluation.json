@@ -1,0 +1,178 @@
+{
+  "summary": {
+    "threshold": 0.38,
+    "recall_at_1": 0.9285714285714286,
+    "recall_at_4": 1.0,
+    "worst_covered_score": 0.397,
+    "best_uncovered_score": 0.4481,
+    "covered_above_threshold": 14,
+    "uncovered_below_threshold": 5,
+    "separable": false
+  },
+  "covered": [
+    {
+      "profile": "en-hipaa-digital",
+      "question": "When was HealthCore founded and by whom?",
+      "expected_doc": "company",
+      "top_citation": "company §Our history",
+      "expected_score": 0.8069373,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "Which clinics do we have in the UK?",
+      "expected_doc": "company",
+      "top_citation": "company §Our clinic network",
+      "expected_score": 0.45079613,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "What is our no-show rate and why does it matter?",
+      "expected_doc": "operations",
+      "top_citation": "operations §No-shows are an operational problem",
+      "expected_score": 0.68445975,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "Where do most claim denials come from?",
+      "expected_doc": "operations",
+      "top_citation": "operations §Claim denials are an operational problem",
+      "expected_score": 0.65763295,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "How many days do we have to notify patients after a breach?",
+      "expected_doc": "compliance-hipaa",
+      "top_citation": "compliance-hipaa §Incident notification",
+      "expected_score": 0.6430493,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "How quickly must a data breach be reported to the ICO?",
+      "expected_doc": "compliance-uk-gdpr",
+      "top_citation": "compliance-uk-gdpr §Incident notification",
+      "expected_score": 0.7597862,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "What should I do with a subject access request?",
+      "expected_doc": "compliance-uk-gdpr",
+      "top_citation": "compliance-uk-gdpr §Patients' rights",
+      "expected_score": 0.45107234,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "Can I paste patient information into Slack?",
+      "expected_doc": "compliance-hipaa",
+      "top_citation": "ways-of-working §Our tools",
+      "expected_score": 0.42429048,
+      "recall_at_1": false,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "What are my goals for the first 90 days?",
+      "expected_doc": "role-digital-engineer",
+      "top_citation": "role-digital-engineer §Your first 90 days",
+      "expected_score": 0.4686674,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "Which report do I build in my first three months?",
+      "expected_doc": "role-revenue-cycle-analyst",
+      "top_citation": "role-revenue-cycle-analyst §Your first 90 days",
+      "expected_score": 0.39704305,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "How is a new system or integration approved?",
+      "expected_doc": "ways-of-working",
+      "top_citation": "ways-of-working §How a new system or integration is approved",
+      "expected_score": 0.7392664,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "When can I schedule a meeting with both Austin and London?",
+      "expected_doc": "ways-of-working",
+      "top_citation": "ways-of-working §Working between Austin and London",
+      "expected_score": 0.6705496,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "es-hipaa-digital",
+      "question": "¿Cuál es el plazo para notificar una brecha bajo HIPAA?",
+      "expected_doc": "compliance-hipaa",
+      "top_citation": "compliance-hipaa §Notificación de incidentes",
+      "expected_score": 0.80679154,
+      "recall_at_1": true,
+      "recall_at_4": true
+    },
+    {
+      "profile": "es-hipaa-digital",
+      "question": "¿Qué herramienta guarda las políticas oficiales?",
+      "expected_doc": "ways-of-working",
+      "top_citation": "ways-of-working §Nuestras herramientas",
+      "expected_score": 0.4696845,
+      "recall_at_1": true,
+      "recall_at_4": true
+    }
+  ],
+  "uncovered": [
+    {
+      "profile": "en-hipaa-digital",
+      "question": "Can I expense a standing desk for my home office?",
+      "top_citation": "ways-of-working §Our tools",
+      "top_score": 0.13148838
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "How many days of annual leave do I get?",
+      "top_citation": "role-revenue-cycle-analyst §Your first 90 days",
+      "top_score": 0.17423744
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "Is there free parking at the Austin office?",
+      "top_citation": "ways-of-working §Working between Austin and London",
+      "top_score": 0.36336604
+    },
+    {
+      "profile": "en-uk-revenue",
+      "question": "How long are access logs retained before deletion?",
+      "top_citation": "compliance-uk-gdpr §Access logging",
+      "top_score": 0.44805512
+    },
+    {
+      "profile": "es-hipaa-digital",
+      "question": "¿Puedo llevar a mi perro a la oficina?",
+      "top_citation": "ways-of-working §Trabajar entre Austin y Londres",
+      "top_score": 0.24779898
+    },
+    {
+      "profile": "en-hipaa-digital",
+      "question": "Which laptop model will I receive?",
+      "top_citation": "role-digital-engineer §How you work with patient data",
+      "top_score": 0.11616924
+    }
+  ]
+}

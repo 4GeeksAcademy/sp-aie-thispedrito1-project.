@@ -1,0 +1,20 @@
+{
+  "doc_id": "role-revenue-cycle-analyst",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "rcanalyst-a1", "section": "Responsibilities", "question": "Which revenue streams do you cover?", "options": ["Only US commercial insurers", "US claims and UK billing", "Only the NHS contract", "Only private payment"], "answer": 1},
+      {"id": "rcanalyst-a2", "section": "Your first 90 days", "question": "Which report do you build in your first 90 days?", "options": ["A weekly denial report by cause", "A yearly marketing report", "A staff holiday report", "A clinic cleaning report"], "answer": 0},
+      {"id": "rcanalyst-a3", "section": "How you work with patient data", "question": "What is your default level of data for an analysis?", "options": ["Patient-level data always", "Aggregated reports, patient-level only when the task requires it", "Whatever is fastest to export", "Personal spreadsheets"], "answer": 1},
+      {"id": "rcanalyst-a4", "section": "Who you work with", "question": "Who leads Revenue Cycle and Billing?", "options": ["Tom Callahan", "James Osei", "Priya Nair", "Claire Whitfield"], "answer": 0},
+      {"id": "rcanalyst-a5", "section": "Your first 90 days", "question": "What kind of improvement do you propose in your first 90 days?", "options": ["An early validation that stops a denial before the claim is sent", "A new clinic", "A price increase", "A new EHR"], "answer": 0}
+    ],
+    [
+      {"id": "rcanalyst-b1", "section": "Your first 90 days", "question": "How many of the most frequent denial root causes do you identify first?", "options": ["One", "Three", "Ten", "All of them"], "answer": 1},
+      {"id": "rcanalyst-b2", "section": "How you work with patient data", "question": "May you export claims to a personal spreadsheet?", "options": ["Yes", "No, never", "Only small ones", "Only on Fridays"], "answer": 1},
+      {"id": "rcanalyst-b3", "section": "Who you work with", "question": "When do you involve Compliance?", "options": ["Whenever billing data leaves its system", "Never", "Only at the end of the year", "Only for UK billing"], "answer": 0},
+      {"id": "rcanalyst-b4", "section": "Responsibilities", "question": "Which US payers do our claims go to?", "options": ["Only Medicare", "Commercial insurers, Medicare and Medicaid", "Only the NHS", "Only private payment"], "answer": 1},
+      {"id": "rcanalyst-b5", "section": "Who you work with", "question": "Who do you work with on booking data?", "options": ["Clinic front desks", "The ICO", "Insurers", "Nobody"], "answer": 0}
+    ]
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Calibración del umbral de similitud del orquestador de incorporaciones. 'covered': la respuesta está en el material de ese perfil y debe salir de expected_doc. 'uncovered': el material no lo cubre y debe derivarse.",
+  "covered": [
+    {"profile": "en-hipaa-digital", "question": "When was HealthCore founded and by whom?", "expected_doc": "company"},
+    {"profile": "en-uk-revenue", "question": "Which clinics do we have in the UK?", "expected_doc": "company"},
+    {"profile": "en-hipaa-digital", "question": "What is our no-show rate and why does it matter?", "expected_doc": "operations"},
+    {"profile": "en-uk-revenue", "question": "Where do most claim denials come from?", "expected_doc": "operations"},
+    {"profile": "en-hipaa-digital", "question": "How many days do we have to notify patients after a breach?", "expected_doc": "compliance-hipaa"},
+    {"profile": "en-uk-revenue", "question": "How quickly must a data breach be reported to the ICO?", "expected_doc": "compliance-uk-gdpr"},
+    {"profile": "en-uk-revenue", "question": "What should I do with a subject access request?", "expected_doc": "compliance-uk-gdpr"},
+    {"profile": "en-hipaa-digital", "question": "Can I paste patient information into Slack?", "expected_doc": "compliance-hipaa"},
+    {"profile": "en-hipaa-digital", "question": "What are my goals for the first 90 days?", "expected_doc": "role-digital-engineer"},
+    {"profile": "en-uk-revenue", "question": "Which report do I build in my first three months?", "expected_doc": "role-revenue-cycle-analyst"},
+    {"profile": "en-hipaa-digital", "question": "How is a new system or integration approved?", "expected_doc": "ways-of-working"},
+    {"profile": "en-uk-revenue", "question": "When can I schedule a meeting with both Austin and London?", "expected_doc": "ways-of-working"},
+    {"profile": "es-hipaa-digital", "question": "¿Cuál es el plazo para notificar una brecha bajo HIPAA?", "expected_doc": "compliance-hipaa"},
+    {"profile": "es-hipaa-digital", "question": "¿Qué herramienta guarda las políticas oficiales?", "expected_doc": "ways-of-working"}
+  ],
+  "uncovered": [
+    {"profile": "en-hipaa-digital", "question": "Can I expense a standing desk for my home office?"},
+    {"profile": "en-uk-revenue", "question": "How many days of annual leave do I get?"},
+    {"profile": "en-hipaa-digital", "question": "Is there free parking at the Austin office?"},
+    {"profile": "en-uk-revenue", "question": "How long are access logs retained before deletion?"},
+    {"profile": "es-hipaa-digital", "question": "¿Puedo llevar a mi perro a la oficina?"},
+    {"profile": "en-hipaa-digital", "question": "Which laptop model will I receive?"}
+  ]
+}

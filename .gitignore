@@ -45,3 +45,6 @@ data/traces/
 # PDFs de RFP subidos por el backoffice (Hito 9) y su Markdown redactado:
 # artefacto de runtime de la recepción, nunca se versiona (podrían traer PHI).
 data/raw/rfp/
+
+# Orquestador de incorporaciones: checkpointer SQLite local y cuentas de demo
+data/onboarding/

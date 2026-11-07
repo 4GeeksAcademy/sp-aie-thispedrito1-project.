@@ -40,6 +40,8 @@
 - Resiliencia de interfaz:
   - Fallback de datos de respaldo en dashboard para no bloquear visualizacion en errores de red.
 
+- Orquestador de incorporaciones (2026-11-07): un unico agente LangGraph con estado persistente (no multiagente), grafo generado desde el catalogo de etapas, el grafo no toca la BD (efectos idempotentes que persiste el runner), aprobaciones validadas con un directorio de roles organizativos (`onboarding_staff`) y no con el rol de la plataforma, entradas con posibles datos sensibles validadas a mano para no repetir valores en un 422. Dependencia nueva: `langgraph-checkpoint-sqlite==3.0.3`.
+
 ## Restricciones tecnicas
 - Dependencia de API externa: disponibilidad y consistencia de datos condicionadas por servicio remoto.
 - Cambios de ruptura en Next.js 16: es obligatorio validar convenciones y APIs vigentes antes de implementar features nuevas.

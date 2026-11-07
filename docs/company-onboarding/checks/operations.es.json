@@ -1,0 +1,20 @@
+{
+  "doc_id": "operations",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "operations-a1", "section": "Los cinco pasos del recorrido del paciente", "question": "¿Cuál es el orden del recorrido del paciente?", "options": ["Visita, reserva, facturación, documentación, seguimiento", "Reserva, visita, documentación clínica, facturación, seguimiento", "Facturación, reserva, visita, seguimiento, documentación", "Reserva, facturación, visita, seguimiento, documentación"], "answer": 1},
+      {"id": "operations-a2", "section": "Las inasistencias son un problema operativo", "question": "¿Cuál es la tasa de inasistencias de la red?", "options": ["5 %", "14 %", "22 %", "35 %"], "answer": 2},
+      {"id": "operations-a3", "section": "Las denegaciones de facturación son un problema operativo", "question": "¿De dónde nacen la mayoría de las denegaciones?", "options": ["De errores anteriores en el recorrido, como datos de cobertura incorrectos o documentación incompleta", "De pacientes que se niegan a pagar", "De los horarios ampliados", "De la atención bilingüe"], "answer": 0},
+      {"id": "operations-a4", "section": "Las derivaciones son un problema operativo", "question": "¿Qué necesita cada derivación hasta que el paciente es atendido?", "options": ["Una segunda derivación", "Un responsable", "Un pago", "Un canal de Slack"], "answer": 1},
+      {"id": "operations-a5", "section": "Facturación", "question": "¿Cómo se factura en Reino Unido?", "options": ["Solo a Medicare", "A aseguradoras comerciales y Medicaid", "Pago privado y un pequeño contrato con el NHS", "En Reino Unido no se factura"], "answer": 2}
+    ],
+    [
+      {"id": "operations-b1", "section": "Las denegaciones de facturación son un problema operativo", "question": "¿Cómo se compara nuestra tasa de denegación del 14 % con el sector?", "options": ["Está por debajo de la media", "Está en la media", "Es más del doble de la media del sector", "El sector no mide denegaciones"], "answer": 2},
+      {"id": "operations-b2", "section": "Las inasistencias son un problema operativo", "question": "¿Por qué una inasistencia es un problema operativo?", "options": ["Solo afecta al paciente", "Es un hueco perdido, una laguna en la atención e ingresos perdidos", "Mejora la capacidad de la clínica", "Solo importa en Reino Unido"], "answer": 1},
+      {"id": "operations-b3", "section": "Reserva", "question": "¿Cómo reservan hoy los pacientes?", "options": ["Con un sistema de reservas online compartido", "Por teléfono en EE. UU. y por la recepción de la clínica en Reino Unido", "Solo con una app móvil", "Solo por correo electrónico"], "answer": 1},
+      {"id": "operations-b4", "section": "Visita y documentación clínica", "question": "¿Cuánto tiempo al día dedican los clínicos a la documentación?", "options": ["Unos 5 minutos", "Unos 35 minutos", "Unas 2 horas", "Nada"], "answer": 1},
+      {"id": "operations-b5", "section": "Un ejemplo genérico", "question": "En el ejemplo genérico, ¿qué provocó la errata en el plan de seguro?", "options": ["Nada, se corrigió sola", "Una reclamación denegada semanas después", "Un cobro más rápido", "Una nueva derivación"], "answer": 1}
+    ]
+  ]
+}
