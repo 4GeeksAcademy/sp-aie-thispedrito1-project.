@@ -121,9 +121,17 @@ class SupplierSeed(SupplierBase):
 
 
 class UserRole(str, Enum):
+    """Códigos de rol del BRIEFING de Roles y Permisos (access_models.py).
+
+    `user` y `manager` son alias de los nombres anteriores al ticket: los
+    scripts de semilla de otras clases siguen funcionando sin cambios y
+    guardan el rol equivalente (employee / supervisor)."""
+
+    employee = "employee"
+    supervisor = "supervisor"
     admin = "admin"
-    manager = "manager"
-    user = "user"
+    user = "employee"
+    manager = "supervisor"
 
 
 class ProfileBase(BaseModel):
@@ -171,8 +179,14 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    """PUT /users/{id}: solo datos de la cuenta. El rol y el departamento se
+    cambian por PATCH /users/{id}/assignment (solo admin), nunca aquí.
+    `extra="forbid"`: un `role` en el cuerpo se rechaza (422) en vez de
+    ignorarse en silencio."""
+
+    model_config = ConfigDict(extra="forbid")
+
     email: Optional[EmailStr] = None
-    role: Optional[UserRole] = None
 
 
 class UserPublic(BaseModel):
@@ -185,7 +199,8 @@ class UserPublic(BaseModel):
     id: str
     email: EmailStr
     is_active: bool
-    role: UserRole
+    role: Optional[str]
+    department: Optional[str] = None
     created_at: datetime
 
 
@@ -197,10 +212,19 @@ class UserListItem(BaseModel):
     correo de terceros, y devolverla convertia el endpoint en un enumerador
     de emails de toda la organizacion. En una red sanitaria sujeta a HIPAA y
     UK GDPR eso es exposicion innecesaria de dato personal. Para el correo de
-    una cuenta concreta esta GET /users/{id}."""
+    una cuenta concreta esta GET /users/{id}.
+
+    Roles y Permisos (2026-11-07): lleva `name` del perfil y el rol y el
+    departamento resueltos, porque su consumidor es la vista de
+    administración de accesos, que tiene que poder reconocer a quién asigna
+    (sigue sin email)."""
 
     id: str
-    role: UserRole
+    name: Optional[str] = None
+    role: Optional[str]
+    role_id: Optional[str] = None
+    department: Optional[str] = None
+    department_id: Optional[str] = None
     is_active: bool
     created_at: datetime
 
@@ -238,7 +262,11 @@ class AuthMeResponse(BaseModel):
 
     id: str
     email: EmailStr
-    role: UserRole
+    role: Optional[str]
+    role_rank: int = 0
+    department: Optional[str] = None
+    department_id: Optional[str] = None
+    capabilities: list[str] = Field(default_factory=list)
     profile: ProfilePublic
 
 
@@ -268,6 +296,8 @@ class IncidentRead(BaseModel):
     status: str
     origin: str
     branch: str
+    # Roles y Permisos: departamento al que pertenece (alcance de datos).
+    department_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

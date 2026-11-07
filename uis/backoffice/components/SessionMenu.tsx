@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { resetAccessProfileCache } from "../hooks/useAccessProfile";
 import { clearAuthToken, hasValidSession } from "../services/session";
 
 const PUBLIC_ROUTES = new Set(["/login", "/register"]);
@@ -13,6 +14,7 @@ export function SessionMenu() {
 
   const onLogout = () => {
     clearAuthToken();
+    resetAccessProfileCache();
     router.replace("/login");
   };
 
@@ -21,9 +23,6 @@ export function SessionMenu() {
       <>
         <Link href="/login" className="nav-link">
           Iniciar sesión
-        </Link>
-        <Link href="/register" className="nav-link">
-          Registro
         </Link>
       </>
     );

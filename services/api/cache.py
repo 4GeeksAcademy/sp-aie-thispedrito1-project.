@@ -34,6 +34,14 @@ class TTLCache:
         with self._lock:
             self._store.pop(key, None)
 
+    def invalidate_prefix(self, prefix: str) -> None:
+        """Borra todas las claves que empiezan por `prefix`. Para cachés con
+        una entrada por alcance (p. ej. el resumen de incidencias, una por
+        departamento): una escritura las invalida todas."""
+        with self._lock:
+            for key in [key for key in self._store if key.startswith(prefix)]:
+                del self._store[key]
+
     def clear(self) -> None:
         """Wipes every entry. Used by the test suite: this cache is a
         process-wide singleton, but each test resets its database directly

@@ -12,6 +12,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from dotenv import load_dotenv
 
+from access_models import CAP_USERS_MANAGE
+from access_repository import AccessRepository
 from auth_repository import AuthRepository
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -21,6 +23,14 @@ ACCESS_TOKEN_TYPE = "access"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 auth_repo = AuthRepository()
+access_repo = AccessRepository()
+
+
+def resolve_access(user: dict[str, Any]) -> dict[str, Any]:
+    """Usuario con rol y departamento resueltos (ver AccessRepository).
+    Se lee de la base en cada petición: un cambio de rol o de departamento
+    se aplica en la siguiente llamada, sin esperar a que caduque el JWT."""
+    return access_repo.resolve_user_access(user)
 
 
 def _credentials_exception() -> HTTPException:
@@ -103,7 +113,7 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
     if not user.get("is_active", True):
         return None
 
-    return user
+    return resolve_access(user)
 
 
 def user_from_token(token: str | None) -> dict[str, Any] | None:
@@ -130,7 +140,7 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     user = auth_repo.get_user_by_id(user_id)
     if not user or not user.get("is_active", True):
         return None
-    return user
+    return resolve_access(user)
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
@@ -140,14 +150,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any
     return user
 
 
+def _is_admin(user: dict[str, Any]) -> bool:
+    # Capacidad, no texto: un rol creado por un admin con rango 3 también
+    # administra. `user` llega siempre resuelto por get_current_user.
+    return CAP_USERS_MANAGE in user.get("capabilities", ())
+
+
 def require_admin(user: dict[str, Any]) -> None:
-    if user.get("role") != "admin":
+    if not _is_admin(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
 
 
 def ensure_self_or_admin(target_user_id: str, user: dict[str, Any]) -> None:
     if user.get("id") == target_user_id:
         return
-    if user.get("role") == "admin":
+    if _is_admin(user):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")

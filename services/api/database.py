@@ -1,23 +1,46 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Dict, Iterator, Optional
 
 from dotenv import load_dotenv
 from sqlmodel import Session, create_engine
 from sqlmodel.pool import StaticPool
 from tinydb import TinyDB
+from tinydb.storages import JSONStorage
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent / "data" / "suppliers.db.json"
 
 
+# Un solo candado para toda la TinyDB del proceso. Cada repositorio abre UN
+# manejador de archivo que comparten todos los hilos de FastAPI (los
+# handlers síncronos corren en un threadpool): dos lecturas simultáneas
+# movían la posición del mismo archivo y una de ellas leía JSON a medias
+# (JSONDecodeError → 500). Lo destapó Roles y Permisos: cada petición
+# resuelve rol y departamento, y /admin/access pide tres listados a la vez.
+_TINYDB_LOCK = threading.RLock()
+
+
+class LockedJSONStorage(JSONStorage):
+    """JSONStorage con lectura y escritura serializadas entre hilos."""
+
+    def read(self) -> Optional[Dict[str, Dict[str, Any]]]:
+        with _TINYDB_LOCK:
+            return super().read()
+
+    def write(self, data: Dict[str, Dict[str, Any]]) -> None:
+        with _TINYDB_LOCK:
+            super().write(data)
+
+
 def get_db() -> TinyDB:
     db_path = Path(os.getenv("SUPPLIERS_DB_PATH", str(DEFAULT_DB_PATH))).resolve()
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    return TinyDB(db_path)
+    return TinyDB(db_path, storage=LockedJSONStorage)
 
 
 def get_suppliers_table():

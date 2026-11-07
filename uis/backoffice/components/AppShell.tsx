@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { NAV_SECTIONS, isActivePath } from "../types/navigation";
+import { useAccessProfile } from "../hooks/useAccessProfile";
+import { NAV_SECTIONS, isActivePath, visibleSections } from "../types/navigation";
 import { SessionMenu } from "./SessionMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -13,6 +14,8 @@ const PUBLIC_ROUTES = new Set(["/login", "/register", "/forgot-password", "/rese
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const isPublic = PUBLIC_ROUTES.has(pathname);
+  const profile = useAccessProfile(!isPublic);
 
   // Al navegar desde el menú móvil, el panel se cierra solo.
   useEffect(() => {
@@ -20,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   // Login, registro y recuperación de contraseña van sin menú.
-  if (PUBLIC_ROUTES.has(pathname)) {
+  if (isPublic) {
     return <>{children}</>;
   }
 
@@ -36,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
 
         <nav aria-label="Navegación principal" className="app-nav">
-          {NAV_SECTIONS.map((section) => (
+          {visibleSections(NAV_SECTIONS, profile).map((section) => (
             <div key={section.title} className="app-nav-section">
               <p className="app-nav-title">{section.title}</p>
               <ul>

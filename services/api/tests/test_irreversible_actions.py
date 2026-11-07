@@ -118,7 +118,7 @@ def test_every_status_change_is_audited_without_content(client, auth_headers, re
         ("incident_status_changed", "open", "in_progress", False),
         ("incident_status_changed", "in_progress", "discarded", True),
     ]
-    assert all(l["actor"] == actor and l["incident_id"] == incident["id"] and l["role"] == "user" for l in lines)
+    assert all(l["actor"] == actor and l["incident_id"] == incident["id"] and l["role"] == "supervisor" for l in lines)
     assert all(l["at"] for l in lines)
     # Nada de contenido ni de identidad en claro (BRIEFING §1).
     text = caplog.text

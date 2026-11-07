@@ -17,7 +17,6 @@ from models import (
     ProfilePublic,
     ResetPasswordRequest,
     TokenResponse,
-    UserRole,
 )
 from security import (
     authenticate_user,
@@ -144,9 +143,16 @@ def me(current_user: dict[str, Any] = Depends(get_current_user)) -> AuthMeRespon
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
+    # Rol y departamento ya resueltos por get_current_user (BRIEFING: /auth/me
+    # devuelve los dos). `capabilities` es lo que usa el backoffice para
+    # ocultar acciones; la API las vuelve a comprobar en cada endpoint.
     return AuthMeResponse(
         id=current_user["id"],
         email=current_user["email"],
-        role=UserRole(current_user["role"]),
+        role=current_user.get("role"),
+        role_rank=current_user.get("role_rank", 0),
+        department=current_user.get("department"),
+        department_id=current_user.get("department_id"),
+        capabilities=list(current_user.get("capabilities", [])),
         profile=ProfilePublic.model_validate(profile),
     )

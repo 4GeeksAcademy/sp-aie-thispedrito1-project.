@@ -199,8 +199,9 @@ def test_socket_is_bound_to_an_existing_session_of_its_owner(client, auth_header
 
     from conftest import TEST_PASSWORD
 
-    other = client.post("/users", json={"name": "Otra Persona", "email": "otra@healthcore.com", "password": TEST_PASSWORD})
-    assert other.status_code == 201, other.text
+    from conftest import provision_user
+
+    provision_user("otra@healthcore.com", role="employee", department="compliance", name="Otra Persona")
     login = client.post("/auth/login", json={"email": "otra@healthcore.com", "password": TEST_PASSWORD})
     session_id = new_session(client, {"Authorization": f"Bearer {login.json()['access_token']}"})
     with client.websocket_connect(f"/agent/chat/ws/{session_id}?token={token}") as ws:

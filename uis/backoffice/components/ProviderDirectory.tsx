@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { createSupplier, deleteSupplier, getSuppliers, updateSupplierRate, updateSupplierStatus } from "../services/suppliersApi";
 import { SUPPLIER_CATEGORY_LABELS, SUPPLIER_STATUS_LABELS, type SupplierCreateInput, type SupplierListItem, type SupplierStatus } from "../types/supplier";
+import { useAccessProfile } from "../hooks/useAccessProfile";
+import { can } from "../types/access";
 import { ProviderStatusBadge } from "./ProviderStatusBadge";
 
 // Most visits to this page are to browse/filter the existing directory, not
@@ -30,6 +32,11 @@ const categories = [
 ];
 
 export function ProviderDirectory() {
+  // Roles y Permisos: tarifa y estado = Supervisor, eliminar = Admin. Solo
+  // oculta los controles; la API responde 403 aunque alguien los fuerce.
+  const profile = useAccessProfile();
+  const canUpdate = can(profile, "records:update");
+  const canDelete = can(profile, "records:delete");
   // El listado devuelve SupplierListItem (sin contact_email, notes,
   // compliance_agreement ni contract_renewal_date, que esta tabla no
   // muestra). Supplier, que devuelven los PATCH, es un superconjunto.
@@ -246,44 +253,54 @@ export function ProviderDirectory() {
                       <td>{supplier.categories.map((c) => SUPPLIER_CATEGORY_LABELS[c] ?? c).join(", ")}</td>
                       <td>
                         <div style={{ display: "flex", gap: 8 }}>
-                          <input
-                            type="number"
-                            min={1}
-                            step="0.01"
-                            value={editingRateById[supplier.id] ?? String(supplier.monthly_rate)}
-                            onChange={(event) =>
-                              setEditingRateById((prev) => ({
-                                ...prev,
-                                [supplier.id]: event.target.value,
-                              }))
-                            }
-                            disabled={rowSaving}
-                            style={{ width: 110 }}
-                          />
-                          <button type="button" onClick={() => void saveRate(supplier)} disabled={rowSaving}>
-                            Guardar
-                          </button>
+                          {canUpdate ? (
+                            <>
+                              <input
+                                type="number"
+                                min={1}
+                                step="0.01"
+                                value={editingRateById[supplier.id] ?? String(supplier.monthly_rate)}
+                                onChange={(event) =>
+                                  setEditingRateById((prev) => ({
+                                    ...prev,
+                                    [supplier.id]: event.target.value,
+                                  }))
+                                }
+                                disabled={rowSaving}
+                                style={{ width: 110 }}
+                              />
+                              <button type="button" onClick={() => void saveRate(supplier)} disabled={rowSaving}>
+                                Guardar
+                              </button>
+                            </>
+                          ) : (
+                            <span>{supplier.monthly_rate}</span>
+                          )}
                         </div>
                       </td>
                       <td>{supplier.currency}</td>
                       <td>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <ProviderStatusBadge status={supplier.status} />
-                          <select
-                            value={supplier.status}
-                            onChange={(event) => void saveStatus(supplier, event.target.value as SupplierStatus)}
-                            disabled={rowSaving}
-                          >
-                            <option value="active">{SUPPLIER_STATUS_LABELS.active}</option>
-                            <option value="suspended">{SUPPLIER_STATUS_LABELS.suspended}</option>
-                          </select>
+                          {canUpdate && (
+                            <select
+                              value={supplier.status}
+                              onChange={(event) => void saveStatus(supplier, event.target.value as SupplierStatus)}
+                              disabled={rowSaving}
+                            >
+                              <option value="active">{SUPPLIER_STATUS_LABELS.active}</option>
+                              <option value="suspended">{SUPPLIER_STATUS_LABELS.suspended}</option>
+                            </select>
+                          )}
                         </div>
                       </td>
                       <td>{new Date(supplier.updated_at).toLocaleString("es-ES")}</td>
                       <td>
-                        <button type="button" onClick={() => void removeSupplier(supplier)} disabled={rowSaving}>
-                          Eliminar
-                        </button>
+                        {canDelete && (
+                          <button type="button" onClick={() => void removeSupplier(supplier)} disabled={rowSaving}>
+                            Eliminar
+                          </button>
+                        )}
                         {errorById[supplier.id] && <p className="error-text">{errorById[supplier.id]}</p>}
                       </td>
                     </tr>

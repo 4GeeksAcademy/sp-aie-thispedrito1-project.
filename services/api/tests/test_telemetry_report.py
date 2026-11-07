@@ -23,7 +23,7 @@ def _authenticated(client: TestClient) -> None:
     user, _ = AuthRepository().create_user(
         email="report.reader@example.com", hashed_password="unused", role=UserRole.user, profile_data={}
     )
-    client.headers["Authorization"] = f"Bearer {create_access_token(user['id'], user['role'])}"
+    client.headers["Authorization"] = f"Bearer {create_access_token(user['id'], "employee")}"
 
 
 def _event(event_type: str, timestamp: str, properties: dict, event_id: str) -> dict:

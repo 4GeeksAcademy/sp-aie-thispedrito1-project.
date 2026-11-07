@@ -3,8 +3,9 @@
     services/api/.venv/bin/python scripts/create_mcp_service_account.py
 
 Desde la raíz. Lee HEALTHCORE_API_EMAIL / HEALTHCORE_API_PASSWORD de
-`mcps/healthcore/.env` y crea el usuario con rol `user` (nunca admin: el
-servidor MCP no necesita más para incidencias e inventario) en la TinyDB que
+`mcps/healthcore/.env` y crea el usuario con rol `supervisor` y departamento
+`patient_experience` (Roles y Permisos, 2026-11-07: cambiar el estado de una
+incidencia exige supervisor; nunca admin, que vería y borraría todo) en la TinyDB que
 use la API (`SUPPLIERS_DB_PATH`, o la de services/api/data por defecto).
 Idempotente: si el usuario ya existe, no hace nada. La contraseña nunca se
 imprime.
@@ -42,10 +43,11 @@ def main() -> int:
     repo.create_user(
         email=settings.api_email,
         hashed_password=hash_password(settings.api_password),
-        role=UserRole.user,
+        role=UserRole.supervisor,
+        department="patient_experience",
         profile_data={"name": "Servidor MCP (cuenta de servicio)"},
     )
-    print(f"Cuenta de servicio {settings.api_email} creada con rol user.")
+    print(f"Cuenta de servicio {settings.api_email} creada: supervisor de patient_experience.")
     return 0
 
 

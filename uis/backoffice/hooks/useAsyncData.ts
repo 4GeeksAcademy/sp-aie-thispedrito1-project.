@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ApiRequestError } from "../services/http";
+
 export interface AsyncDataState<T> {
   /** Datos ya cargados, o `null` mientras no haya una carga con exito. */
   data: T | null;
@@ -64,9 +66,12 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, errorMessage: string)
       const result = await fetcher();
       if (!isMountedRef.current || requestIdRef.current !== requestId) return;
       setData(result);
-    } catch {
+    } catch (caught) {
       if (!isMountedRef.current || requestIdRef.current !== requestId) return;
-      setError(errorMessage);
+      // Roles y Permisos: un 403 no es "la API no responde" — se muestra su
+      // motivo (ya en español, ver http.ts) para que reintentar no parezca
+      // la solución.
+      setError(caught instanceof ApiRequestError && caught.status === 403 ? caught.message : errorMessage);
     } finally {
       if (isMountedRef.current && requestIdRef.current === requestId) {
         setIsLoading(false);

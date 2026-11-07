@@ -1,9 +1,14 @@
 // Menú del backoffice: datos puros, sin JSX, para poder testearlos y
 // cambiar el orden o los grupos sin tocar el componente.
 
+import { can, type AccessProfile, type Capability } from "./access";
+
 export type NavItem = {
   href: string;
   label: string;
+  // Roles y Permisos: capacidad que exige la entrada (sin ella, todos la ven).
+  // Solo oculta el enlace; la página y la API vuelven a comprobarlo.
+  capability?: Capability;
 };
 
 export type NavSection = {
@@ -36,6 +41,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Informes",
     items: [
+      { href: "/internal-reports", label: "Informes internos" },
       { href: "/reporting", label: "Informe mensual" },
       { href: "/financial-close", label: "Cierre financiero" },
       { href: "/telemetry", label: "Telemetría" },
@@ -55,6 +61,10 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/compliance-chat", label: "Asistente de compliance" },
       { href: "/rfps", label: "RFPs" },
     ],
+  },
+  {
+    title: "Administración",
+    items: [{ href: "/admin/access", label: "Roles y accesos", capability: "access:manage" }],
   },
 ];
 
@@ -80,4 +90,16 @@ export function isActivePath(pathname: string, href: string, allHrefs: string[] 
   }
   // Solo gana si ningún otro enlace del menú encaja de forma más específica.
   return !allHrefs.some((other) => other.length > href.length && matches(other));
+}
+
+/** Secciones que ve este perfil: quita las entradas cuya capacidad no tiene y
+ * las secciones que se quedan vacías. Sin perfil (cargando), ninguna entrada
+ * restringida. */
+export function visibleSections(sections: NavSection[], profile: AccessProfile | null): NavSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.capability || can(profile, item.capability)),
+    }))
+    .filter((section) => section.items.length > 0);
 }
