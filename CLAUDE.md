@@ -221,6 +221,16 @@ services/api/.venv/bin/python scripts/onboarding_followup.py                    
 
 Desde la raíz. Para entrar con las cuentas de la semilla: API con `SUPPLIERS_DB_PATH=data/onboarding/demo-users.db.json`, Redis + worker de Celery (`--pool=solo`). Detalle en `docs/onboarding/onboarding-orchestrator.md`.
 
+### Proveedores y contratos (Agentic Engineering, supervisor + especialistas)
+
+```bash
+services/api/.venv/bin/python scripts/seed_supplier_contracts.py           # genera CSV + 4 PDF (fecha de hoy), ingiere en sc_*, cuentas demo y alertas
+services/api/.venv/bin/python -m pytest tests/supplier_contracts           # 121, sin red
+(cd services/api && .venv/bin/python -m pytest tests/test_supplier_contracts_api.py -o addopts="")   # 10
+```
+
+Desde la raíz. Cuentas (Marcus, Claire, Sandra) en `data/supplier_contracts/demo-users.db.json`: API con `SUPPLIERS_DB_PATH` apuntando ahí. Pantalla `/supplier-contracts`. `SUPPLIER_CONTRACTS_USE_MODEL=0` = plan por reglas y borradores de plantilla. Detalle en `docs/supplier-contracts/supplier-contracts.md`.
+
 ### Auditoría OWASP Top 10 y endurecimiento del servidor
 
 ```bash
@@ -878,6 +888,31 @@ Gotchas reales:
 - Las aristas de `Command(goto=…)` necesitan `destinations=` en `add_node` para que `get_graph()` las dibuje (`docs/onboarding/graph.mmd` se genera del grafo compilado).
 - Tests de API: un hash bcrypt por módulo (9 por test tardaban 42 s → 1,5 s) y fechas de inicio futuras (con una pasada, las etapas salen vencidas).
 - El proxy de embeddings tardó ~14 s por llamada el 2026-11-07: indexar las 88 secciones lleva ~20 min.
+
+### Gestión de proveedores y contratos — `docs/supplier-contracts/supplier-contracts.md`
+
+Agentic Engineering "Gestión de Proveedores y Contratos", rama `feature/supplier-contracts` apilada sobre `feature/onboarding-orchestrator`, 2026-11-07. Stakeholder Dr. Marcus Reid. BRIEFING de HealthCore descargado del repo del currículo (`content/contexts/supplier-contracts/`): el de Descargas era el del onboarding. Arquitectura supervisor + especialista de precios + especialista de contratos.
+
+Mapa del código (`services/supplier_contracts/`):
+- `catalog.py`: el BRIEFING como datos (7 proveedores, 4 contratos, umbrales, aprobadores, IPC 2,9 %, 1 GBP = 1,27 USD, `AGENT_TOOLS` por agente, `SENSITIVE_BILLING` ficticio). Fuente única.
+- `seed_data.py` (CSV + PDF con fpdf2, fechas relativas a la carga), `ingestion.py` (CSV con fila de origen; PDF con pdfplumber → cláusulas → términos con confianza), `calculations.py` (Decimal, puras), `sensitive.py` (`redact` + rechazo de peticiones por paciente).
+- `runtime.py`: contratos de E/S (`PricingRequest`, `ContractsRequest`, `SpecialistResult`, `Fact` + `Ref`), `ActionLog` y `AgentRuntime` (lista cerrada de herramientas; ajena → `ToolNotAllowed` + `denied`).
+- `pricing.py`, `contracts.py` (especialistas), `supervisor.py` (plan modelo/reglas, coordinación, tope de 8 consultas), `alerts.py`, `brief.py`, `communications.py`, `repository.py`, `models.py` (11 tablas `sc_*`), `router.py` + `schemas.py` (`/supplier-contracts`).
+- Backoffice `/supplier-contracts` ("Precios y contratos" en Operaciones): `types/supplierContracts.ts`, `services/supplierContractsApi.ts`.
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** el modelo planifica (function calling) con respaldo por reglas; extracción de contratos determinista (sin modelo); Supabase; API + pantalla.
+- **El modelo nunca calcula**: solo elige especialistas/intenciones y redacta borradores. Un borrador con un número que no está en los hechos o con un dato sensible se descarta y sale la plantilla (`validate_draft`).
+- **Coordinación en código**: el % que evalúa el especialista de contratos lo calcula el de precios; BAA/DPA primero (una sola consulta por proveedor); subida > 4 % → impacto + permiso automáticos.
+- **BAA/DPA bloquea** brief y borradores (409) hasta que Cumplimiento autoriza (`/compliance-clearances`); la alerta va a Claire. Lone Star (sin contrato ni BAA) también alerta y es la alternativa más barata a ClearPath: el brief la condiciona al BAA.
+- **La cláusula de facturación nunca se lee ni se cita** (`EXCLUDED_CLAUSE_HEADINGS`); `redact` como segunda capa. Preguntas y prompts solo como SHA-256; personas como `human:<seudónimo>`.
+- **Aprobadores**: Marcus siempre; + Claire si datos de pacientes; + Sandra si valor anual > 500.000 USD (GBP × 1,27). "Enviado" = registro, solo Operaciones Clínicas y con todas las aprobaciones.
+- `recommend_actions` (brief.py): Learn by Doing **delegado**; un test exige que ninguna cifra de la recomendación salga de fuera de `BriefInputs`.
+
+Gotchas:
+- **`from conftest import ...` en tests de la raíz es frágil**: con la batería completa Python entrega el `conftest.py` de otra carpeta. Los tests nuevos no lo usan; `tests/onboarding/test_onboarding_resume.py::test_reopening_the_checkpointer_resumes_the_same_stage` sí, y falla en `pytest tests` (pasa solo) desde antes de esta rama.
+- pdfplumber parte las cláusulas largas en varias líneas: se reconstruyen antes de extraer. Una mención de pasada ("before the Expiry Date") no contradice a la cláusula exacta (`_single` se queda con las de mayor confianza).
+- Verificado contra Supabase real y con el modelo real (deepseek, ~8 s el plan): la prueba real destapó la doble consulta del BAA (test de regresión).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
