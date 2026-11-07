@@ -22,7 +22,27 @@ from typing import Any, Optional
 
 logger = logging.getLogger("healthcore.audit")
 
-ALLOWED_FIELDS = frozenset({"incident_id", "from_status", "to_status", "confirmed", "role"})
+ALLOWED_FIELDS = frozenset(
+    {
+        "incident_id",
+        "from_status",
+        "to_status",
+        "confirmed",
+        "role",
+        # Roles y Permisos: cambios de asignación y administración de accesos.
+        # Solo códigos (employee, revenue_cycle…) e ids internos; la cuenta
+        # afectada va en seudónimo igual que el actor.
+        "target_user",
+        "from_role",
+        "to_role",
+        "from_department",
+        "to_department",
+        "resource",
+        "resource_id",
+    }
+)
+# Campos que identifican a una persona: se guardan en seudónimo.
+PSEUDONYMIZED_FIELDS = frozenset({"target_user"})
 
 
 def actor_pseudonym(user_id: Optional[str]) -> Optional[str]:
@@ -41,7 +61,10 @@ def audit_event(event: str, *, actor_id: Optional[str], **fields: Any) -> None:
                 "event": event,
                 "at": datetime.now(timezone.utc).isoformat(),
                 "actor": actor_pseudonym(actor_id),
-                **fields,
+                **{
+                    key: actor_pseudonym(value) if key in PSEUDONYMIZED_FIELDS else value
+                    for key, value in fields.items()
+                },
             },
             ensure_ascii=False,
         )

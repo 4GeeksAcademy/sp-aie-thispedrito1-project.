@@ -203,6 +203,13 @@
   - **Revision y distribucion**: informe `pending_review` -> Tom aprueba (distribucion a los 7 destinatarios, bandeja interna) o rechaza con comentarios (nueva version, mismas cifras). Disparo programado: tercer dia habil, 06:00 Austin (scheduler horario + `schedule.is_close_due`; `nth_business_day` fue Learn by Doing delegado). Celery `financial_close.run_close` / `revise_report`.
   - **Trazabilidad**: cada cifra con sus `entry_id`, fila de budget/operations o tipo de cambio; anexo en el informe y consulta por cifra en `/financial-close`.
   - **Tests:** 90 en `tests/financial_close`, 10 de API (backend 379), Jest 191 (+8); `tsc` y `next build` limpios. Verificado contra Supabase real y con el modelo real (dos ejecuciones con la misma huella de cifras).
+- Roles y Permisos (Plataforma, rama `feature/roles-permissions` apilada sobre `feature/financial-close`, 2026-11-07). Detalle en `docs/roles-permissions/roles-permissions.md`.
+  - **Dos ejes independientes** del BRIEFING del CTO: rol (employee 1 < supervisor 2 < admin 3, capacidades por rango) y departamento (6 del BRIEFING, solo alcance de datos). `users.role_id` + `users.department_id` separados en la TinyDB; tablas `roles`, `departments`, `internal_reports`.
+  - **Verificacion centralizada** en `services/api/permissions.py` (`require_capability`, `ensure_in_scope`, `department_scope`; `can_access_department` fue Learn by Doing delegado). 403 explicitos con `code`; nunca 200 vacio.
+  - **Alcance**: informes internos (nuevos, obligatorios) e incidencias (nuevas con el depto del creador; historicas por categoria, decision del usuario). Proveedores e inventario solo regla de rol. `POST /users` pasa a solo admin (decision del usuario); `/register` ya no crea cuentas.
+  - **Backoffice**: `/internal-reports`, `/admin/access` (solo Admin, rol y departamento con dos controles separados), menu y botones segun capacidades.
+  - **Bug real (Chrome)**: TinyDB compartia un manejador de archivo entre hilos y lecturas simultaneas daban `JSONDecodeError`; `database.LockedJSONStorage` lo serializa (test que falla sin el candado).
+  - **Tests:** 42 en `test_roles_permissions.py` (las 5 de Compliance incluidas), backend 425; Jest 204 (+13); `tsc` y `next build` limpios. Verificado contra la API real con curl y en Chrome.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).

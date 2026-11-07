@@ -4,13 +4,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from models import Supplier, SupplierCreate, SupplierListItem, SupplierRateUpdate, SupplierStatusUpdate
 from repository import SupplierRepository
+from access_models import CAP_RECORDS_CREATE, CAP_RECORDS_DELETE, CAP_RECORDS_UPDATE
+from permissions import require_capability
 from security import get_current_user
 
+# Roles y Permisos: proveedores es un catálogo de toda la red (sin alcance
+# departamental). Solo regla de rol: crear = employee, cambiar tarifa o
+# estado = supervisor, eliminar = admin.
 router = APIRouter(prefix="/suppliers", tags=["suppliers"], dependencies=[Depends(get_current_user)])
 repo = SupplierRepository()
 
 
-@router.post("", response_model=Supplier, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=Supplier,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability(CAP_RECORDS_CREATE))],
+)
 def create_supplier(payload: SupplierCreate) -> Supplier:
     created = repo.create(payload.model_dump(mode="json", exclude_none=True))
     return Supplier.model_validate(created)
@@ -36,7 +46,9 @@ def get_supplier(supplier_id: int) -> Supplier:
     return Supplier.model_validate(found)
 
 
-@router.patch("/{supplier_id}/rate", response_model=Supplier)
+@router.patch(
+    "/{supplier_id}/rate", response_model=Supplier, dependencies=[Depends(require_capability(CAP_RECORDS_UPDATE))]
+)
 def patch_supplier_rate(supplier_id: int, payload: SupplierRateUpdate) -> Supplier:
     updated = repo.update_rate(supplier_id, payload.monthly_rate)
     if not updated:
@@ -44,7 +56,9 @@ def patch_supplier_rate(supplier_id: int, payload: SupplierRateUpdate) -> Suppli
     return Supplier.model_validate(updated)
 
 
-@router.patch("/{supplier_id}/status", response_model=Supplier)
+@router.patch(
+    "/{supplier_id}/status", response_model=Supplier, dependencies=[Depends(require_capability(CAP_RECORDS_UPDATE))]
+)
 def patch_supplier_status(supplier_id: int, payload: SupplierStatusUpdate) -> Supplier:
     updated = repo.update_status(supplier_id, payload.status.value)
     if not updated:
@@ -52,7 +66,11 @@ def patch_supplier_status(supplier_id: int, payload: SupplierStatusUpdate) -> Su
     return Supplier.model_validate(updated)
 
 
-@router.delete("/{supplier_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{supplier_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_capability(CAP_RECORDS_DELETE))],
+)
 def delete_supplier(supplier_id: int) -> Response:
     deleted = repo.delete(supplier_id)
     if not deleted:

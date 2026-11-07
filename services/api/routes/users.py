@@ -4,50 +4,64 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from access_models import CAP_USERS_MANAGE, AdminUserCreate, UserAssignment
+from audit_log import audit_event
 from auth_repository import AuthRepository
-from models import UserCreate, UserListItem, UserPublic, UserRegistered, UserRole, UserUpdate
-from security import ensure_self_or_admin, get_current_user, hash_password, require_admin
+from models import UserListItem, UserPublic, UserRegistered, UserUpdate
+from permissions import require_capability
+from security import access_repo, ensure_self_or_admin, get_current_user, hash_password, resolve_access
 
 router = APIRouter(prefix="/users", tags=["users"])
 auth_repo = AuthRepository()
 
+require_user_admin = require_capability(CAP_USERS_MANAGE)
+
+
+def _field_errors(errors: list[dict[str, str]]) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"errors": errors})
+
+
+def _validate_assignment_ids(role_id: str | None, department_id: str | None) -> None:
+    errors = []
+    if role_id is not None and not access_repo.get_role(role_id):
+        errors.append({"field": "role_id", "message": "Unknown role."})
+    if department_id is not None and not access_repo.get_department(department_id):
+        errors.append({"field": "department_id", "message": "Unknown department."})
+    if errors:
+        raise _field_errors(errors)
+
+
+def _list_item(user: dict[str, Any]) -> UserListItem:
+    resolved = resolve_access(user)
+    profile = auth_repo.get_profile_by_user_id(user["id"]) or {}
+    return UserListItem.model_validate({**resolved, "name": profile.get("name")})
+
 
 @router.post("", response_model=UserRegistered, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate) -> UserRegistered:
-    """Registro (no autenticado). Devuelve solo la confirmacion de que la
-    cuenta existe: ni el email que el cliente acaba de enviar ni el perfil.
-    Ver docs/serialization-audit.md."""
-    hashed = hash_password(payload.password)
+def create_user(payload: AdminUserCreate, _: dict[str, Any] = Depends(require_user_admin)) -> UserRegistered:
+    """Alta de cuentas: solo admin (BRIEFING de Roles y Permisos).
+
+    Antes era un registro público que creaba rol `user`. Ahora rol y
+    departamento son obligatorios y se eligen por separado. Sigue devolviendo
+    solo la confirmación (ver docs/serialization-audit.md)."""
+    _validate_assignment_ids(payload.role_id, payload.department_id)
     try:
-        user, profile = auth_repo.create_user(
+        user, _profile = auth_repo.create_user(
             email=str(payload.email),
-            hashed_password=hashed,
-            role=UserRole.user,
-            profile_data={
-                "name": payload.name,
-                "phone": payload.phone,
-                "address": payload.address,
-            },
+            hashed_password=hash_password(payload.password),
+            role_id=payload.role_id,
+            department_id=payload.department_id,
+            profile_data={"name": payload.name, "phone": payload.phone, "address": payload.address},
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    # `profile` se crea aqui pero no se devuelve: el cliente lo consulta
-    # despues por /auth/me o /profiles/me, ya autenticado.
-    _ = profile
     return UserRegistered(id=user["id"], created_at=user["created_at"])
 
 
 @router.get("", response_model=list[UserListItem])
-def list_users(current_user: dict[str, Any] = Depends(get_current_user)) -> list[UserListItem]:
-    """Listado de cuentas. Solo admin, y sin emails.
-
-    Antes lo servia cualquier usuario autenticado devolviendo UserPublic, es
-    decir, el correo de toda la organizacion a quien tuviera una cuenta. Se
-    corrigen las dos cosas: la proyeccion (UserListItem no lleva email) y el
-    control de acceso (require_admin)."""
-    require_admin(current_user)
-    return [UserListItem.model_validate(item) for item in auth_repo.list_users()]
+def list_users(_: dict[str, Any] = Depends(require_user_admin)) -> list[UserListItem]:
+    """Listado de cuentas para administrar accesos. Solo admin, sin emails."""
+    return [_list_item(item) for item in auth_repo.list_users()]
 
 
 @router.get("/{user_id}", response_model=UserPublic)
@@ -58,31 +72,67 @@ def get_user(user_id: str, current_user: dict[str, Any] = Depends(get_current_us
     found = auth_repo.get_user_by_id(user_id)
     if not found:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserPublic.model_validate(found)
+    return UserPublic.model_validate(resolve_access(found))
 
 
 @router.put("/{user_id}", response_model=UserPublic)
 def update_user(user_id: str, payload: UserUpdate, current_user: dict[str, Any] = Depends(get_current_user)) -> UserPublic:
     ensure_self_or_admin(user_id, current_user)
-
-    if payload.role is not None and current_user.get("role") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admin can change role")
-
     try:
-        updated = auth_repo.update_user(user_id, email=str(payload.email) if payload.email else None, role=payload.role)
+        updated = auth_repo.update_user(user_id, email=str(payload.email) if payload.email else None)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return UserPublic.model_validate(updated)
+    return UserPublic.model_validate(resolve_access(updated))
+
+
+@router.patch("/{user_id}/assignment", response_model=UserListItem)
+def assign_user(
+    user_id: str,
+    payload: UserAssignment,
+    current_user: dict[str, Any] = Depends(require_user_admin),
+) -> UserListItem:
+    """Cambia `role_id` y/o `department_id` de forma independiente.
+
+    Lo que no llega en el cuerpo no se toca: cambiar el departamento de Tom
+    no cambia su rol, y cambiar el rol de Marcus no cambia su departamento
+    (prueba 4 del BRIEFING). Bajar al último admin se rechaza con 409: la
+    plataforma se quedaría sin nadie capaz de administrarla."""
+    if payload.role_id is None and payload.department_id is None:
+        raise _field_errors([{"field": "assignment", "message": "Send role_id and/or department_id."}])
+    _validate_assignment_ids(payload.role_id, payload.department_id)
+
+    target = auth_repo.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    before = resolve_access(target)
+
+    if payload.role_id is not None and CAP_USERS_MANAGE in before["capabilities"]:
+        new_role = access_repo.get_role(payload.role_id)
+        if new_role and CAP_USERS_MANAGE not in new_role["capabilities"]:
+            admins = [u for u in auth_repo.list_users() if CAP_USERS_MANAGE in resolve_access(u)["capabilities"]]
+            if len(admins) <= 1:
+                raise HTTPException(status_code=409, detail="The platform must keep at least one admin.")
+
+    updated = auth_repo.assign(user_id, role_id=payload.role_id, department_id=payload.department_id)
+    after = resolve_access(updated or target)
+    audit_event(
+        "user_assignment_changed",
+        actor_id=current_user.get("id"),
+        target_user=user_id,
+        from_role=before["role"],
+        to_role=after["role"],
+        from_department=before["department"],
+        to_department=after["department"],
+    )
+    return _list_item(updated or target)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: str, current_user: dict[str, Any] = Depends(get_current_user)) -> Response:
-    require_admin(current_user)
-
+def delete_user(user_id: str, _: dict[str, Any] = Depends(require_user_admin)) -> Response:
     deleted = auth_repo.delete_user(user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")

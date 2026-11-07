@@ -1,0 +1,20 @@
+### 1. Priya (employee) intenta editar un informe (update solo de supervisor)
+{"detail":{"code":"insufficient_role","message":"Your role does not allow 'records:update'.","capability":"records:update","required_role":"supervisor","current_role":"employee"}}  -> HTTP 403
+### 2. Marcus (supervisor) llama a GET /roles (solo admin)
+{"detail":{"code":"insufficient_role","message":"Your role does not allow 'access:manage'.","capability":"access:manage","required_role":"admin","current_role":"supervisor"}}  -> HTTP 403
+### 3. Marcus pide por id el informe de ciclo de ingresos de Tom
+{"detail":{"code":"department_out_of_scope","message":"This record belongs to a department outside your scope."}}  -> HTTP 403
+### 3b. Tom (su departamento) y James (admin) sí lo leen
+Tom -> HTTP 200
+James -> HTTP 200
+### Listados con alcance
+M ve: ['clinical_operations']
+T ve: ['revenue_cycle']
+P ve: ['patient_experience']
+J ve: ['clinical_operations', 'patient_experience', 'revenue_cycle']
+### Sin token
+{"detail":"Not authenticated"}  -> HTTP 401
+### 4. James mueve a Tom a compliance (solo department_id)
+Tom -> supervisor / compliance
+### 4. James baja a Marcus a employee (solo role_id)
+Marcus -> employee / clinical_operations

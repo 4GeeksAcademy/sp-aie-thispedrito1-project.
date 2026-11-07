@@ -38,7 +38,9 @@ def test_user_list_never_exposes_emails(
 
     assert response.status_code == 200
     for user in response.json():
-        assert set(user) == {"id", "role", "is_active", "created_at"}
+        assert set(user) == {
+            "id", "name", "role", "role_id", "department", "department_id", "is_active", "created_at"
+        }
         assert "email" not in user
 
 
@@ -73,22 +75,32 @@ def test_regular_user_cannot_change_roles(
     client: TestClient, registered_user: dict[str, str], auth_headers: dict[str, str]
 ) -> None:
     # Escalada de privilegios: un usuario normal no puede autoproclamarse admin.
+    # PUT ya no acepta `role` (rechazo explícito, nunca ignorado en silencio)
+    # y la vía real, /assignment, es solo de admin.
+    from access_models import role_id_for
+
     response = client.put(
         f"/users/{registered_user['id']}",
         json={"role": "admin"},
         headers=auth_headers,
     )
+    assert response.status_code == 422
 
-    assert response.status_code == 403
+    assignment = client.patch(
+        f"/users/{registered_user['id']}/assignment",
+        json={"role_id": role_id_for("admin")},
+        headers=auth_headers,
+    )
+    assert assignment.status_code == 403
+    assert client.get("/auth/me", headers=auth_headers).json()["role"] == "supervisor"
 
 
 def test_user_cannot_update_another_users_account(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
-    other = client.post(
-        "/users",
-        json={"email": "otro.usuario@healthcore.com", "password": "SuperSecure123"},
-    ).json()
+    from conftest import provision_user
+
+    other = {"id": provision_user("otro.usuario@healthcore.com", role="employee", department="patient_experience")}
 
     response = client.put(
         f"/users/{other['id']}",

@@ -20,9 +20,12 @@ OTHER_USER = {"email": "otra.cuenta@example.com", "password": "password-sintetic
 
 
 def _register_other_user(client: TestClient) -> str:
-    response = client.post("/users", json=OTHER_USER)
-    assert response.status_code == 201, response.text
-    return response.json()["id"]
+    # POST /users es solo de admin desde Roles y Permisos: se aprovisiona.
+    from conftest import provision_user
+
+    return provision_user(
+        OTHER_USER["email"], role="employee", department="compliance", password=OTHER_USER["password"]
+    )
 
 
 # --- A01 Control de acceso roto ------------------------------------------------------

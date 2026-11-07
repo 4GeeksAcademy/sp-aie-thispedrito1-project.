@@ -121,13 +121,43 @@ def client(inventory_engine) -> TestClient:
     app.dependency_overrides.clear()
 
 
+def provision_user(
+    email: str, *, role: str, department: str | None, name: str | None = None, password: str = TEST_PASSWORD
+) -> str:
+    """Crea una cuenta por el repositorio (como la aprovisiona un admin) con
+    rol y departamento por código. Devuelve su id."""
+    from auth_repository import AuthRepository
+    from security import hash_password
+
+    user, _profile = AuthRepository().create_user(
+        email=email,
+        hashed_password=hash_password(password),
+        role=role,
+        department=department,
+        profile_data={"name": name},
+    )
+    return user["id"]
+
+
+def login_headers(client: TestClient, email: str, password: str = TEST_PASSWORD) -> dict[str, str]:
+    response = client.post("/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 @pytest.fixture()
 def registered_user(client: TestClient) -> dict[str, str]:
-    """A user already registered through the real endpoint."""
+    """Usuario genérico de la batería: Supervisor de Experiencia del paciente.
+
+    Desde Roles y Permisos (2026-11-07) POST /users es solo de admin, así que
+    se aprovisiona por el repositorio. Supervisor porque los tests heredados
+    crean incidencias y cambian su estado (eso exige supervisor); los tests
+    de permisos (test_roles_permissions.py) crean sus propios usuarios de
+    cada rol y departamento."""
     payload = {"email": "ana.perez@healthcore.com", "password": TEST_PASSWORD, "name": "Ana Perez"}
-    response = client.post("/users", json=payload)
-    assert response.status_code == 201, response.text
-    payload["id"] = response.json()["id"]
+    payload["id"] = provision_user(
+        payload["email"], role="supervisor", department="patient_experience", name=payload["name"]
+    )
     return payload
 
 
@@ -150,8 +180,8 @@ def auth_headers(auth_token: str) -> dict[str, str]:
 def admin_headers(client: TestClient) -> dict[str, str]:
     """Cabeceras de un usuario con rol admin.
 
-    No se puede conseguir por la API: POST /users siempre crea rol `user` (y
-    eso es intencionado — nadie se autoproclama admin). Se crea directamente
+    No se puede conseguir por la API sin otro admin (nadie se autoproclama
+    admin). Se crea directamente
     por el repositorio, que es como se aprovisiona un admin en la practica.
     Necesario desde la auditoria de serializacion, que restringio
     GET /users a admin.
@@ -165,6 +195,7 @@ def admin_headers(client: TestClient) -> dict[str, str]:
         email="admin@healthcore.com",
         hashed_password=hash_password(TEST_PASSWORD),
         role=UserRole.admin,
+        department="technology",
         profile_data={"name": "Admin HealthCore"},
     )
     response = client.post(
@@ -177,8 +208,9 @@ def admin_headers(client: TestClient) -> dict[str, str]:
 
 @pytest.fixture()
 def service_account(client: TestClient) -> None:
-    """Cuenta de servicio del servidor MCP (mcps/healthcore): rol `user`, nunca
-    admin, creada por el repositorio como la aprovisionaría un admin."""
+    """Cuenta de servicio del servidor MCP (mcps/healthcore): Supervisor de
+    Experiencia del paciente (cambia estados de incidencias), nunca admin,
+    creada por el repositorio como la aprovisionaría un admin."""
     from auth_repository import AuthRepository
     from models import UserRole
     from security import hash_password
@@ -187,6 +219,7 @@ def service_account(client: TestClient) -> None:
     AuthRepository().create_user(
         email=SERVICE_EMAIL,
         hashed_password=hash_password(SERVICE_PASSWORD),
-        role=UserRole.user,
+        role=UserRole.supervisor,
+        department="patient_experience",
         profile_data={"name": "Servidor MCP"},
     )

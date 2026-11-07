@@ -5,7 +5,9 @@ from typing import Any
 from uuid import uuid4
 
 from tinydb import Query
+from tinydb.operations import delete
 
+from access_models import department_id_for, role_id_for
 from database import get_db
 from models import UserRole
 
@@ -42,10 +44,19 @@ class AuthRepository:
         self,
         email: str,
         hashed_password: str,
-        role: UserRole = UserRole.user,
+        role: UserRole = UserRole.employee,
         is_active: bool = True,
         profile_data: dict[str, Any] | None = None,
+        department: str | None = None,
+        role_id: str | None = None,
+        department_id: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Crea la cuenta con `role_id` y `department_id` como claves
+        separadas (BRIEFING: ninguna se deriva de la otra).
+
+        `role`/`department` son códigos de conveniencia para scripts y tests;
+        `role_id`/`department_id` explícitos (POST /users de un admin) tienen
+        prioridad. Sin departamento la cuenta no ve datos departamentales."""
         normalized_email = self._normalize_email(email)
         if self.get_user_by_email(normalized_email):
             raise ValueError("Email already registered")
@@ -56,7 +67,8 @@ class AuthRepository:
             "email": normalized_email,
             "hashed_password": hashed_password,
             "is_active": is_active,
-            "role": role.value,
+            "role_id": role_id or role_id_for(UserRole(role).value),
+            "department_id": department_id or (department_id_for(department) if department else None),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         self._users.insert(user_record)
@@ -84,7 +96,6 @@ class AuthRepository:
         user_id: str,
         *,
         email: str | None = None,
-        role: UserRole | None = None,
     ) -> dict[str, Any] | None:
         user = Query()
         current = self._users.get(user.id == user_id)
@@ -99,14 +110,34 @@ class AuthRepository:
                 raise ValueError("Email already registered")
             updates["email"] = normalized_email
 
-        if role is not None:
-            updates["role"] = role.value
-
         if updates:
             self._users.update(updates, user.id == user_id)
 
         updated = self._users.get(user.id == user_id)
         return dict(updated) if updated else None
+
+    def assign(
+        self, user_id: str, *, role_id: str | None = None, department_id: str | None = None
+    ) -> dict[str, Any] | None:
+        """Cambia rol y/o departamento. Solo escribe lo que llega: cambiar uno
+        deja el otro intacto. Al fijar `role_id` se retira el `role` antiguo
+        (texto) para que no quede un segundo origen de verdad."""
+        user = Query()
+        current = self._users.get(user.id == user_id)
+        if not current:
+            return None
+        updates: dict[str, Any] = {}
+        if role_id is not None:
+            updates["role_id"] = role_id
+        if department_id is not None:
+            updates["department_id"] = department_id
+        if updates:
+            self._users.update(updates, user.id == user_id)
+        # update() mezcla campos, no borra: el texto antiguo se quita aparte.
+        if role_id is not None and "role" in current:
+            self._users.update(delete("role"), user.id == user_id)
+        found = self._users.get(user.id == user_id)
+        return dict(found) if found else None
 
     def delete_user(self, user_id: str) -> bool:
         user = Query()

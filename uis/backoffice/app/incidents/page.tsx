@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { AsyncSection } from "../../components/AsyncSection";
+import { useAccessProfile } from "../../hooks/useAccessProfile";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { ApiFieldError } from "../../services/http";
 import { getIncidents, updateIncidentStatus } from "../../services/incidentsApi";
@@ -21,6 +22,7 @@ import {
   type IncidentFilters,
   type IncidentStatus,
 } from "../../types/incident";
+import { can } from "../../types/access";
 
 const STATUS_BADGE_STYLES: Record<IncidentStatus, React.CSSProperties> = {
   open: { background: "color-mix(in srgb, var(--critical) 14%, transparent)", color: "var(--critical)" },
@@ -30,6 +32,9 @@ const STATUS_BADGE_STYLES: Record<IncidentStatus, React.CSSProperties> = {
 };
 
 export default function IncidentsPage() {
+  // Roles y Permisos: cambiar el estado exige Supervisor. La API ya filtra el
+  // listado por departamento y rechaza con 403 lo que el rol no permite.
+  const canChangeStatus = can(useAccessProfile(), "records:update");
   const [filters, setFilters] = useState<IncidentFilters>({ status: "", origin: "", branch: "" });
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
@@ -201,6 +206,8 @@ export default function IncidentsPage() {
                     <td>
                       {transitions.length === 0 ? (
                         <span style={{ color: "var(--muted)", fontSize: 13 }}>Definitivo</span>
+                      ) : !canChangeStatus ? (
+                        <span style={{ color: "var(--muted)", fontSize: 13 }}>Requiere Supervisor</span>
                       ) : pendingClose?.id === incident.id ? (
                         <div role="alert" style={{ display: "grid", gap: 6, maxWidth: 240 }}>
                           <span style={{ color: "var(--warning)", fontSize: 13 }}>

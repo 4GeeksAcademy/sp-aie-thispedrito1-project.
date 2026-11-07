@@ -25,7 +25,9 @@ def test_me_happy_path_returns_current_user(client: TestClient, auth_headers: di
     assert response.status_code == 200
     body = response.json()
     assert body["email"] == "ana.perez@healthcore.com"
-    assert body["role"] == "user"
+    assert body["role"] == "supervisor"
+    assert body["department"] == "patient_experience"
+    assert "records:update" in body["capabilities"]
     assert body["profile"]["name"] == "Ana Perez"
 
 

@@ -56,3 +56,6 @@ data/supplier_contracts/
 # Cierre financiero: CSV generados por scripts/seed_financial_close.py y cuentas de demo.
 data/raw/financial-close/
 data/financial_close/
+# Roles y Permisos: cuentas de demo de scripts/seed_roles_permissions.py
+# (copia de la TinyDB con hashes de contraseña).
+data/roles_permissions/

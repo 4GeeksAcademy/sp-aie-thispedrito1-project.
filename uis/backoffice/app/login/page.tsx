@@ -73,9 +73,9 @@ export default function LoginPage() {
         </form>
 
         <p style={{ marginBottom: 0 }}>
-          No tienes cuenta?{" "}
+          ¿No tienes cuenta?{" "}
           <Link href="/register" style={{ color: "var(--brand)", fontWeight: 700 }}>
-            Registrate
+            Cómo conseguir una
           </Link>
         </p>
       </section>

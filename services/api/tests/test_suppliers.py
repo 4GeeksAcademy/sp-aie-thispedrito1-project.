@@ -62,7 +62,9 @@ def test_get_missing_supplier_returns_404(client: TestClient, auth_headers: dict
     assert response.status_code == 404
 
 
-def test_update_rate_and_delete_supplier(client: TestClient, auth_headers: dict[str, str]) -> None:
+def test_update_rate_and_delete_supplier(
+    client: TestClient, auth_headers: dict[str, str], admin_headers: dict[str, str]
+) -> None:
     created = client.post("/suppliers", json=VALID_SUPPLIER, headers=auth_headers).json()
 
     updated = client.patch(
@@ -71,7 +73,12 @@ def test_update_rate_and_delete_supplier(client: TestClient, auth_headers: dict[
     assert updated.status_code == 200
     assert updated.json()["monthly_rate"] == 999.5
 
-    deleted = client.delete(f"/suppliers/{created['id']}", headers=auth_headers)
+    # Roles y Permisos: eliminar es solo de admin; el supervisor recibe 403.
+    forbidden = client.delete(f"/suppliers/{created['id']}", headers=auth_headers)
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"]["required_role"] == "admin"
+
+    deleted = client.delete(f"/suppliers/{created['id']}", headers=admin_headers)
     assert deleted.status_code == 204
     assert client.get(f"/suppliers/{created['id']}", headers=auth_headers).status_code == 404
 

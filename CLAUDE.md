@@ -263,6 +263,17 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_nist_prompt_injecti
 
 Desde la raíz, sin red. Informe en `docs/security/nist-ai-security-report.md`.
 
+### Roles y Permisos (rol × departamento)
+
+```bash
+services/api/.venv/bin/python scripts/seed_roles_permissions.py     # 3 roles, 6 deptos, 5 usuarios y 2 informes del BRIEFING → data/roles_permissions/demo-users.db.json
+(cd services/api && SUPPLIERS_DB_PATH=../../data/roles_permissions/demo-users.db.json .venv/bin/uvicorn main:app --port 8000)
+(cd services/api && .venv/bin/python -m pytest tests/test_roles_permissions.py -o addopts="")   # 42, incluye las 5 pruebas de Compliance
+(cd uis/backoffice && npx jest __tests__/access.test.tsx)                                        # 13
+```
+
+Desde la raíz. La contraseña de la semilla es aleatoria (o `ROLES_SEED_PASSWORD`) y el script la imprime. Pantallas `/internal-reports` y `/admin/access` (solo Admin). Detalle en `docs/roles-permissions/roles-permissions.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -293,11 +304,11 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (342 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 15 del chat WebSocket, 13 de la auditoría OWASP, 21 del rate limiting, 17 de acciones irreversibles): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
+# Backend (425 tests, 42 de Roles y Permisos, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 15 del chat WebSocket, 13 de la auditoría OWASP, 21 del rate limiting, 17 de acciones irreversibles): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (161 tests): desde uis/backoffice
+# Frontend (204 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -349,7 +360,7 @@ Reglas que quedan fijadas y conviene no romper:
 - **`response_model` no se aplica a ciegas.** `GET /` sirve el HTML de `uis/web` y `GET /api/incidents/results/export` devuelve un CSV: ahí va `response_class` + el content-type en `responses`, porque un `response_model` prometería JSON que nunca llega. Los dos `DELETE` responden 204, que no lleva cuerpo por definición.
 - **Los flujos de auth no autenticados no devuelven email** (registro, login, token, forgot, reset). `GET /auth/me` sí puede: el llamante está autenticado y el correo es suyo.
 - **`services/api/tests/test_serialization.py` es el guardián de toda la superficie.** Tres de sus tests recorren el esquema OpenAPI completo en vez de una lista escrita a mano, así que cubren rutas que todavía no existen: si alguien añade un endpoint que filtra `hashed_password` o que devuelve JSON sin esquema, falla solo. `access_token` está excluido de la lista de prohibidos a propósito — es el propósito de `/auth/login`.
-- **Fixture `admin_headers`** en `tests/conftest.py`: crea un admin por el repositorio, porque `POST /users` siempre crea rol `user` (intencionado). Necesaria desde que `GET /users` exige `require_admin`.
+- **Fixture `admin_headers`** en `tests/conftest.py`: crea un admin por el repositorio. Desde Roles y Permisos `POST /users` es solo de admin, así que `registered_user` (Ana Pérez, **supervisor de `patient_experience`**) también se aprovisiona por el repositorio (`provision_user`, `login_headers` en el mismo conftest).
 - **`user_uuid` se mantiene en inventario a propósito**, contra la recomendación genérica sobre claves foráneas en bruto: es el rastro de auditoría que exigen HIPAA/UK GDPR, la tabla de `/inventory/orders` lo muestra, y no hay objeto usuario anidado que ofrecer — los usuarios viven en TinyDB y las órdenes en Supabase.
 - **Cambio de comportamiento**: `GET /users` pasa a exigir `require_admin`. Antes lo servía cualquier usuario autenticado devolviendo el email de toda la organización. Residual documentado y **no** resuelto: `GET /users/{id}` sigue devolviendo el email de cualquier cuenta a cualquier autenticado.
 - Impacto en el frontend: `uis/backoffice/types/` tiene ahora `IncidentListItem` y `SupplierListItem` junto a los tipos completos, y `AuthProfile` ya no declara `id` ni `user_id`. Al recortar un campo de la API, actualizar el tipo — `tsc --noEmit` localiza los puntos que asumían la proyección completa.
@@ -951,6 +962,32 @@ Gotchas:
 - **Formato de `entry_id` = `JE-2026OCT-0001`**: con `JE-202610-0001` (forma de NHS number) o `JE-2026-10-0001` (10 dígitos con guiones = teléfono), `phi_guard` marcaba el informe y bloqueaba la distribución. Cualquier identificador nuevo que vaya en un texto saliente: sin series largas de dígitos.
 - **Tests de la raíz con nombre único** (`test_fc_*.py`): las carpetas `tests/*` no son paquetes y `test_calculations.py` chocaba con el de proveedores. Ayudantes en `tests/financial_close/fc_helpers.py`, nunca `from conftest import`.
 - `operations.csv` solo tiene `value`: el presupuesto de cada indicador va como `<indicador>_budget`.
+
+### Roles y Permisos — `docs/roles-permissions/roles-permissions.md`
+
+Ticket del CTO (Plataforma – Roles y Permisos), rama `feature/roles-permissions` apilada sobre `feature/financial-close`, 2026-11-07. BRIEFING del currículo (`content/contexts/roles-permissions/`). Cualquier autenticado tenía el mismo acceso; ahora hay dos ejes **independientes**: rol (qué puede hacer) y departamento (qué datos le competen), evaluados siempre en ese orden.
+
+Mapa del código (`services/api/`):
+- `access_models.py`: semilla literal (`ROLES_SEED`, `DEPARTMENTS_SEED`), ids `uuid5` deterministas (`role_id_for`, `department_id_for`), `CAPABILITY_MIN_RANK` (capacidades por rango), mapeo categoría → departamento de incidencias, alias de roles antiguos y contratos.
+- `access_repository.py`: tablas TinyDB `roles`, `departments`, `internal_reports`; `ensure_catalog` (siembra perezosa) y `resolve_user_access` (rol + departamento resueltos; falla cerrado).
+- `permissions.py`: `require_capability` (dependencia, 403 `insufficient_role`), `ensure_in_scope` (403 `department_out_of_scope`), `department_scope` (filtro de listados; 403 `department_required` sin departamento), `can_access_department` (Learn by Doing **delegado**), `own_department`.
+- `routes/access.py` (`/roles`, `/departments`, solo Admin), `routes/internal_reports.py` (colección canónica con alcance), `routes/users.py` (`POST`/`GET /users` solo Admin, `PATCH /users/{id}/assignment`), `access_seed.py` + `scripts/seed_roles_permissions.py`.
+- Backoffice: `types/access.ts`, `hooks/useAccessProfile.ts` (caché por token), `services/accessApi.ts`, `app/internal-reports/`, `app/admin/access/`, `NavItem.capability` + `visibleSections`.
+
+Decisiones que conviene no romper:
+- **`users.role_id` y `users.department_id` separados**; `AuthRepository.assign` solo escribe lo que recibe. Cuentas antiguas con `role` en texto (`user`/`manager`) se traducen al leerlas (`employee`/`supervisor`); `UserRole.user`/`.manager` son alias del enum para no romper los scripts de semilla de otras clases.
+- **Rol y departamento se releen de la base en cada petición** (`security.user_from_token`): el `role` del JWT es informativo. `user["role"]` sigue siendo el código, así que los `role == "admin"` de `services/*/router.py` siguen funcionando.
+- **Ninguna ruta de `routes/` compara rol o departamento a mano** (test con `ast`) y cada endpoint sensible lleva su `require_*` (test que recorre `app.routes`). Lo detectó en `incidents.py` en esta misma rama.
+- **Decisiones del usuario:** `POST /users` solo Admin (`/register` ya no crea cuentas, explica el cambio); alcance departamental en informes internos + incidencias (históricas por categoría: `patient_experience`→`patient_experience`, `billing_error`→`revenue_cycle`, `other`→`clinical_operations`); proveedores e inventario solo regla de rol.
+- **El resumen de incidencias cachea por alcance** (`incidents_summary:<depto|all>`) y las escrituras usan `cache.invalidate_prefix`.
+- **Cuenta de servicio MCP = supervisor de `patient_experience`** (cambia estados). Residual: el agente ya no ve incidencias de facturación ni "otros".
+- `PUT /users/{id}` tiene `extra="forbid"`: un `role` en el cuerpo da 422, no se ignora. Bajar al último admin → 409. Rango de los 3 roles base inmutable → 409.
+- Informes internos pasan por `phi_guard.scan` (400 por campo, sin repetir el texto). Auditoría `user_assignment_changed` con actor y `target_user` en seudónimo.
+
+Gotchas reales:
+- **TinyDB compartía un manejador de archivo entre hilos**: `/admin/access` pide tres listados a la vez y `GET /roles` daba 500 (`JSONDecodeError`). Lo destapó Chrome, no los tests. `database.LockedJSONStorage` serializa lecturas/escrituras (RLock de proceso); `test_concurrent_reads_of_the_shared_tinydb_do_not_corrupt` falla sin él. Con varios workers de uvicorn seguiría habiendo carreras entre procesos.
+- `useAsyncData` ahora muestra el mensaje de un 403 (ya en español vía `http.ts`/`FORBIDDEN_MESSAGES`) en vez del genérico "verifica que la API esté activa".
+- Tests: hash bcrypt una vez por módulo y tokens con `create_access_token` (sin login) para no tardar.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

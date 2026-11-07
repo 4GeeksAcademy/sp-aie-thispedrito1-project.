@@ -56,8 +56,11 @@ class IncidentRepository:
         self._table.update({"status": status, "updated_at": updated_at}, doc_ids=[incident_id])
         return self.get_by_id(incident_id)
 
-    def summary(self) -> dict[str, Any]:
-        records = [dict(doc) for doc in self._table.all()]
+    def summary(self, records: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """Recuentos por campo. `records` permite resumir un subconjunto ya
+        filtrado (p. ej. el alcance departamental del llamante)."""
+        if records is None:
+            records = [dict(doc) for doc in self._table.all()]
 
         def count_by(field: str) -> dict[str, int]:
             counts: dict[str, int] = {}

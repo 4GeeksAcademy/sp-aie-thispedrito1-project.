@@ -1,3 +1,5 @@
+import type { AccessProfile } from "./access";
+
 export interface LoginPayload {
   email: string;
   password: string;
@@ -26,10 +28,11 @@ export interface AuthProfile {
   address?: string | null;
 }
 
-export interface AuthMeResponse {
+// Roles y Permisos: /auth/me devuelve rol y departamento (dos ejes
+// independientes) y las capacidades que el rol concede. Ver types/access.ts.
+export interface AuthMeResponse extends AccessProfile {
   id: string;
   email: string;
-  role: "admin" | "manager" | "user";
   profile: AuthProfile;
 }
 

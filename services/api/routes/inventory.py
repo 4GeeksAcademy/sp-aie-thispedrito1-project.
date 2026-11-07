@@ -21,7 +21,15 @@ from models import (
     SupplyDeliveryCreate,
     SupplyDeliveryRead,
 )
+from access_models import CAP_RECORDS_CREATE, CAP_RECORDS_UPDATE
+from permissions import require_capability
 from security import get_current_user
+
+# Roles y Permisos: inventario es de toda la red (sin alcance departamental,
+# decisión del usuario 2026-11-07). Crear productos y órdenes = employee; el
+# intento de editar el stock (siempre 400) es una actualización = supervisor.
+_can_create = [Depends(require_capability(CAP_RECORDS_CREATE))]
+_can_update = [Depends(require_capability(CAP_RECORDS_UPDATE))]
 
 router = APIRouter(prefix="/inventory", tags=["inventory"], dependencies=[Depends(get_current_user)])
 
@@ -100,7 +108,9 @@ def list_products(session: Session = Depends(get_inventory_db)) -> list[MedicalS
     return result
 
 
-@router.post("/products", response_model=MedicalSupplyRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/products", response_model=MedicalSupplyRead, status_code=status.HTTP_201_CREATED, dependencies=_can_create
+)
 def create_product(
     payload: MedicalSupplyCreate, session: Session = Depends(get_inventory_db)
 ) -> MedicalSupplyRead:
@@ -120,7 +130,12 @@ def get_product(supply_id: int, session: Session = Depends(get_inventory_db)) ->
     return _to_supply_read(session, supply)
 
 
-@router.post("/orders/inbound", response_model=SupplyDeliveryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/orders/inbound",
+    response_model=SupplyDeliveryRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_can_create,
+)
 def create_inbound_order(
     payload: SupplyDeliveryCreate,
     session: Session = Depends(get_inventory_db),
@@ -138,7 +153,12 @@ def create_inbound_order(
     return SupplyDeliveryRead.model_validate(delivery)
 
 
-@router.post("/orders/outbound", response_model=SupplyConsumptionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/orders/outbound",
+    response_model=SupplyConsumptionRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_can_create,
+)
 def create_outbound_order(
     payload: SupplyConsumptionCreate,
     session: Session = Depends(get_inventory_db),
@@ -176,6 +196,7 @@ def create_outbound_order(
     "/products/{supply_id}/stock",
     response_model=DirectStockEditRejection,
     responses={400: {"model": DirectStockEditRejection}},
+    dependencies=_can_update,
 )
 def reject_direct_stock_edit(
     supply_id: int,

@@ -1,16 +1,9 @@
-import type { AuthMeResponse, ForgotPasswordPayload, LoginPayload, MessageResponse, ProfileUpdatePayload, RegisterPayload, ResetPasswordPayload, TokenResponse } from "../types/auth";
+import type { AuthMeResponse, ForgotPasswordPayload, LoginPayload, MessageResponse, ProfileUpdatePayload, ResetPasswordPayload, TokenResponse } from "../types/auth";
 import { requestJson } from "./http";
 
 export const authApi = {
   login(payload: LoginPayload): Promise<TokenResponse> {
     return requestJson<TokenResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  register(payload: RegisterPayload): Promise<void> {
-    return requestJson<void>("/users", {
       method: "POST",
       body: JSON.stringify(payload),
     });

@@ -1,3 +1,4 @@
+import { FORBIDDEN_MESSAGES } from "../types/access";
 import { clearAuthToken, getAuthToken } from "./session";
 import { track } from "./telemetry";
 
@@ -88,6 +89,17 @@ function extractErrorMessage(status: number, payload: unknown): string {
   }
   if (isObjectRecord(payload) && typeof payload.detail === "string") {
     return payload.detail;
+  }
+  // Roles y Permisos: los 403 llegan como { detail: { code, message } }. Se
+  // muestra el texto en español por `code`; el `message` en inglés de la API
+  // solo si el código no es conocido.
+  if (status === 403 && isObjectRecord(payload) && isObjectRecord(payload.detail)) {
+    const { code, message } = payload.detail;
+    if (typeof code === "string" && FORBIDDEN_MESSAGES[code]) return FORBIDDEN_MESSAGES[code];
+    if (typeof message === "string") return message;
+  }
+  if (status === 403) {
+    return "No tienes permiso para esta acción.";
   }
   if (status === 422) {
     return "Algunos datos enviados no son válidos. Revisa el formulario e inténtalo de nuevo.";
