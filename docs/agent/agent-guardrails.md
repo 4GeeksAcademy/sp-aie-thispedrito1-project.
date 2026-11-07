@@ -107,7 +107,7 @@ habría retenido respuestas correctas.
 
 `tests/pipelines/test_agent_guardrails.py` + `services/api/tests/test_agent_guardrails_api.py`:
 
-- los 35 casos de `data/eval/guardrail-cases.json` con su acción, guardia y tipo de fallo esperados;
+- los 37 casos de `data/eval/guardrail-cases.json` (35 del ticket + 2 del caso 1 del BRIEFING de ciberseguridad, clase NIST) con su acción, guardia y tipo de fallo esperados;
 - el rechazo de jailbreak es idéntico en 25 reintentos, y 6 trucos de ortografía no lo esquivan;
 - sin falsos positivos sobre las 25 preguntas reales de los Hitos 7-8 (`test-queries.json`,
   `agent-eval-cases.json`);

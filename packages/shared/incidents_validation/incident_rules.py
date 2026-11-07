@@ -50,6 +50,17 @@ STATUS_TRANSITIONS: Dict[str, Tuple[str, ...]] = {
     "discarded": (),
 }
 
+# Estados finales: sin transición de salida, así que llegar a ellos es una
+# acción irreversible. Se derivan de STATUS_TRANSITIONS para que no puedan
+# desincronizarse. Clase NIST (BRIEFING de ciberseguridad §5): exigen
+# confirmación humana explícita (`"confirm": true` en el PATCH).
+TERMINAL_STATUSES: Tuple[str, ...] = tuple(status for status, nxt in STATUS_TRANSITIONS.items() if not nxt)
+
+CONFIRMATION_REQUIRED_MESSAGE = (
+    "Moving an incident to '{status}' is final and cannot be undone. "
+    "Send \"confirm\": true to confirm it explicitly."
+)
+
 REQUIRED_INCIDENT_FIELDS: Tuple[str, ...] = (
     "title",
     "description",
@@ -125,4 +136,15 @@ def validate_status_transition(current_status: str, new_status: str) -> str | No
             f"Allowed transitions: {', '.join(allowed)}."
         )
 
+    return None
+
+
+def validate_status_confirmation(new_status: str, confirm: Any) -> str | None:
+    """Error si `new_status` es final y no llega `confirm` exactamente `True`.
+
+    Exactamente `True` (no "true", no 1): una confirmación de una acción
+    irreversible no se infiere de un valor que "parece" afirmativo.
+    """
+    if new_status in TERMINAL_STATUSES and confirm is not True:
+        return CONFIRMATION_REQUIRED_MESSAGE.format(status=new_status)
     return None

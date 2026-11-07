@@ -37,6 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, status
 from sqlmodel import Session
 
 from database import get_inventory_db
+from rate_limit import check_llm_quota, rate_limit_message
 from security import get_current_user, user_from_token
 from services.agent.chat import events
 from services.agent.chat.hub import SlowConsumer, Subscription
@@ -181,6 +182,12 @@ async def _receive(
             continue
         if service.runtime(session_id).closed:
             reply_error("session_closed", "Esta conversación está cerrada. Abre una nueva.")
+            continue
+        # Rate limiting (clase NIST): el mismo cupo por usuario que los endpoints
+        # HTTP. Solo cuentan los mensajes que pondrían en marcha al agente.
+        quota = check_llm_quota(deps.user_id)
+        if not quota.allowed:
+            reply_error("rate_limited", rate_limit_message(quota.retry_after_s))
             continue
         try:
             await service.submit(session_id, event.text, deps)

@@ -10,10 +10,13 @@ from packages.shared.incidents_validation import (
     INCIDENT_ORIGINS,
     INCIDENT_STATUSES,
     REQUIRED_INCIDENT_FIELDS,
+    TERMINAL_STATUSES,
     validate_incident_payload,
+    validate_status_confirmation,
     validate_status_transition,
 )
 
+from audit_log import audit_event
 from cache import cache
 from incident_repository import IncidentRepository
 from models import IncidentListItem, IncidentRead, IncidentSummary
@@ -105,19 +108,46 @@ def get_incident(incident_id: int) -> IncidentRead:
 
 
 @router.patch("/{incident_id}/status", response_model=IncidentRead)
-def patch_incident_status(incident_id: int, payload: dict[str, Any] = Body(...)) -> IncidentRead:
+def patch_incident_status(
+    incident_id: int,
+    payload: dict[str, Any] = Body(...),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> IncidentRead:
+    """Cambia el estado siguiendo el ciclo de vida.
+
+    Clase NIST (BRIEFING de ciberseguridad §5, acciones irreversibles): pasar a
+    un estado final (`resolved`/`discarded`) exige `"confirm": true`, y todo
+    cambio deja una línea en `healthcore.audit` (quién en seudónimo, de qué
+    estado a cuál; nunca título ni descripción). Se valida primero que la
+    transición sea posible y después la confirmación: pedir algo imposible
+    da su error de siempre, no un "falta confirmar".
+    """
     new_status = payload.get("status")
     if not isinstance(new_status, str) or not new_status.strip():
         raise _field_errors([{"field": "status", "message": "The field 'status' is required."}])
+    new_status = new_status.strip()
 
     found = repo.get_by_id(incident_id)
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
-    transition_error = validate_status_transition(found["status"], new_status.strip())
+    transition_error = validate_status_transition(found["status"], new_status)
     if transition_error:
         raise _field_errors([{"field": "status", "message": transition_error}])
 
-    updated = repo.update_status(incident_id, new_status.strip())
+    confirmation_error = validate_status_confirmation(new_status, payload.get("confirm"))
+    if confirmation_error:
+        raise _field_errors([{"field": "confirm", "message": confirmation_error}])
+
+    updated = repo.update_status(incident_id, new_status)
     cache.invalidate(SUMMARY_CACHE_KEY)
+    audit_event(
+        "incident_status_changed",
+        actor_id=user.get("id"),
+        role=user.get("role"),
+        incident_id=incident_id,
+        from_status=found["status"],
+        to_status=new_status,
+        confirmed=new_status in TERMINAL_STATUSES,
+    )
     return IncidentRead.model_validate(updated)

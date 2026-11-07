@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from data.pipelines import rag
 from data.process.rag import RagConfigError
+from rate_limit import enforce_llm_rate_limit
 from security import get_current_user
 from services.agent.guardrails.input_guard import BLOCK, check_input
 from services.agent.guardrails.isolation import isolate_evidence
@@ -27,7 +28,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(get_current_user)])
 
 
-@router.post("/query", response_model=KnowledgeQueryResponse)
+# Rate limiting (clase NIST): mismo cupo por usuario que /agent/query y el chat.
+@router.post("/query", response_model=KnowledgeQueryResponse, dependencies=[Depends(enforce_llm_rate_limit)])
 def query_knowledge_base(
     payload: KnowledgeQueryRequest, user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, str]:

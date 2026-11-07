@@ -174,6 +174,11 @@
   - **Verificado:** `run-lab.sh` tras reiniciar Docker Desktop: `verify.sh` 17 FAIL -> 0 FAIL; desde otra maquina, root con contrasena ACEPTADO -> rechazado, puertos 8000/5432 ABIERTO -> cerrado, `healthcore` con clave ACEPTADO.
   - **No verificado:** build de los Dockerfiles con `USER healthcore` (~2 GB por imagen, quedaban 3,4 GB de disco).
   - **Tests:** API 303 (+13 `test_owasp_fixes.py`, +1 en `test_users.py`), raiz 591 (+9 `tests/security`, +5 `test_indirect_injection.py`), Jest 157; `next build` en verde en las dos webs.
+- Practicas seguras de IA, informe NIST (rama `feature/nist-security-practices` apilada sobre `feature/owasp-top10-audit`, 2026-11-01, Ciberseguridad). Informe en `docs/security/nist-ai-security-report.md`: 6 funciones NIST con acciones priorizadas, HIPAA (60 dias, HHS, BAA) y UK GDPR (72 h, ICO, DPA) separados, inventario de 12 sistemas + 5 del BRIEFING con responsable, mapa de entradas externas al modelo.
+  - **Nuevo:** rate limiting de las llamadas al modelo (`services/api/rate_limit.py`, 10/min por usuario, un cupo para `/agent/query`, `/knowledge/query` y el chat). Cierre de incidencias con `"confirm": true` obligatorio + auditoria `healthcore.audit` (API, backoffice y MCP con `destructiveHint`). Test anti-secretos sobre `git ls-files`. Casos 1 y 2 del BRIEFING §4 reproducibles (`tests/pipelines/test_nist_prompt_injection.py`, `nist-briefing-1-*`).
+  - **Decisiones del usuario:** contador en memoria (no Redis ni slowapi); ampliar el alcance al cierre de incidencias tras detectarlo. Delegada ("hazlo tu"): `SlidingWindowLimiter.check`.
+  - **Hallazgo:** `services/api/.env` estuvo en el historial publicado (22-23 jul 2026) con un `JWT_SECRET_KEY`; el actual es distinto (comprobado por huella).
+  - **Tests:** API 342 (+21 rate limit, +1 chat, +17 acciones irreversibles), raiz 618 (+16 anti-secretos, +7 inyeccion, +4 casos), Jest 161 (+4); batería del harness 37/37; `next build` del backoffice en verde.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
@@ -198,6 +203,7 @@
 12. Recomendación de ingesta, fuera del pipeline: índice único sobre `tags->>'eventId'` en `telemetry_events` con `ON CONFLICT DO NOTHING`, previa limpieza de duplicados. Hoy `POST /telemetry/events` no deduplica y un reintento tras timeout duplica eventos.
 13. Cola de tareas (#DEV-55): construir y probar `docker compose up -d --build redis worker flower` cuando haya disco; valorar mover a Celery otras operaciones lentas (p. ej. `POST /api/incidents/analyze` si crece el CSV, guardando el archivo y encolando solo su ruta) y proteger Flower con `--basic-auth` si se expone fuera de localhost.
 14. Seguridad (pendientes de la auditoria OWASP, §6 del informe): migrar a LangGraph 1.x (deserializacion de checkpoints), limite de intentos de login, `clinic_id` en usuarios y filtro en tools del agente, autorizacion por rol en la firma de RFP, cookie HttpOnly + CSP, imagen de produccion sin Swagger ni `--reload`, `uis` sin root, subir Starlette/Pillow, proveedor LLM con BAA/DPA, python-jose -> PyJWT.
+15. Seguridad (pendientes del informe NIST, §6): P0 BAA/DPA con el proveedor LLM y con Supabase antes de datos reales; rate limiting a Redis si hay varios workers; alertas sobre los contadores de guardarrailes; citar siempre la politica en respuestas regulatorias; auditar tambien las lecturas; plan de incidentes y RTO/RPO aprobados por Compliance.
 
 ## Riesgos activos
 - Worker de Celery nativo en macOS: con el pool por defecto (prefork) cada tarea muere antes de ejecutarse (`ValueError` en `fast_trace_task`); usar `--pool=solo`. Causa no investigada.

@@ -129,7 +129,7 @@ Desde la raíz. Arranca la API en el puerto 8010 con una TinyDB temporal (2 coor
 ### Harness y guardrails del agente (Ticket #SEC-114)
 
 ```bash
-services/api/.venv/bin/python scripts/run_guardrail_cases.py          # 35 casos, sin red: solo guardarraíles + resumen
+services/api/.venv/bin/python scripts/run_guardrail_cases.py          # 37 casos, sin red: solo guardarraíles + resumen
 docker compose up -d qdrant                                           # solo para --live
 services/api/.venv/bin/python scripts/run_guardrail_cases.py --live   # agente real → docs/agent/guardrails-evidence/cases.json
 docker compose stop qdrant
@@ -219,6 +219,15 @@ services/api/.venv/bin/python -m pytest tests/security tests/pipelines/test_indi
 
 Desde la raíz. En un Ubuntu real: `OPS_PUBKEY_FILE=… infra/hardening/harden.sh` y luego `infra/hardening/verify.sh` (como root). Detalle en `docs/security/owasp-top10-audit.md`.
 
+### Prácticas seguras de IA (informe NIST)
+
+```bash
+services/api/.venv/bin/python -m pytest tests/pipelines/test_nist_prompt_injection.py tests/security -o addopts=""   # caso reproducible de inyección + anti-secretos
+(cd services/api && .venv/bin/python -m pytest tests/test_rate_limit.py tests/test_irreversible_actions.py -o addopts="")
+```
+
+Desde la raíz, sin red. Informe en `docs/security/nist-ai-security-report.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -249,11 +258,11 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (303 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 14 del chat WebSocket, 13 de la auditoría OWASP): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
+# Backend (342 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 15 del chat WebSocket, 13 de la auditoría OWASP, 21 del rate limiting, 17 de acciones irreversibles): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (157 tests): desde uis/backoffice
+# Frontend (161 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -811,6 +820,26 @@ Gotchas:
 - `uis/website` no tenía `node_modules`: se instalaron para verificar el build.
 - Laboratorio verificado (2026-10-28): `verify.sh` 17 FAIL → 0 FAIL, root por SSH ACEPTADO → rechazado, 8000/5432 ABIERTO → cerrado. **No verificado**: build de los Dockerfiles con `USER healthcore` (falta de disco).
 - Docker Desktop puede quedar colgado (`docker ps` no responde). Antes de reiniciarlo, comprobar que el runner de producción no tiene job: `pgrep -fl Runner.Worker` vacío = libre.
+
+### Prácticas seguras de IA (NIST) — `docs/security/nist-ai-security-report.md`
+
+Clase "Prácticas Seguras en la Integración de IA", rama `feature/nist-security-practices` apilada sobre `feature/owasp-top10-audit`, 2026-11-01. Mismo BRIEFING de ciberseguridad que la clase OWASP (§1-§6; descargado del repo del currículo, no viene en Descargas). Informe con las 6 funciones NIST, HIPAA y UK GDPR por separado, inventario de 12 sistemas + los 5 del BRIEFING con responsable, mapa de entradas externas al modelo y pendientes con mitigación.
+
+Lo nuevo en código:
+- **`services/api/rate_limit.py`**: `SlidingWindowLimiter` (ventana deslizante, reloj inyectable) + `LLM_LIMITER` (singleton, 10/60 s por defecto, `LLM_RATE_LIMIT_MAX_REQUESTS`/`_WINDOW_S`). Dependencia `enforce_llm_rate_limit` en `POST /agent/query` y `POST /knowledge/query`; `check_llm_quota` en el bucle del chat WebSocket (`chat_error` `rate_limited`). El cálculo de `check` fue Learn by Doing **delegado**.
+- **Cierre de incidencias = acción irreversible**: `incident_rules.TERMINAL_STATUSES` (derivado de `STATUS_TRANSITIONS`) + `validate_status_confirmation`. `PATCH …/status` a `resolved`/`discarded` exige `"confirm": true` literal (400 `field: "confirm"`); se valida DESPUÉS de la transición. Backoffice: confirmación en línea en `/incidents` (`isTerminalStatus`, `statusChangeBody`). MCP: `incidents_update_status` con `confirm` y `destructiveHint=True`.
+- **`services/api/audit_log.py`**: logger `healthcore.audit`, `audit_event` con lista cerrada de campos (`ALLOWED_FIELDS`; un campo fuera de lista lanza `ValueError`) y actor en seudónimo SHA-256.
+- **`tests/security/test_no_hardcoded_secrets.py`**: escanea `git ls-files`. Excepciones en `ALLOWED_LITERALS`, cada una con motivo (hoy solo la contraseña sintética del lab de endurecimiento).
+- **Caso reproducible de inyección**: `tests/pipelines/test_nist_prompt_injection.py` (casos 1 y 2 del BRIEFING §4) + `nist-briefing-1-*` en `guardrail-cases.json` (37 casos).
+
+Decisiones que conviene no romper:
+- **Un cupo por usuario para los tres canales**: lo que se protege es el coste. Cuentan también las peticiones que luego bloquea un guardarraíl; las rechazadas por el límite no (si no, un cliente en bucle no recupera nunca el cupo). En memoria (decisión del usuario): con varios workers de uvicorn cada uno cuenta por su lado.
+- `tests/conftest.py::offline_agent_harness` vacía `LLM_LIMITER`: sin eso, un test que consulta 10 veces deja sin cupo al siguiente. Los tests que quieren otro cupo sustituyen `rate_limit.LLM_LIMITER` con `monkeypatch` (las funciones lo leen al llamar).
+- **Identificador sintético `P-0001`**, nunca un nombre, en casos y logs de prueba (BRIEFING §6).
+
+Hallazgos:
+- `services/api/.env` estuvo versionado el 22-23 jul 2026 (`aaded8d` → `051ca1a`, publicado en origin) con un `JWT_SECRET_KEY`. Comprobado por huella SHA-256: **el actual es distinto**. `apps/.env.local` del historial solo tenía una URL.
+- Pendiente P0: proveedor LLM y Supabase gratuito sin BAA/DPA (solo datos sintéticos).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 
