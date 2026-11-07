@@ -507,7 +507,7 @@ Mapa del código:
 - **`data/process/rag.py`**: `chunk_document`/`load_chunks`, `embed()` y `setup()`, más los clientes (`get_llm_client`, `get_qdrant_client`) y `RagConfigError`. Carga `services/api/.env`.
 - **`data/pipelines/rag.py`**: `retrieve()`, `generate_answer()`, `query()` y el prompt en tres capas (`ASSISTANT_ROLE`, `GROUNDING_RULES`, `BUSINESS_RULES`).
 - **`services/knowledge/`**: `POST /knowledge/query` (`{question}` → `{answer}`), con autenticación obligatoria. Mismo patrón que `services/reporting/`: solo HTTP, llama a `query()`.
-- **`uis/backoffice/app/knowledge/`**: pantalla "Asistente" (`services/knowledgeApi.ts`, `types/knowledge.ts`).
+- **`uis/backoffice/app/knowledge/`**: pantalla "Asistente de políticas" (`services/knowledgeApi.ts`, `types/knowledge.ts`).
 - **`scripts/index_knowledge_base.py`** y **`scripts/evaluate_rag_retrieval.py`**, sobre **`data/eval/test-queries.json`** (14 preguntas, una por chunk, más 4 fuera de tema).
 - Qdrant en `docker-compose.yml` (servicio `qdrant`, volumen `qdrant-data`, sin `restart:`). La API en Docker lo encuentra por nombre (`QDRANT_URL=http://qdrant:6333`).
 
@@ -536,7 +536,7 @@ Rama `feature/langgraph-agent-base` apilada sobre `feature/rag-knowledge-base`, 
 Mapa del código:
 - **`services/agent/graph.py`**: `AgentState` (4 claves: `question`, `context`, `answer`, `outcome`, sin historial), `AgentNodes` (5 nodos: `receive_question`, `reject_question`, `retrieve`, `no_information`, `generate`, con las dependencias inyectables), las aristas `route_after_receive`/`route_after_retrieve` y `compile_agent_graph()` + `validate_structure()`.
 - **`services/agent/tracing.py`**: `run_agent()` recorre el grafo con `stream_mode="updates"` y escribe el trace JSON (`AGENT_TRACE_DIR`, por defecto `data/traces/agent/`, en `.gitignore`).
-- **`services/agent/router.py`**: `POST /agent/query` → `{answer, trace_id, outcome}`, con autenticación. Convive con `/knowledge/query`; la pantalla "Asistente" no cambió.
+- **`services/agent/router.py`**: `POST /agent/query` → `{answer, trace_id, outcome}`, con autenticación. Convive con `/knowledge/query`; la pantalla "Asistente de políticas" no cambió.
 - **Evals:** `data/eval/agent-eval-cases.json` (5 casos) → `scripts/record_agent_traces.py` → `data/eval/agent-traces/*.json` (versionados) → `tests/pipelines/test_agent_evals.py` (26, sin red). Tests de estructura con dobles en `tests/pipelines/test_agent_graph.py` (17) y del endpoint en `services/api/tests/test_agent.py` (6).
 
 Decisiones que conviene no romper:

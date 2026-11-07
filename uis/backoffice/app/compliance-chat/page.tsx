@@ -104,7 +104,7 @@ export default function ComplianceChatPage() {
     <main className="shell chat-page">
       <div className="chat-header">
         <div>
-          <h1>Chat de compliance</h1>
+          <h1>Asistente de compliance</h1>
           <p className="chat-intro">
             Pregunta qué está permitido bajo HIPAA (EE. UU.) y UK GDPR (Reino Unido). La respuesta aparece mientras se
             escribe; si va por el camino equivocado, escribe otra cosa y pulsa «Interrumpir y enviar».

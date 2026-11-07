@@ -42,8 +42,8 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Inteligencia artificial",
     items: [
-      { href: "/knowledge", label: "Asistente" },
-      { href: "/compliance-chat", label: "Chat de compliance" },
+      { href: "/knowledge", label: "Asistente de políticas" },
+      { href: "/compliance-chat", label: "Asistente de compliance" },
       { href: "/rfps", label: "RFPs" },
     ],
   },
