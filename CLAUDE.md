@@ -286,6 +286,17 @@ services/api/.venv/bin/python scripts/seed_federated_auth.py      # Marcus vincu
 
 Desde la raíz. `MICROSOFT_IDP_MODE=mock` usa el simulador de la propia API (`/dev/mock-microsoft/authorize`); `microsoft` + `MICROSOFT_CLIENT_ID/SECRET/TENANT_ID` usa Entra real (single-tenant). Detalle en `docs/federated-auth/federated-auth.md`.
 
+### Registro de Auditoría
+
+```bash
+services/api/.venv/bin/python scripts/seed_audit_log.py          # 8 pacientes sintéticos + 8 cuentas + 72 entradas (idempotente) → data/audit_log/demo-users.db.json
+(cd services/api && SUPPLIERS_DB_PATH=../../data/audit_log/demo-users.db.json .venv/bin/uvicorn main:app --port 8000)
+(cd services/api && .venv/bin/python -m pytest tests/test_audit_log.py -o addopts="")   # 47
+(cd uis/backoffice && npx jest __tests__/audit.test.ts)                                  # 11
+```
+
+Desde la raíz. Necesita Supabase despierto (tablas `audit_log_entries`, `patient_records`, `patient_insurance_claims`). Pantallas `/audit-log` y `/patients`. Detalle en `docs/audit-log/audit-log.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -316,11 +327,11 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tes
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (425 tests, 42 de Roles y Permisos, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 15 del chat WebSocket, 13 de la auditoría OWASP, 21 del rate limiting, 17 de acciones irreversibles): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
+# Backend (523 tests, 47 del Registro de Auditoría, 42 de Roles y Permisos, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets, 11 del stream SSE, 15 del chat WebSocket, 13 de la auditoría OWASP, 21 del rate limiting, 17 de acciones irreversibles): desde services/api, con el venv activado. Ojo: pyproject.toml pone addopts="-q" y oculta la línea de resumen; usar -o addopts="" para verla
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (204 tests): desde uis/backoffice
+# Frontend (223 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -1026,6 +1037,34 @@ Gotchas y residuales:
 - `useRef` en el callback: React estricto ejecuta el efecto dos veces en dev y el `code` es de un solo uso.
 - Candados de proceso para unicidad del vínculo y consumo del `state` (un worker de uvicorn).
 - No probado contra un tenant de Entra real; el canje real se cubre con `httpx.MockTransport`. En modo simulado el `oid` aparece en el log de acceso de uvicorn (URL del simulador).
+
+### Registro de Auditoría — `docs/audit-log/audit-log.md`
+
+Plataforma – Registro de Auditoría, rama `feature/audit-log` apilada sobre `feature/federated-auth`, 2026-11-07. BRIEFING del currículo (`content/contexts/audit-log/`): el de Descargas era el de autenticación federada. Responde "quién, qué, cuándo, desde dónde" de cada acción sensible, sin PHI y sin poder alterarse.
+
+Mapa del código:
+- **`services/audit/`**: `catalog.py` (acciones → recurso, procesos, motivos de acceso, claves de `details`, formatos de ids opacos, `department_id(code)`), `models.py` (tabla `audit_log_entries` + guardas), `chain.py` (`compute_entry_hash`, `verify_chain`), `writer.py` (`record`, `commit_record`, actores, `request_origin`), `queries.py` (filtros + cursor), `anomalies.py`, `router.py` + `schemas.py` (`/audit-log`, solo GET).
+- **`services/patients/`**: módulo mínimo de pacientes SINTÉTICOS (decisión del usuario: el proyecto no tenía pacientes). `rules.py` (clínico solo equipo de cuidado; facturación también Revenue Cycle), `router.py` (`/patients`: ver con motivo, cambios clínicos/facturación, reclamaciones, asistente de documentación, exportación CSV), `seed_data.py`.
+- Instrumentado además: `routes/auth.py` (login ok/fallido), `routes/users.py`, `routes/access.py`, `services/onboarding/access.py` (agente), `services/financial_close/workflow.py` (agente). Capacidad nueva `audit:read` (rango 2).
+- Backoffice: `/audit-log` (visor con filtros, paginación, integridad para Admin, accesos inusuales, "quién accedió a mis pacientes"), `/patients`; `types/audit.ts`, `types/patients.ts`, `services/auditApi.ts`. `requestJson` admite `responseType: "text"` (CSV).
+
+Decisiones que conviene no romper:
+- **Append-only en tres capas**: router solo GET (test que recorre `app.routes`), eventos `before_update`/`before_delete` del mapper (`AuditLogImmutableError`) y triggers de BD (Postgres: UPDATE/DELETE/TRUNCATE + RLS + REVOKE a anon/authenticated; SQLite: `RAISE(ABORT)`). `ensure_audit_log_guards` se ejecuta en el arranque. Nunca escribir `update(AuditLogEntry)`/`delete(AuditLogEntry)`: hay un test que lo busca en todo el código.
+- **Toda escritura por `writer.record`** (sin commit: entra en la transacción del cambio). Lecturas de fichas: commit de la entrada ANTES de devolver datos (falla cerrado). Datos en TinyDB (usuarios, roles, departamentos): `commit_record` justo después del cambio. Login: excepción documentada, sigue sin Supabase y avisa por stderr.
+- **Sin PHI**: catálogo cerrado; `details` solo con claves permitidas; ids opacos (`PT-XXXXXXXX`, UUID, `CL-…`, hashes) validados por FORMATO y no por `phi_guard` (un UUID o `PT-AB1C2DE5` daban falsos positivos de teléfono/código postal); el resto sí pasa por `phi_guard`. `changed_fields` = nombres, nunca valores.
+- **Actor**: `human` (id de cuenta), `process` (nombre de `PROCESS_ACTORS` + `on_behalf_of`; origen `process:<nombre>:pid<n>`, sin nombre de máquina) o `anonymous` (login fallido, con huella HMAC). Los procesos calculan el id de departamento con `catalog.department_id` (mismo uuid5 que `access_models`; test lo fija).
+- **Alcance**: Admin todo; Supervisor su departamento (`department_scope`); Empleado sin visor, solo `/audit-log/my-patients` (sin IP ni hashes). Integridad solo Admin. Ser Admin NO da contenido clínico de otro departamento en `/patients`. La entrada lleva el departamento del paciente (equipo de cuidado), Revenue Cycle (facturación) o el de la cuenta afectada (usuarios); roles/departamentos sin departamento = solo Admin.
+- **Cadena**: `entry_hash` = SHA-256 del JSON canónico (incluye `sequence` y `prev_hash`); `occurred_at` como texto ISO fijo para que el hash sea idéntico en Postgres y SQLite. `pg_advisory_xact_lock` + índice único en `prev_hash`. Límite conocido: borrar las ÚLTIMAS entradas no se detecta desde dentro (la integridad devuelve la huella de cabeza para anotarla fuera).
+- **Accesos inusuales**: últimas 24 h frente a media diaria de 30 días (días sin accesos = 0). `is_unusual_access` (Learn by Doing **delegado**): `recent >= MIN_RECENT_ACCESSES (10)` y `recent >= RATIO_THRESHOLD (3) × media`.
+- **Semilla** idempotente por `details.seed_batch` (el registro no se puede vaciar para re-sembrar); entradas fechadas en el pasado con `occurred_at` (nunca futuro). Claire y Sandra son Admin (BRIEFING §3); en la semilla de Roles Claire era empleada.
+
+Gotchas reales:
+- `test_serialization.py` detectó la exportación CSV sin `response_class` + `responses` (prometía JSON).
+- Un test de la clase de Roles exige que la sección "Administración" del menú sea solo de Admin: el enlace al registro va en "Cumplimiento".
+- Tests de la raíz que crean solo sus tablas necesitan `AuditLogEntry.__table__` si tocan procesos auditados (ya en `FC_TABLES` y en el conftest de onboarding).
+- `EmailStr` rechaza el dominio `.test` (422): usar uno normal en tests.
+- Para verificar a mano con tokens sin login, cargar `services/api/.env` (si no, el JWT se firma con otro secreto y da 401).
+- Verificado contra Supabase real (2026-11-07): UPDATE/DELETE/TRUNCATE rechazados, 72 entradas íntegras, Tom ve a Leo marcado, Marcus 35 entradas, Claire 72. No verificado en Chrome.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

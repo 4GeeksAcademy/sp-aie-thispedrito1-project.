@@ -14,6 +14,9 @@ export function apiUrl(path: string): string {
 
 type RequestOptions = {
   authRequired?: boolean;
+  // "text": devuelve el cuerpo tal cual (exportación CSV de /patients/export)
+  // con el mismo manejo de errores, sesión y mensajes que el JSON.
+  responseType?: "json" | "text";
 };
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
@@ -162,6 +165,10 @@ export async function requestJson<T>(path: string, init?: RequestInit, options: 
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  if (options.responseType === "text") {
+    return (await response.text()) as T;
   }
 
   try {

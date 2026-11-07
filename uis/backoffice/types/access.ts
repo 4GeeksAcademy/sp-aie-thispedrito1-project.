@@ -11,7 +11,9 @@ export type Capability =
   | "records:delete"
   | "users:manage"
   | "access:manage"
-  | "departments:read_all";
+  | "departments:read_all"
+  // Registro de Auditoría: Supervisor (su departamento) y Admin (todo).
+  | "audit:read";
 
 export interface Role {
   id: string;

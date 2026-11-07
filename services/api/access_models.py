@@ -61,6 +61,9 @@ CAP_RECORDS_DELETE = "records:delete"
 CAP_USERS_MANAGE = "users:manage"
 CAP_ACCESS_MANAGE = "access:manage"  # roles y departamentos
 CAP_DEPARTMENTS_ALL = "departments:read_all"  # visibilidad cruzada
+# Registro de Auditoría (BRIEFING §3): Supervisor ve el de su departamento,
+# Admin el completo (vía CAP_DEPARTMENTS_ALL), Empleado no tiene visor.
+CAP_AUDIT_READ = "audit:read"
 
 CAPABILITY_MIN_RANK: dict[str, int] = {
     CAP_RECORDS_READ: 1,
@@ -71,6 +74,7 @@ CAPABILITY_MIN_RANK: dict[str, int] = {
     CAP_USERS_MANAGE: 3,
     CAP_ACCESS_MANAGE: 3,
     CAP_DEPARTMENTS_ALL: 3,
+    CAP_AUDIT_READ: 2,
 }
 
 # El rol base que exige cada rango, para el cuerpo del 403 ("required_role").

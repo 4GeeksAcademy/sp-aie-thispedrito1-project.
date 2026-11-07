@@ -38,7 +38,10 @@ from services.onboarding.models import (  # noqa: E402
     OnboardingStaff,
 )
 
+from services.audit.models import AuditLogEntry  # noqa: E402
+
 ONBOARDING_TABLES = [
+    AuditLogEntry.__table__,  # Registro de Auditoría: los accesos del agente se auditan
     OnboardingStaff.__table__,
     OnboardingHire.__table__,
     OnboardingAuditEvent.__table__,

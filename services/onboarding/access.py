@@ -20,6 +20,8 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from services.audit import catalog as audit_catalog
+from services.audit.writer import Actor, human_actor, process_actor, record as audit_record
 from services.onboarding import repository
 from services.onboarding.catalog import (
     ACTOR_AGENT,
@@ -46,6 +48,15 @@ class AccessBlockedError(PermissionError):
 
 def compliance_approved(hire: OnboardingHire) -> bool:
     return hire.compliance_approved_at is not None
+
+
+def _audit_actor(actor_type: str, actor_user_id: Optional[str]) -> Actor:
+    """El agente de incorporaciones es un PROCESO; una persona del equipo de
+    Personas es humana. Sin petición HTTP aquí: el origen de la persona es el
+    servicio, no su IP."""
+    if actor_type == ACTOR_HUMAN and actor_user_id:
+        return human_actor(actor_user_id, "service:onboarding")
+    return process_actor(audit_catalog.PROCESS_ONBOARDING_AGENT, on_behalf_of=actor_user_id)
 
 
 def issue_access_request(
@@ -112,6 +123,16 @@ def issue_access_request(
             session, hire, key=key, stage=hire.current_stage, kind="access_blocked",
             recipient_role=RECIPIENT_HIRE, params={"system": system_key},
         )
+        session.flush()
+        audit_record(
+            session,
+            actor=_audit_actor(actor_type, actor_user_id),
+            action="access_request_blocked",
+            resource_id=str(request.id),
+            department_id=audit_catalog.department_id("people_workforce"),
+            outcome=audit_catalog.OUTCOME_BLOCKED,
+            details={"system_key": system_key, "hire_ref": str(hire.hire_id)},
+        )
         session.commit()
         session.refresh(request)
         raise AccessBlockedError(request)
@@ -133,5 +154,14 @@ def issue_access_request(
         actor_type=actor_type,
         actor_user_id=actor_user_id,
         outcome=system_key,
+    )
+    session.flush()
+    audit_record(
+        session,
+        actor=_audit_actor(actor_type, actor_user_id),
+        action="access_request_issued",
+        resource_id=str(request.id),
+        department_id=audit_catalog.department_id("people_workforce"),
+        details={"system_key": system_key, "hire_ref": str(hire.hire_id)},
     )
     return request

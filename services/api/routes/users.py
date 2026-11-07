@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlmodel import Session
 
 from access_models import CAP_USERS_MANAGE, AdminUserCreate, UserAssignment
 from audit_log import audit_event
 from auth_repository import AuthRepository
+from database import get_inventory_db
 from models import UserListItem, UserPublic, UserRegistered, UserUpdate
 from permissions import require_capability
 from security import access_repo, ensure_self_or_admin, get_current_user, hash_password, resolve_access
+from services.audit.writer import commit_record, human_actor, request_origin
 
 router = APIRouter(prefix="/users", tags=["users"])
 auth_repo = AuthRepository()
@@ -31,6 +34,27 @@ def _validate_assignment_ids(role_id: str | None, department_id: str | None) -> 
         raise _field_errors(errors)
 
 
+def _audit(
+    session: Session,
+    request: Request,
+    actor: dict[str, Any],
+    action: str,
+    target: dict[str, Any],
+    **details: Any,
+) -> None:
+    """Registro de Auditoría: la entrada va al departamento de la cuenta
+    AFECTADA, para que el Supervisor de ese departamento vea los cambios de
+    su equipo. Nunca el email ni el nombre: solo ids y códigos."""
+    commit_record(
+        session,
+        actor=human_actor(str(actor["id"]), request_origin(request)),
+        action=action,
+        resource_id=str(target["id"]),
+        department_id=target.get("department_id"),
+        details={"target_user": str(target["id"]), **details},
+    )
+
+
 def _list_item(user: dict[str, Any]) -> UserListItem:
     resolved = resolve_access(user)
     profile = auth_repo.get_profile_by_user_id(user["id"]) or {}
@@ -38,7 +62,12 @@ def _list_item(user: dict[str, Any]) -> UserListItem:
 
 
 @router.post("", response_model=UserRegistered, status_code=status.HTTP_201_CREATED)
-def create_user(payload: AdminUserCreate, _: dict[str, Any] = Depends(require_user_admin)) -> UserRegistered:
+def create_user(
+    payload: AdminUserCreate,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_user_admin),
+    session: Session = Depends(get_inventory_db),
+) -> UserRegistered:
     """Alta de cuentas: solo admin (BRIEFING de Roles y Permisos).
 
     Antes era un registro público que creaba rol `user`. Ahora rol y
@@ -55,6 +84,16 @@ def create_user(payload: AdminUserCreate, _: dict[str, Any] = Depends(require_us
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    resolved = resolve_access(user)
+    _audit(
+        session,
+        request,
+        current_user,
+        "user_created",
+        resolved,
+        to_role=resolved["role"],
+        to_department=resolved["department"],
+    )
     return UserRegistered(id=user["id"], created_at=user["created_at"])
 
 
@@ -76,7 +115,13 @@ def get_user(user_id: str, current_user: dict[str, Any] = Depends(get_current_us
 
 
 @router.put("/{user_id}", response_model=UserPublic)
-def update_user(user_id: str, payload: UserUpdate, current_user: dict[str, Any] = Depends(get_current_user)) -> UserPublic:
+def update_user(
+    user_id: str,
+    payload: UserUpdate,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    session: Session = Depends(get_inventory_db),
+) -> UserPublic:
     ensure_self_or_admin(user_id, current_user)
     try:
         updated = auth_repo.update_user(user_id, email=str(payload.email) if payload.email else None)
@@ -86,14 +131,18 @@ def update_user(user_id: str, payload: UserUpdate, current_user: dict[str, Any] 
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return UserPublic.model_validate(resolve_access(updated))
+    resolved = resolve_access(updated)
+    _audit(session, request, current_user, "user_updated", resolved, changed_fields=sorted(payload.model_dump(exclude_none=True)))
+    return UserPublic.model_validate(resolved)
 
 
 @router.patch("/{user_id}/assignment", response_model=UserListItem)
 def assign_user(
     user_id: str,
     payload: UserAssignment,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_user_admin),
+    session: Session = Depends(get_inventory_db),
 ) -> UserListItem:
     """Cambia `role_id` y/o `department_id` de forma independiente.
 
@@ -128,13 +177,40 @@ def assign_user(
         from_department=before["department"],
         to_department=after["department"],
     )
+    _audit(
+        session,
+        request,
+        current_user,
+        "user_assignment_changed",
+        after,
+        from_role=before["role"],
+        to_role=after["role"],
+        from_department=before["department"],
+        to_department=after["department"],
+    )
     return _list_item(updated or target)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: str, _: dict[str, Any] = Depends(require_user_admin)) -> Response:
+def delete_user(
+    user_id: str,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_user_admin),
+    session: Session = Depends(get_inventory_db),
+) -> Response:
+    target = auth_repo.get_user_by_id(user_id)
     deleted = auth_repo.delete_user(user_id)
-    if not deleted:
+    if not deleted or not target:
         raise HTTPException(status_code=404, detail="User not found")
+    resolved = resolve_access(target)
+    _audit(
+        session,
+        request,
+        current_user,
+        "user_deleted",
+        resolved,
+        from_role=resolved["role"],
+        from_department=resolved["department"],
+    )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

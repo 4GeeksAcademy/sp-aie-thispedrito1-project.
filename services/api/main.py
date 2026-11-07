@@ -52,6 +52,9 @@ from services.supplier_contracts.router import router as supplier_contracts_rout
 from services.financial_close.router import router as financial_close_router  # noqa: E402  (registra las tablas fc_*)
 from services.rfp_intake.events import install_shutdown_signal_hook, shutdown_hub as shutdown_rfp_event_hub  # noqa: E402
 from services.tasks.router import router as tasks_router  # noqa: E402
+from services.audit.router import router as audit_log_router  # noqa: E402  (registra audit_log_entries)
+from services.audit.models import ensure_audit_log_guards  # noqa: E402
+from services.patients.router import router as patients_router  # noqa: E402  (registra patient_records y claims)
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
 from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
 from data.pipelines.rfp_intake.models import ensure_rfp_response_columns  # noqa: E402
@@ -118,6 +121,8 @@ app.include_router(rfp_intake_router)
 app.include_router(onboarding_router)
 app.include_router(supplier_contracts_router)
 app.include_router(financial_close_router)
+app.include_router(patients_router)
+app.include_router(audit_log_router)
 
 timing_logger = logging.getLogger("api.timing")
 
@@ -168,6 +173,9 @@ def init_inventory_schema() -> None:
         SQLModel.metadata.create_all(get_inventory_engine())
         # rfp_* already existed before Part 2 of the RFP milestone added columns.
         ensure_rfp_response_columns(get_inventory_engine())
+        # Registro de Auditoría: create_all no reinstala los triggers que
+        # impiden UPDATE/DELETE si la tabla ya existía. Idempotente.
+        ensure_audit_log_guards(get_inventory_engine())
     except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
         print(f"[inventory] skipping schema init: {exc}", file=sys.stderr)
 

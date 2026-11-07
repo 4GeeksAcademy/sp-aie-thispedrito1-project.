@@ -23,6 +23,8 @@ from typing import Any, Optional
 
 from sqlmodel import Session
 
+from services.audit import catalog as audit_catalog
+from services.audit.writer import process_actor, record as audit_record
 from services.financial_close import ingestion, report, repository
 from services.financial_close.agent import CloseAgent
 from services.financial_close.catalog import (
@@ -123,6 +125,22 @@ def run_close(session: Session, engine, period: date, *, trigger: str, comments:
     session.add(row)
     session.flush()
     _notify_reviewer(session, row)
+    # Registro de Auditoría: el agente de cierre lee el ledger (que puede
+    # traer un registro con datos de un paciente, ver sensitive.py) y produce
+    # un informe. Actor = PROCESO, en la misma transacción que el informe.
+    audit_record(
+        session,
+        actor=process_actor(audit_catalog.PROCESS_FINANCIAL_CLOSE_AGENT),
+        action="financial_report_prepared",
+        resource_id=str(row.id),
+        department_id=audit_catalog.department_id("revenue_cycle"),
+        details={
+            "period": period.isoformat(),
+            "version": row.version,
+            "trigger": trigger,
+            "figures_sha256": row.figures_sha256,
+        },
+    )
     session.commit()
     session.refresh(row)
     log.record(AGENT_ACTOR, "prepare_report", "ok", report_id=str(row.id), period=period.isoformat(),

@@ -217,6 +217,12 @@
   - **Desvinculacion**: aviso + 409 si Microsoft es el unico metodo (cuenta sin contrasena). `unlink_block_reason` fue Learn by Doing delegado.
   - **Auditoria**: tabla `federated_audit_events` (GET `/auth/federated/audit`, admin) + `healthcore.audit` con seudonimos. 4 eventos del BRIEFING + `federated_link_rejected`.
   - **Tests:** 49 en `test_federated_auth.py`, backend 476; Jest 212 (+8); `tsc` y `next build` limpios. Verificado en Chrome con el simulador (rechazo, vinculacion, login, aviso de ultimo metodo). No probado contra un tenant Entra real.
+- Registro de auditoria (Plataforma, rama `feature/audit-log` apilada sobre `feature/federated-auth`, 2026-11-07). Detalle en `docs/audit-log/audit-log.md`.
+  - **Tabla `audit_log_entries` en Supabase, append-only en tres capas**: API solo GET, eventos del mapper que lanzan `AuditLogImmutableError`, y triggers de BD (UPDATE/DELETE/TRUNCATE en Postgres, verificado contra Supabase real; RLS + REVOKE a anon/authenticated). Encadenamiento SHA-256 con `prev_hash`; `verify_chain` recalcula y dice el eslabon roto (tampered/broken_link/missing).
+  - **Modulo minimo de pacientes SINTETICOS** (`/patients`, decision del usuario): el proyecto no tenia pacientes y el BRIEFING pide auditar lecturas con motivo, cambios clinicos/facturacion, reclamaciones y exportaciones. Clinico solo para el equipo de cuidado (Admin incluido: no ve contenido clinico ajeno); facturacion para Revenue Cycle.
+  - **Actores**: persona, proceso (asistente de documentacion, agente de incorporaciones, agente de cierre) o anonimo (login fallido). Capacidad nueva `audit:read` (rango 2).
+  - **Extras del BRIEFING** (decision del usuario): deteccion de accesos inusuales y "quien accedio a mis pacientes" para Empleado. `is_unusual_access` fue Learn by Doing delegado (minimo 10 en 24 h y >= 3x la media).
+  - **Tests:** 47 en `test_audit_log.py`, backend 523; onboarding 72, cierre 91; Jest 223 (+11); `tsc` y `next build` limpios. Verificado contra Supabase real (triggers, cadena de 72, alcance por rol, anomalia de Leo). No verificado en Chrome.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
@@ -241,9 +247,10 @@
 12. Recomendación de ingesta, fuera del pipeline: índice único sobre `tags->>'eventId'` en `telemetry_events` con `ON CONFLICT DO NOTHING`, previa limpieza de duplicados. Hoy `POST /telemetry/events` no deduplica y un reintento tras timeout duplica eventos.
 13. Cola de tareas (#DEV-55): construir y probar `docker compose up -d --build redis worker flower` cuando haya disco; valorar mover a Celery otras operaciones lentas (p. ej. `POST /api/incidents/analyze` si crece el CSV, guardando el archivo y encolando solo su ruta) y proteger Flower con `--basic-auth` si se expone fuera de localhost.
 14. Seguridad (pendientes de la auditoria OWASP, §6 del informe): migrar a LangGraph 1.x (deserializacion de checkpoints), limite de intentos de login, `clinic_id` en usuarios y filtro en tools del agente, autorizacion por rol en la firma de RFP, cookie HttpOnly + CSP, imagen de produccion sin Swagger ni `--reload`, `uis` sin root, subir Starlette/Pillow, proveedor LLM con BAA/DPA, python-jose -> PyJWT.
-15. Seguridad (pendientes del informe NIST, §6): P0 BAA/DPA con el proveedor LLM y con Supabase antes de datos reales; rate limiting a Redis si hay varios workers; alertas sobre los contadores de guardarrailes; citar siempre la politica en respuestas regulatorias; auditar tambien las lecturas; plan de incidentes y RTO/RPO aprobados por Compliance.
+15. Seguridad (pendientes del informe NIST, §6): P0 BAA/DPA con el proveedor LLM y con Supabase antes de datos reales; rate limiting a Redis si hay varios workers; alertas sobre los contadores de guardarrailes; citar siempre la politica en respuestas regulatorias; auditar tambien las lecturas (hecho para fichas de pacientes en el registro de auditoria del 2026-11-07); plan de incidentes y RTO/RPO aprobados por Compliance.
 
 ## Riesgos activos
+- Registro de auditoria: borrar las ULTIMAS entradas no se detecta desde la cadena (hace falta anclar la huella de cabeza fuera del sistema; el visor la muestra). El dueno de la tabla (`postgres`) podria desactivar los triggers: lo deja a la vista la cadena. El login federado aun no escribe en `audit_log_entries` (sigue en `federated_audit_events`).
 - Worker de Celery nativo en macOS: con el pool por defecto (prefork) cada tarea muere antes de ejecutarse (`ValueError` en `fast_trace_task`); usar `--pool=solo`. Causa no investigada.
 - Supabase gratuito se pausa tras ~7 dias sin uso (`tenant/user ... not found`): reactivarlo desde el dashboard antes de verificar.
 - Dependencia operativa de API externa para CRUD.

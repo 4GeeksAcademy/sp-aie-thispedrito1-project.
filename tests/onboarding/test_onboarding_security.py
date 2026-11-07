@@ -168,3 +168,28 @@ def test_sensitive_data_never_reaches_logs_db_checkpoints_prompts_or_messages(se
             assert secret not in text, f"{secret} apareció en {where}"
     assert prompts and "[ID number removed]" in prompts[0][1]["content"]
     assert any(e.action == "sensitive_data_redacted" for e in repository.list_audit(session, hire.hire_id))
+
+
+# --- Registro de Auditoría: el agente queda como PROCESO -----------------------------
+
+def test_access_requests_reach_the_audit_log_with_the_right_actor(session, driver):
+    from sqlmodel import select
+
+    from services.audit import catalog as audit_catalog
+    from services.audit.chain import verify_chain
+    from services.audit.models import AuditLogEntry
+
+    hire = driver.to_stage(new_hire(session, hire_user_id="hire-audit"), 2)
+    with pytest.raises(access.AccessBlockedError):
+        access.issue_access_request(session, hire, "ehr_epic", requested_by_type="agent")
+    access.issue_access_request(session, hire, "slack", requested_by_type="human", actor_user_id="hire-audit")
+    session.commit()
+
+    entries = session.exec(select(AuditLogEntry).order_by(AuditLogEntry.sequence)).all()
+    by_action = {entry.action: entry for entry in entries}
+    blocked = by_action["access_request_blocked"]
+    assert (blocked.actor_type, blocked.actor_id, blocked.outcome) == ("process", "onboarding_agent", "blocked")
+    assert blocked.department_id == audit_catalog.department_id("people_workforce")
+    issued = by_action["access_request_issued"]
+    assert (issued.actor_type, issued.actor_id) == ("human", "hire-audit")
+    assert verify_chain(entries).ok
