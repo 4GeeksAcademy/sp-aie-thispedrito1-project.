@@ -28,6 +28,14 @@ eval-type-backport==0.2.2; python_version < "3.10"
 # checkpointing y trace. Se mantiene 0.6.11 tras pasar el venv a Python 3.12:
 # acepta el langchain-core 1.x que exige langchain-mcp-adapters.
 langgraph==0.6.11
+# Aprobación humana de RFPs (Hito 9, Parte 3): checkpointer de LangGraph en
+# Supabase (Postgres), para que el grafo se pause por departamento y se
+# reanude desde otro proceso. 3.0.5 es la última que acepta el
+# langgraph-checkpoint 3.x de langgraph 0.6.11 (la 3.2 exige el 4.x). Usa
+# psycopg 3 (el resto de la API sigue con psycopg2).
+langgraph-checkpoint==3.0.1
+langgraph-checkpoint-postgres==3.0.5
+psycopg[binary]==3.3.6
 # Servidor MCP con OAuth (mcps/healthcore): SDK oficial de MCP (trae FastMCP en
 # mcp.server.fastmcp y el transporte Streamable HTTP), MCP Auth como resource
 # server OAuth 2.1 y el adaptador con el que el agente LangGraph consume el

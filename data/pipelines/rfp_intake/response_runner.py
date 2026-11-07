@@ -48,6 +48,8 @@ from data.pipelines.rfp_intake.response_graph import (
     compile_response_graph,
 )
 from data.pipelines.rfp_intake.runner import HANDOFF_VERSION
+from data.pipelines.rfp_intake.trace import entry as trace_entry
+from data.pipelines.rfp_intake.trace import text_digest
 
 logger = logging.getLogger("healthcore.rfp_intake")
 
@@ -64,10 +66,37 @@ class HandoffError(ValueError):
 class TicketProgress:
     """`on_progress` del grafo → filas de Supabase."""
 
-    def __init__(self, engine: Any, ticket_id: uuid.UUID) -> None:
+    def __init__(self, engine: Any, ticket_id: uuid.UUID, run_id: str = "") -> None:
         self._engine = engine
         self._ticket_id = ticket_id
+        # Cada corrida (reintento de Celery, reproceso) deja su propio rastro.
+        self._run_id = run_id or uuid.uuid4().hex
         self._lock = threading.Lock()
+
+    def _trace(self, department_id: str, event: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Paso de la Parte 2 para `rfp_trace_events`: el generador al
+        entregar su borrador y los evaluadores al emitir su veredicto."""
+        iteration = data["iteration"]
+        if event == EVENT_EVALUATING:
+            return trace_entry(
+                key=(str(self._ticket_id), "p2", self._run_id, "generate", department_id, iteration),
+                part=2, node="generate", agent=f"generator:{department_id}", department_id=department_id,
+                input={"iteration": iteration, "with_feedback": iteration > 1},
+                output={"draft": text_digest(data["draft"])},
+            )
+        evaluation = data["evaluation"]
+        return trace_entry(
+            key=(str(self._ticket_id), "p2", self._run_id, "judge", department_id, iteration),
+            part=2, node="judge", agent="evaluators:readability+relevance+compliance", department_id=department_id,
+            input={"iteration": iteration, "draft": text_digest(data["draft"])},
+            output={
+                "overall_pass": evaluation["overall_pass"],
+                "readability_pass": evaluation["readability"]["pass"],
+                "relevance_pass": evaluation["relevance"]["pass"],
+                "compliance_rule_ids_failed": sorted({v["rule_id"] for v in evaluation["compliance"]["violations"]}),
+                "contains_phi": evaluation["compliance"]["contains_phi"],
+            },
+        )
 
     def __call__(self, department_id: str, event: str, data: Dict[str, Any]) -> None:
         if event == EVENT_DRAFTING:
@@ -83,6 +112,8 @@ class TicketProgress:
                 repository.record_section_progress(
                     session, self._ticket_id, department_id, iteration=data["iteration"], **fields
                 )
+                if event != EVENT_DRAFTING:
+                    repository.insert_trace_events(session, self._ticket_id, [self._trace(department_id, event, data)])
         except Exception as exc:  # noqa: BLE001 — el progreso no debe tumbar la generación
             logger.warning(
                 "rfp_response_progress_write_failed ticket=%s department=%s error_type=%s",

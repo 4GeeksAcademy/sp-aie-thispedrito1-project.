@@ -178,9 +178,12 @@ cd uis/backoffice && npm run dev -- --port 3001                                 
 services/api/.venv/bin/python scripts/make_phi_test_rfp.py                                    # PDF del caso 4 (PHI ficticia)
 services/api/.venv/bin/python scripts/reprocess_rfp.py <ticket_id> [--inline]                 # reprocesar un ticket
 services/api/.venv/bin/python scripts/generate_rfp_response.py <ticket_id> [--inline]          # (re)lanzar la Parte 2 (borradores)
+services/api/.venv/bin/python scripts/advance_rfp_approval.py <ticket_id> [--inline]           # (re)lanzar la Parte 3 (aprobación)
+services/api/.venv/bin/python scripts/run_rfp_e2e.py --offline                                 # E2E Partes 1→3 sin red, aprobaciones simuladas
+services/api/.venv/bin/python scripts/run_rfp_e2e.py --live data/raw/rfp/samples/healthcore-request-2.pdf   # E2E real (deepseek + Supabase)
 ```
 
-La Parte 2 (borradores + evaluación) arranca sola en el worker cuando un ticket llega a `analisis_completo`. Las columnas nuevas de `rfp_*` las crea la API al arrancar (`ensure_rfp_response_columns`).
+La Parte 2 (borradores + evaluación) arranca sola en el worker cuando un ticket llega a `analisis_completo`, y la Parte 3 (aprobación) cuando la Parte 2 termina. Las columnas y tablas nuevas de `rfp_*` las crea la API al arrancar (`create_all` + `ensure_rfp_response_columns`); el script `--live` no arranca la API, así que en una base nueva hay que arrancarla una vez antes. Los PDF de muestra están copiados en `data/raw/rfp/samples/` (solo en local: `data/raw/rfp/` está en `.gitignore`).
 
 Los PDF de muestra están en el repo del currículo (`content/contexts/09-agentic-workflows/rfp-requests/healthcore/`). Requiere `markitdown[pdf]` y `py-readability-metrics` (en `services/api/requirements.txt`); el tokenizador `punkt_tab` de NLTK se descarga solo dentro del venv la primera vez. Detalle en `docs/rfp-intake.md`.
 
@@ -208,14 +211,17 @@ services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_intake.py
 # Tests de la generación y evaluación de respuestas a RFP (49: generadores, 3 evaluadores, reglas del BRIEFING, ciclo con límite, progreso en vivo, encadenamiento Celery): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_response.py
 
+# Tests de la aprobación humana y cierre de RFPs (39: interrupt/resume, B aprobado con A pausado, límites, arbitraje, validación, concurrencia, reintento) + E2E Partes 1→3 (1): desde la RAÍZ
+services/api/.venv/bin/python -m pytest tests/pipelines/test_rfp_approval.py tests/pipelines/test_rfp_e2e.py
+
 # Tests del pipeline RAG (21: chunking real, setup idempotente en QdrantClient(":memory:"), retrieve/query con mocks): desde la RAÍZ
 services/api/.venv/bin/python -m pytest tests/pipelines/test_rag.py
 
-# Backend (258 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 12 de /rfp-tickets): desde services/api, con el venv activado
+# Backend (264 tests, 44 del servidor MCP, 16 de la memoria del agente, 6 del harness, 18 de /rfp-tickets): desde services/api, con el venv activado
 python -m pytest            # o: uv run pytest (en Codespaces)
 python -m pytest --cov      # cobertura: auth ≥70%, backoffice ≥60%, total ~77% (bajó de ~81% al sumar telemetría: rutas de startup con Supabase real, dificiles de cubrir sin conexión — no hay --cov-fail-under que lo bloquee)
 
-# Frontend (110 tests): desde uis/backoffice
+# Frontend (119 tests): desde uis/backoffice
 npm test                    # o: npx jest --coverage
 ```
 
@@ -674,6 +680,32 @@ Gotchas reales (solo los destapó el modelo real, con test de regresión):
 - **"3.000" español** se marcaba como cifra inventada frente al "3,000" de la RFP y el generador borraba un dato verdadero: se normaliza antes de comparar (sin tocar `numbers_in` de la Parte 1).
 - Efecto "tapar un agujero, abrir otro" en Clinical (sus `key_aspects` son tareas internas): lo absorbe el límite + `needs_human_review`.
 - El proxy corta llamadas a los 60 s (`APITimeoutError`): con `--inline` no hay reintento y el ticket queda `error`.
+
+### Aprobación humana y cierre de RFPs — `docs/rfp-approval.md`
+
+Hito 9 (Parte 3 de 3), rama `feature/rfp-approval-completion` apilada sobre `feature/rfp-response-generation`, 2026-10-21. Cada responsable del BRIEFING (Tom Callahan, Dr. Marcus Reid, Claire Whitfield) aprueba, pide cambios o rechaza su sección por separado; con todo aprobado (Compliance siempre) el documento final se genera solo y el ticket pasa a `terminado`.
+
+Mapa del código (`data/pipelines/rfp_intake/`):
+- `approval_graph.py`: grafo `rfp_approval` (`open_approval` → Send por departamento → `arbitrate` → `synthesize_final_document` | `close_without_document`) y subgrafo `rfp_department_approval` (`screen_section` → `request_approval` con `interrupt()` → `revise_section`, que reutiliza el ciclo generador-evaluador de la Parte 2).
+- `approval_runner.py`: `advance` (único punto de entrada: start | resume | retry | sync, idempotente, con advisory lock por ticket), `submit_section_decision`/`submit_arbitration_decision` (API y simulación E2E por el mismo camino) y `sync` (estado del grafo → filas).
+- `arbitration.py` (triggers del BRIEFING §7 y árbitro fijo), `decisions.py` (validación de la respuesta humana, PHI en comentarios incluido), `final_document.py` (synthesizer sin LLM), `checkpointer.py` (Postgres) y `trace.py`.
+- `services/tasks/rfp_tasks.py`: `rfp_approval.advance_ticket`, encadenada desde la Parte 2. `services/rfp_intake/`: `POST …/sections/{dept}/decision`, `POST …/arbitration`, `GET …/final-document`, `GET …/trace`. Backoffice: formulario de decisión, panel de arbitraje, documento final (descarga .md) y trazabilidad en `/rfps/[id]`.
+
+Decisiones que conviene no romper:
+- **Checkpointer Postgres en Supabase** (decisión del usuario), hilo `rfp-{ticket_id}`; las ramas se separan por `checkpoint_ns`. `prepare_threshold=None` por el pooler en modo transacción. Versiones fijadas: `langgraph-checkpoint==3.0.1` + `langgraph-checkpoint-postgres==3.0.5` (la 3.2 exige 4.x, que `langgraph` 0.6.11 no acepta).
+- **La pausa es por rama**: `interrupt()` dentro del subgrafo del departamento y `Command(resume={interrupt_id: …})` solo para quien decidió. Lo anterior a un `interrupt()` debe ser puro (LangGraph lo reejecuta al reanudar). El grafo no toca la base de datos.
+- **La decisión no viaja por Redis**: la API la valida contra la petición del grafo, la guarda en `pending_decision` y encola solo el `ticket_id`; el worker la revalida (huella del borrador incluida) antes del resume.
+- **Límites en código**: 2 rondas de cambios por sección y 2 de arbitraje. **Rechazar o agotar el arbitraje → `descartado`** (decisión del usuario; `discard_reason` `rejected_in_approval` / `arbitration_limit`).
+- **Arbitraje sin LLM**: PHI y BAA/DPA salen del evaluador de cumplimiento de la Parte 2 (regla de Claire); capacidad sale de `confirmed_capacity` (número que Clinical escribe al aprobar) frente a `covered_population` (decide Tom). Los regulatorios van primero.
+- **Firma**: cualquier usuario autenticado, en nombre del responsable del BRIEFING; `decided_by` guarda quién pulsó (decisión del usuario).
+- **Traza de las tres partes** en `rfp_trace_events` (agente, entrada, salida, timestamp; sin texto libre, `event_id` determinista). La Parte 1 usa `graph.stream` en vez de `invoke` para tener la hora real de cada nodo.
+
+Gotchas reales:
+- **LangGraph 0.6 deja datos viejos en `get_state`**: lista pausas ya resueltas (una pausa está viva solo si su tarea no tiene `result`) y una tarea reintentada con éxito conserva su `error` (solo cuenta si el ticket está en `error`; `advance` lo marca al fallar).
+- **`GET /response-handoff` daba 409 en cuanto arrancaba la Parte 3**: ahora responde mientras exista el handoff (mismo salto que corrigió la Parte 2 en `/handoff`).
+- **La pantalla dejaba de consultar durante un reintento de Celery** (el ticket pasa por `error`): `shouldPollTicket` sigue si hay una sección "en revisión". Lo detectó el recorrido en Chrome.
+- **Token local para verificar en Chrome**: `create_access_token(subject=<id UUID del usuario>)`, no la clave "1" de la TinyDB (da 401).
+- **Los fixtures SQLite de las Partes 1 y 2 crean ya todo el esquema RFP** (`rfp_fixtures.RFP_TABLES`): el reproceso limpia también el documento final.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

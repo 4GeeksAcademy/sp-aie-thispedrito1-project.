@@ -453,7 +453,8 @@ def test_graph_with_phi_never_calls_the_model():
 # Runner + persistencia (SQLite en memoria)
 # --------------------------------------------------------------------------
 
-RFP_TABLES = [RfpTicket.__table__, RfpMetadata.__table__, RfpDepartmentSection.__table__]
+# Todo el esquema RFP (las Partes 2 y 3 limpian también documento final y trace al reprocesar).
+from rfp_fixtures import RFP_TABLES  # noqa: E402
 
 
 @pytest.fixture()

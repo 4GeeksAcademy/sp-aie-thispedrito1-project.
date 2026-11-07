@@ -39,15 +39,29 @@ STATUS_DRAFTING = "generando_borrador"
 STATUS_EVALUATING = "en_evaluación"
 STATUS_NEEDS_REVIEW = "needs_human_review"
 STATUS_EVALUATED = "evaluacion_completa"
+# Parte 3 (README + BRIEFING §2.3), nombres literales.
+STATUS_AWAITING_APPROVAL = "esperando_aprobación"
+STATUS_FINISHED = "terminado"
 STATUSES = (
     STATUS_ANALYZING, STATUS_DISCARDED, STATUS_COMPLETE, STATUS_ERROR,
     STATUS_DRAFTING, STATUS_EVALUATING, STATUS_NEEDS_REVIEW, STATUS_EVALUATED,
+    STATUS_AWAITING_APPROVAL, STATUS_FINISHED,
 )
 # Estados en los que un worker está trabajando: `recover_stale` los vigila.
+# `esperando_aprobación` no está: ahí se espera a personas, no a un worker, y
+# puede durar días sin que nada vaya mal.
 IN_PROGRESS_STATUSES = (STATUS_ANALYZING, STATUS_DRAFTING, STATUS_EVALUATING)
+# Estados con los que la Parte 2 entrega el ticket a la Parte 3.
+APPROVAL_ENTRY_STATUSES = (STATUS_EVALUATED, STATUS_NEEDS_REVIEW)
 
 DISCARD_NOT_RFP = "not_rfp"
 DISCARD_PHI = "phi_detected"
+# Parte 3 (decisión del usuario, 2026-10-21): "Rechazar" significa que el
+# departamento se niega a firmar y la propuesta se descarta. Agotar las rondas
+# de arbitraje sin resolver el conflicto termina igual. Se reutiliza
+# `descartado` (estado de la Parte 1) en vez de inventar uno nuevo.
+DISCARD_REJECTED = "rejected_in_approval"
+DISCARD_ARBITRATION_LIMIT = "arbitration_limit"
 
 # Siguiente etapa del mismo ticket: la recogerá la Parte 2 (generadores).
 NEXT_STAGE_DRAFTING = "generando_borrador"
@@ -61,6 +75,23 @@ SECTION_DRAFTING = STATUS_DRAFTING
 SECTION_EVALUATING = STATUS_EVALUATING
 SECTION_PASSED = "aprobada_por_evaluadores"
 SECTION_NEEDS_REVIEW = STATUS_NEEDS_REVIEW
+
+# Aprobación humana de cada sección (Parte 3, `approval_status`).
+APPROVAL_PENDING = "pendiente"                 # interrumpida: espera al responsable
+APPROVAL_DECISION_RECORDED = "decision_registrada"  # la API la guardó; el worker la aplica
+APPROVAL_REVISING = "en_revisión"              # el generador de la Parte 2 la reescribe
+APPROVAL_BLOCKED = "bloqueada"                 # un trigger del BRIEFING §7 la frenó antes del humano
+APPROVAL_APPROVED = "aprobada"
+APPROVAL_REJECTED = "rechazada"
+APPROVAL_CANCELLED = "cancelada"               # otro departamento rechazó la propuesta
+
+# Decisiones humanas (README: aprobar, rechazar o solicitar cambios). `cancel`
+# solo lo genera el sistema, nunca llega desde la API.
+DECISION_APPROVE = "approve"
+DECISION_REQUEST_CHANGES = "request_changes"
+DECISION_REJECT = "reject"
+DECISION_CANCEL = "cancel"
+HUMAN_DECISIONS = (DECISION_APPROVE, DECISION_REQUEST_CHANGES, DECISION_REJECT)
 
 
 def utcnow() -> datetime:
@@ -95,6 +126,11 @@ class RfpTicket(SQLModel, table=True):
     # Parte 1 y la Parte 2 lo lee, nunca lo pisa.
     response_handoff: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
     response_task_id: Optional[str] = Field(default=None, max_length=64)
+    # Parte 3: hilo del checkpointer (`rfp-{ticket_id}`), última tarea y el
+    # arbitraje en curso (trigger, árbitro, petición y decisión pendiente).
+    approval_thread_id: Optional[str] = Field(default=None, max_length=80)
+    approval_task_id: Optional[str] = Field(default=None, max_length=64)
+    arbitration: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
     created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     updated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
@@ -158,21 +194,84 @@ class RfpDepartmentSection(SQLModel, table=True):
     draft_iterations: int = Field(default=0)
     drafted_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     approval_status: Optional[str] = Field(default=None, max_length=32)
+    # `approver` es el responsable nombrado del BRIEFING §2.1 (en cuyo nombre
+    # se firma); `decided_by`, el user_id que pulsó el botón (auditoría).
     approver: Optional[str] = Field(default=None, max_length=64)
     approved_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    # Parte 3. `approval_request` = lo mínimo para decidir (payload del
+    # interrupt); `pending_decision` = decisión validada que el worker aún no
+    # aplicó. Los comentarios pasan antes por el detector de PHI.
+    approval_request: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
+    pending_decision: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
+    approval_round: int = Field(default=0)
+    approval_history: List[dict[str, Any]] = Field(default_factory=list, sa_column=_json_column())
+    approval_comments: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    decided_by: Optional[str] = Field(default=None, max_length=64)
+    confirmed_capacity: Optional[int] = None
 
 
-# Columnas añadidas por la Parte 2 a tablas que la Parte 1 ya creó en
+class RfpFinalDocument(SQLModel, table=True):
+    """FinalDocument del BRIEFING §2.3: solo existe cuando todos los
+    departamentos aprobaron (y Compliance siempre)."""
+
+    __tablename__ = "rfp_final_documents"
+
+    ticket_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("rfp_tickets.ticket_id", ondelete="CASCADE"), primary_key=True)
+    )
+    sections: List[dict[str, Any]] = Field(default_factory=list, sa_column=_json_column())
+    currency: Optional[str] = Field(default=None, max_length=3)
+    client_country: Optional[str] = Field(default=None, max_length=2)
+    approvals: List[dict[str, Any]] = Field(default_factory=list, sa_column=_json_column())
+    content_markdown: str = Field(sa_column=Column(Text, nullable=False))
+    generated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class RfpTraceEvent(SQLModel, table=True):
+    """Trazabilidad: qué agente hizo qué, con qué entrada y salida, y cuándo.
+
+    `event_id` es determinista (uuid5): LangGraph vuelve a ejecutar los nodos
+    pausados al reanudar, y el mismo evento no debe contarse dos veces. Las
+    entradas y salidas son resúmenes (huellas, recuentos, decisiones), nunca
+    el texto de un borrador ni de un comentario."""
+
+    __tablename__ = "rfp_trace_events"
+
+    event_id: str = Field(primary_key=True, max_length=36)
+    ticket_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("rfp_tickets.ticket_id", ondelete="CASCADE"), index=True, nullable=False)
+    )
+    part: int
+    node: str = Field(max_length=64)
+    agent: str = Field(max_length=80)
+    department_id: Optional[str] = Field(default=None, max_length=16)
+    input: dict[str, Any] = Field(default_factory=dict, sa_column=_json_column())
+    output: dict[str, Any] = Field(default_factory=dict, sa_column=_json_column())
+    timestamp: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+
+
+# Columnas añadidas por las Partes 2 y 3 a tablas que la Parte 1 ya creó en
 # Supabase. `create_all` no altera tablas existentes; esto sí, y es
 # idempotente (IF NOT EXISTS). Las bases nuevas (SQLite de tests, Supabase
 # limpio) ya las reciben de `create_all` y aquí no pasa nada.
-_PART2_COLUMNS = (
+_ADDED_COLUMNS = (
     ("rfp_tickets", "response_handoff", "JSONB"),
     ("rfp_tickets", "response_task_id", "VARCHAR(64)"),
     ("rfp_department_sections", "evaluation_history", "JSONB"),
     ("rfp_department_sections", "draft_status", "VARCHAR(32)"),
     ("rfp_department_sections", "draft_iterations", "INTEGER NOT NULL DEFAULT 0"),
     ("rfp_department_sections", "drafted_at", "TIMESTAMP WITH TIME ZONE"),
+    # Parte 3
+    ("rfp_tickets", "approval_thread_id", "VARCHAR(80)"),
+    ("rfp_tickets", "approval_task_id", "VARCHAR(64)"),
+    ("rfp_tickets", "arbitration", "JSONB"),
+    ("rfp_department_sections", "approval_request", "JSONB"),
+    ("rfp_department_sections", "pending_decision", "JSONB"),
+    ("rfp_department_sections", "approval_round", "INTEGER NOT NULL DEFAULT 0"),
+    ("rfp_department_sections", "approval_history", "JSONB"),
+    ("rfp_department_sections", "approval_comments", "TEXT"),
+    ("rfp_department_sections", "decided_by", "VARCHAR(64)"),
+    ("rfp_department_sections", "confirmed_capacity", "INTEGER"),
 )
 
 
@@ -182,5 +281,5 @@ def ensure_rfp_response_columns(engine: Any) -> None:
     from sqlalchemy import text
 
     with engine.begin() as connection:
-        for table, column, ddl in _PART2_COLUMNS:
+        for table, column, ddl in _ADDED_COLUMNS:
             connection.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}"))

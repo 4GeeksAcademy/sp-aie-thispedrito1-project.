@@ -9,22 +9,33 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, delete, select
 
 from data.pipelines.rfp_intake.models import (
+    APPROVAL_DECISION_RECORDED,
+    APPROVAL_PENDING,
+    APPROVAL_REVISING,
+    DECISION_REQUEST_CHANGES,
     IN_PROGRESS_STATUSES,
     NEXT_STAGE_APPROVAL,
     SECTION_PENDING,
     STATUS_ANALYZING,
+    STATUS_AWAITING_APPROVAL,
     STATUS_COMPLETE,
+    STATUS_DISCARDED,
     STATUS_DRAFTING,
     STATUS_ERROR,
+    STATUS_FINISHED,
     RfpDepartmentSection,
+    RfpFinalDocument,
     RfpMetadata,
     RfpTicket,
+    RfpTraceEvent,
     utcnow,
 )
 
@@ -98,6 +109,8 @@ def reset_for_reprocess(session: Session, ticket: RfpTicket) -> None:
     ticket.response_handoff = None
     ticket.next_stage = None
     ticket.completed_at = None
+    ticket.approval_thread_id = None  # el runner de la Parte 3 borra el checkpoint huérfano
+    ticket.arbitration = None
     ticket.updated_at = utcnow()
     session.add(ticket)
     session.commit()
@@ -152,6 +165,8 @@ def start_drafting(session: Session, ticket: RfpTicket) -> None:
     ticket.status = STATUS_DRAFTING
     ticket.error_message = None
     ticket.response_handoff = None
+    ticket.approval_thread_id = None
+    ticket.arbitration = None
     ticket.updated_at = utcnow()
     session.add(ticket)
     for section in session.exec(
@@ -163,6 +178,17 @@ def start_drafting(session: Session, ticket: RfpTicket) -> None:
         section.draft_status = SECTION_PENDING
         section.draft_iterations = 0
         section.drafted_at = None
+        # Un borrador nuevo invalida las aprobaciones del anterior.
+        section.approval_status = None
+        section.approval_request = None
+        section.pending_decision = None
+        section.approval_round = 0
+        section.approval_history = []
+        section.approval_comments = None
+        section.approver = None
+        section.approved_at = None
+        section.decided_by = None
+        section.confirmed_capacity = None
         session.add(section)
     session.commit()
 
@@ -238,12 +264,17 @@ def reset_for_response(session: Session, ticket: RfpTicket) -> None:
     ticket.status = STATUS_COMPLETE
     ticket.error_message = None
     ticket.response_handoff = None
+    ticket.approval_thread_id = None
+    ticket.arbitration = None
+    ticket.completed_at = None
+    session.exec(delete(RfpFinalDocument).where(RfpFinalDocument.ticket_id == ticket.ticket_id))
     ticket.updated_at = utcnow()
     session.add(ticket)
     session.commit()
 
 
 def _delete_results(session: Session, ticket_id: uuid.UUID) -> None:
+    session.exec(delete(RfpFinalDocument).where(RfpFinalDocument.ticket_id == ticket_id))
     session.exec(delete(RfpDepartmentSection).where(RfpDepartmentSection.ticket_id == ticket_id))
     session.exec(delete(RfpMetadata).where(RfpMetadata.ticket_id == ticket_id))
 
@@ -277,3 +308,135 @@ def save_result(
     for section in sections:
         session.add(RfpDepartmentSection(ticket_id=ticket.ticket_id, **section))
     session.commit()
+
+
+# --------------------------------------------------------------------------
+# Parte 3: aprobación humana, arbitraje, documento final y trazabilidad
+# --------------------------------------------------------------------------
+
+
+def sections_by_department(session: Session, ticket_id: uuid.UUID) -> Dict[str, RfpDepartmentSection]:
+    rows = session.exec(select(RfpDepartmentSection).where(RfpDepartmentSection.ticket_id == ticket_id)).all()
+    return {row.department_id: row for row in rows}
+
+
+def start_approval(session: Session, ticket: RfpTicket, thread_id: str) -> None:
+    """Ticket → `esperando_aprobación`. Conserva todo lo de las Partes 1 y 2
+    (README: "conserva valores previos en la misma fila")."""
+    ticket.status = STATUS_AWAITING_APPROVAL
+    ticket.approval_thread_id = thread_id
+    ticket.error_message = None
+    ticket.updated_at = utcnow()
+    session.add(ticket)
+    session.commit()
+
+
+def record_pending_decision(session: Session, section: RfpDepartmentSection, decision: Dict[str, Any]) -> None:
+    """La API guarda la decisión ya validada; el worker la aplica (Redis solo
+    lleva el ticket_id, nunca un comentario)."""
+    section.pending_decision = decision
+    section.approval_status = APPROVAL_DECISION_RECORDED
+    session.add(section)
+    session.commit()
+
+
+def clear_pending_decision(session: Session, section: RfpDepartmentSection, *, error: Optional[str] = None) -> None:
+    """Decisión que ya no corresponde a ninguna petición del grafo (llegó
+    tarde, o el borrador cambió entre medias). Se descarta con el motivo
+    visible para quien la envió."""
+    section.pending_decision = None
+    if section.approval_request is not None:
+        section.approval_status = APPROVAL_PENDING
+        section.approval_request = {**section.approval_request, "last_error": error}
+    session.add(section)
+
+
+def mark_decision_applying(session: Session, section: RfpDepartmentSection, decision: Dict[str, Any]) -> None:
+    """La decisión entra al grafo: pasa de pendiente al historial. Los
+    comentarios se guardan (ya pasaron el detector de PHI); el historial solo
+    lleva si los hubo."""
+    section.approval_history = [
+        *(section.approval_history or []),
+        {
+            "decision": decision["decision"],
+            "round": section.approval_round,
+            "decided_by": decision.get("decided_by"),
+            "decided_at": decision.get("decided_at"),
+            "has_comments": bool(decision.get("comments")),
+            "confirmed_capacity": decision.get("confirmed_capacity"),
+        },
+    ]
+    # Se conserva el último comentario escrito: aprobar sin comentar no borra
+    # lo que el responsable pidió en la ronda anterior.
+    if decision.get("comments"):
+        section.approval_comments = decision["comments"]
+    section.decided_by = decision.get("decided_by")
+    section.pending_decision = None
+    section.approval_status = APPROVAL_REVISING if decision["decision"] == DECISION_REQUEST_CHANGES else APPROVAL_DECISION_RECORDED
+    session.add(section)
+
+
+def record_pending_arbitration(session: Session, ticket: RfpTicket, decision: Dict[str, Any]) -> None:
+    ticket.arbitration = {**(ticket.arbitration or {}), "pending_decision": decision}
+    ticket.updated_at = utcnow()
+    session.add(ticket)
+    session.commit()
+
+
+def save_final_document(session: Session, ticket: RfpTicket, document: Dict[str, Any]) -> None:
+    """FinalDocument + ticket `terminado`, en la misma transacción que el
+    resto de la sincronización (la hace el runner con un solo commit)."""
+    session.exec(delete(RfpFinalDocument).where(RfpFinalDocument.ticket_id == ticket.ticket_id))
+    session.add(RfpFinalDocument(
+        ticket_id=ticket.ticket_id,
+        sections=document["sections"],
+        currency=document["currency"],
+        client_country=document["client_country"],
+        approvals=document["approvals"],
+        content_markdown=document["content_markdown"],
+        generated_at=datetime.fromisoformat(document["generated_at"]),
+    ))
+    ticket.status = STATUS_FINISHED
+    ticket.next_stage = None
+    ticket.completed_at = utcnow()
+
+
+def close_without_document(session: Session, ticket: RfpTicket, *, reason: str, requires_compliance_review: bool) -> None:
+    ticket.status = STATUS_DISCARDED
+    ticket.discard_reason = reason
+    ticket.next_stage = None
+    ticket.completed_at = utcnow()
+    ticket.requires_compliance_review = ticket.requires_compliance_review or requires_compliance_review
+
+
+def get_final_document(session: Session, ticket_id: uuid.UUID) -> Optional[RfpFinalDocument]:
+    return session.get(RfpFinalDocument, ticket_id)
+
+
+def insert_trace_events(session: Session, ticket_id: uuid.UUID, entries: List[Dict[str, Any]]) -> int:
+    """Inserta ignorando los ya registrados (`event_id` determinista: un nodo
+    reejecutado al reanudar no duplica su evento). Devuelve los nuevos."""
+    if not entries:
+        return 0
+    rows = [
+        {
+            "event_id": e["event_id"], "ticket_id": ticket_id, "part": e["part"], "node": e["node"],
+            "agent": e["agent"][:80], "department_id": e.get("department_id"), "input": e.get("input") or {},
+            "output": e.get("output") or {}, "timestamp": datetime.fromisoformat(e["timestamp"]),
+        }
+        for e in entries
+    ]
+    dialect = session.get_bind().dialect.name
+    insert = pg_insert if dialect == "postgresql" else sqlite_insert
+    statement = insert(RfpTraceEvent.__table__).values(rows).on_conflict_do_nothing(index_elements=["event_id"])
+    result = session.exec(statement)
+    session.commit()
+    return result.rowcount or 0
+
+
+def list_trace_events(session: Session, ticket_id: uuid.UUID) -> List[RfpTraceEvent]:
+    return list(session.exec(
+        select(RfpTraceEvent)
+        .where(RfpTraceEvent.ticket_id == ticket_id)
+        .order_by(RfpTraceEvent.timestamp, RfpTraceEvent.part, RfpTraceEvent.event_id)
+    ).all())
