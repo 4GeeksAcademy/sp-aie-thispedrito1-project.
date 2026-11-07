@@ -210,6 +210,13 @@
   - **Backoffice**: `/internal-reports`, `/admin/access` (solo Admin, rol y departamento con dos controles separados), menu y botones segun capacidades.
   - **Bug real (Chrome)**: TinyDB compartia un manejador de archivo entre hilos y lecturas simultaneas daban `JSONDecodeError`; `database.LockedJSONStorage` lo serializa (test que falla sin el candado).
   - **Tests:** 42 en `test_roles_permissions.py` (las 5 de Compliance incluidas), backend 425; Jest 204 (+13); `tsc` y `next build` limpios. Verificado contra la API real con curl y en Chrome.
+- Autenticacion federada con Microsoft (Plataforma, rama `feature/federated-auth` apilada sobre `feature/roles-permissions`, 2026-11-07). Detalle en `docs/federated-auth/federated-auth.md`.
+  - **Regla del CTO**: el login federado nunca crea cuentas; solo entra a cuentas que IT aprovisiono (`provisioned_by_it`) y que su dueno vinculo desde `/account/profile` con sesion de contrasena. Nunca se busca la cuenta por email.
+  - **Microsoft single-tenant** (unico proveedor del BRIEFING). Modo real (Entra) + simulador local (`MICROSOFT_IDP_MODE=mock`, decision del usuario) que firma id_tokens RS256 validados por la misma funcion. Callback en el backoffice (3001), no en 3000 (decision del usuario).
+  - **OAuth**: state de un solo uso guardado como huella (10 min) + comprobacion en sessionStorage, redirect_uri en lista blanca exacta y el mismo del inicio, PKCE S256, nonce, tid. El proposito (login/link) vive en el servidor. Sin tokens de Microsoft persistidos.
+  - **Desvinculacion**: aviso + 409 si Microsoft es el unico metodo (cuenta sin contrasena). `unlink_block_reason` fue Learn by Doing delegado.
+  - **Auditoria**: tabla `federated_audit_events` (GET `/auth/federated/audit`, admin) + `healthcore.audit` con seudonimos. 4 eventos del BRIEFING + `federated_link_rejected`.
+  - **Tests:** 49 en `test_federated_auth.py`, backend 476; Jest 212 (+8); `tsc` y `next build` limpios. Verificado en Chrome con el simulador (rechazo, vinculacion, login, aviso de ultimo metodo). No probado contra un tenant Entra real.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).

@@ -130,6 +130,13 @@ def change_password(
     payload: ChangePasswordRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
 ) -> MessageResponse:
+    if not current_user.get("hashed_password"):
+        # Cuenta que solo entra con Microsoft: fija su primera contraseña
+        # con /auth/forgot-password (prueba de control del correo).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has no password yet. Use 'Forgot password' to set one.",
+        )
     if not verify_password(payload.current_password, current_user["hashed_password"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
 

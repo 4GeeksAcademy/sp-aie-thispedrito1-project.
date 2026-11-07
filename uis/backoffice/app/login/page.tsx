@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { authApi } from "../../services/authApi";
+import { beginFederatedFlow, federatedApi } from "../../services/federatedApi";
 import { setAuthToken } from "../../services/session";
+import { MICROSOFT_PROVIDER, callbackUrl, type FederatedProvider } from "../../types/federated";
 
 function resolveRedirect(nextParam: string | null): string {
   if (nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")) {
@@ -24,6 +26,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [microsoft, setMicrosoft] = useState<FederatedProvider | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+
+  // El botón solo aparece si la API tiene Microsoft configurado. Si la
+  // consulta falla, el login por contraseña sigue funcionando igual.
+  useEffect(() => {
+    federatedApi
+      .providers()
+      .then((response) => {
+        setMicrosoft(response.providers.find((item) => item.provider === MICROSOFT_PROVIDER && item.enabled) ?? null);
+      })
+      .catch(() => setMicrosoft(null));
+  }, []);
+
+  // Solo LOGIN: desde esta pantalla nunca se vincula una cuenta (BRIEFING).
+  const handleMicrosoft = async () => {
+    setRedirecting(true);
+    setError(null);
+    try {
+      await beginFederatedFlow(MICROSOFT_PROVIDER, "login", callbackUrl(window.location.origin));
+    } catch (requestError: unknown) {
+      setError(requestError instanceof Error ? requestError.message : "No se pudo iniciar sesion con Microsoft.");
+      setRedirecting(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -71,6 +98,18 @@ export default function LoginPage() {
             </Link>
           </p>
         </form>
+
+        {microsoft && (
+          <div style={{ display: "grid", gap: 6, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+            <button type="button" onClick={handleMicrosoft} disabled={redirecting}>
+              {redirecting ? "Redirigiendo a Microsoft..." : "Iniciar sesión con Microsoft"}
+            </button>
+            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
+              Solo para cuentas de personal que ya vincularon Microsoft desde su perfil. No crea cuentas nuevas.
+              {microsoft.mode === "mock" ? " (Simulador local de Microsoft.)" : ""}
+            </p>
+          </div>
+        )}
 
         <p style={{ marginBottom: 0 }}>
           ¿No tienes cuenta?{" "}

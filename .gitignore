@@ -59,3 +59,5 @@ data/financial_close/
 # Roles y Permisos: cuentas de demo de scripts/seed_roles_permissions.py
 # (copia de la TinyDB con hashes de contraseña).
 data/roles_permissions/
+# Autenticación federada: cuentas de demo de scripts/seed_federated_auth.py.
+data/federated_auth/

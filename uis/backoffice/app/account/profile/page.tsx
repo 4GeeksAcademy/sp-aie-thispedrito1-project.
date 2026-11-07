@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { FederatedAccountsPanel } from "../../../components/FederatedAccountsPanel";
 import { authApi } from "../../../services/authApi";
 import { clearAuthToken } from "../../../services/session";
 import type { AuthMeResponse } from "../../../types/auth";
@@ -16,8 +17,17 @@ export default function AccountProfilePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [justLinked, setJustLinked] = useState<string | null>(null);
 
   useEffect(() => {
+    // Vuelta del callback de Microsoft tras vincular: se confirma una vez y
+    // se limpia la URL para que una recarga no repita el aviso.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("federated") === "linked") {
+      setJustLinked(params.get("provider") || "microsoft");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
     const loadProfile = async () => {
       try {
         setLoading(true);
@@ -113,6 +123,8 @@ export default function AccountProfilePage() {
             </button>
           </form>
         )}
+
+        {!loading && <FederatedAccountsPanel justLinkedProvider={justLinked} />}
       </section>
     </main>
   );

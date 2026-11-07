@@ -107,7 +107,9 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
     if not user:
         return None
 
-    if not verify_password(password, user["hashed_password"]):
+    # Cuenta sin contraseña (solo entra con Microsoft, autenticación
+    # federada): el login por contraseña falla igual que con una errónea.
+    if not user.get("hashed_password") or not verify_password(password, user["hashed_password"]):
         return None
 
     if not user.get("is_active", True):

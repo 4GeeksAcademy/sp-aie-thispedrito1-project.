@@ -39,10 +39,16 @@ ALLOWED_FIELDS = frozenset(
         "to_department",
         "resource",
         "resource_id",
+        # Autenticación federada: proveedor, motivo de rechazo (código) e
+        # identidad externa (`oid` de Microsoft, en seudónimo en el log; la
+        # tabla federated_audit_events la guarda completa para Compliance).
+        "provider",
+        "reason",
+        "external_identity",
     }
 )
 # Campos que identifican a una persona: se guardan en seudónimo.
-PSEUDONYMIZED_FIELDS = frozenset({"target_user"})
+PSEUDONYMIZED_FIELDS = frozenset({"target_user", "external_identity"})
 
 
 def actor_pseudonym(user_id: Optional[str]) -> Optional[str]:
