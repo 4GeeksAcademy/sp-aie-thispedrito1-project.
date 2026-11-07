@@ -1,0 +1,89 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	start(start)
+	s1_welcome_paperwork__paperwork(s1_welcome_paperwork__paperwork)
+	s2_company__present(s2_company__present)
+	s2_company__check(s2_company__check)
+	s2_company__grade(s2_company__grade)
+	s2_company__reinforce(s2_company__reinforce)
+	s3_operations__present(s3_operations__present)
+	s3_operations__check(s3_operations__check)
+	s3_operations__grade(s3_operations__grade)
+	s3_operations__reinforce(s3_operations__reinforce)
+	s4_compliance__present(s4_compliance__present)
+	s4_compliance__check(s4_compliance__check)
+	s4_compliance__grade(s4_compliance__grade)
+	s4_compliance__reinforce(s4_compliance__reinforce)
+	s4_compliance__approval(s4_compliance__approval)
+	s5_role__present(s5_role__present)
+	s5_role__check(s5_role__check)
+	s5_role__grade(s5_role__grade)
+	s5_role__reinforce(s5_role__reinforce)
+	s5_role__approval(s5_role__approval)
+	s6_ways_of_working__present(s6_ways_of_working__present)
+	s6_ways_of_working__check(s6_ways_of_working__check)
+	s6_ways_of_working__grade(s6_ways_of_working__grade)
+	s6_ways_of_working__reinforce(s6_ways_of_working__reinforce)
+	s7_access_closure__access(s7_access_closure__access)
+	s7_access_closure__approval(s7_access_closure__approval)
+	onboarding_complete(onboarding_complete)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> start;
+	s1_welcome_paperwork__paperwork -.-> s2_company__present;
+	s2_company__check -.-> s2_company__grade;
+	s2_company__grade -.-> s2_company__check;
+	s2_company__grade -.-> s2_company__reinforce;
+	s2_company__grade -.-> s3_operations__present;
+	s2_company__present -.-> s2_company__check;
+	s2_company__reinforce -.-> s2_company__check;
+	s3_operations__check -.-> s3_operations__grade;
+	s3_operations__grade -.-> s3_operations__check;
+	s3_operations__grade -.-> s3_operations__reinforce;
+	s3_operations__grade -.-> s4_compliance__present;
+	s3_operations__present -.-> s3_operations__check;
+	s3_operations__reinforce -.-> s3_operations__check;
+	s4_compliance__approval -.-> s4_compliance__present;
+	s4_compliance__approval -.-> s5_role__present;
+	s4_compliance__check -.-> s4_compliance__grade;
+	s4_compliance__grade -.-> s4_compliance__approval;
+	s4_compliance__grade -.-> s4_compliance__check;
+	s4_compliance__grade -.-> s4_compliance__reinforce;
+	s4_compliance__present -.-> s4_compliance__check;
+	s4_compliance__reinforce -.-> s4_compliance__check;
+	s5_role__approval -.-> s5_role__present;
+	s5_role__approval -.-> s6_ways_of_working__present;
+	s5_role__check -.-> s5_role__grade;
+	s5_role__grade -.-> s5_role__approval;
+	s5_role__grade -.-> s5_role__check;
+	s5_role__grade -.-> s5_role__reinforce;
+	s5_role__present -.-> s5_role__check;
+	s5_role__reinforce -.-> s5_role__check;
+	s6_ways_of_working__check -.-> s6_ways_of_working__grade;
+	s6_ways_of_working__grade -.-> s6_ways_of_working__check;
+	s6_ways_of_working__grade -.-> s6_ways_of_working__reinforce;
+	s6_ways_of_working__grade -.-> s7_access_closure__access;
+	s6_ways_of_working__present -.-> s6_ways_of_working__check;
+	s6_ways_of_working__reinforce -.-> s6_ways_of_working__check;
+	s7_access_closure__access -.-> s7_access_closure__approval;
+	s7_access_closure__approval -.-> onboarding_complete;
+	s7_access_closure__approval -.-> s7_access_closure__access;
+	start -.-> s1_welcome_paperwork__paperwork;
+	onboarding_complete --> __end__;
+	s1_welcome_paperwork__paperwork -.-> s1_welcome_paperwork__paperwork;
+	s2_company__check -.-> s2_company__check;
+	s3_operations__check -.-> s3_operations__check;
+	s4_compliance__approval -.-> s4_compliance__approval;
+	s4_compliance__check -.-> s4_compliance__check;
+	s5_role__approval -.-> s5_role__approval;
+	s5_role__check -.-> s5_role__check;
+	s6_ways_of_working__check -.-> s6_ways_of_working__check;
+	s7_access_closure__approval -.-> s7_access_closure__approval;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+

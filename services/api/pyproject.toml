@@ -25,6 +25,7 @@ dependencies = [
   "langgraph==0.6.11",
   "langgraph-checkpoint==3.0.1",
   "langgraph-checkpoint-postgres==3.0.5",
+  "langgraph-checkpoint-sqlite==3.0.3",
   "psycopg[binary]==3.3.6",
   "mcp>=1.24,<2",
   "mcpauth==0.2.0b1",

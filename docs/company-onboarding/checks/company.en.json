@@ -1,0 +1,20 @@
+{
+  "doc_id": "company",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "company-a1", "section": "Our history", "question": "When and where was HealthCore founded?", "options": ["2008 in Houston, Texas", "2011 in Austin, Texas", "2011 in London", "2015 in Atlanta, Georgia"], "answer": 1},
+      {"id": "company-a2", "section": "Our clinic network", "question": "How is the clinic network split between countries?", "options": ["6 in the US and 6 in the UK", "12 in the US", "9 in the US and 3 in the UK", "10 in the US and 2 in the UK"], "answer": 2},
+      {"id": "company-a3", "section": "Our value proposition", "question": "Which three promises make up HealthCore's value proposition?", "options": ["Lowest prices, online booking and home visits", "Same-day appointments, extended hours and bilingual care in US markets", "Hospital care, emergency departments and surgery", "Telemedicine only, 24/7 chat and free parking"], "answer": 1},
+      {"id": "company-a4", "section": "Size and regulation", "question": "Which data protection frameworks does HealthCore operate under?", "options": ["HIPAA in the US and UK GDPR in the UK", "Only HIPAA in both countries", "Only UK GDPR in both countries", "None, because we are an outpatient provider"], "answer": 0},
+      {"id": "company-a5", "section": "Leadership and corporate teams", "question": "Who leads Compliance and Data Governance?", "options": ["Diane Foster", "Tom Callahan", "Claire Whitfield", "Priya Nair"], "answer": 2}
+    ],
+    [
+      {"id": "company-b1", "section": "Our history", "question": "Why did Dr. Sandra Okonkwo start HealthCore?", "options": ["Clinicians spent more time on paperwork than with patients", "To build a hospital chain", "To sell health insurance", "To open clinics only in the UK"], "answer": 0},
+      {"id": "company-b2", "section": "Service lines", "question": "Which of these is NOT one of HealthCore's service lines?", "options": ["Primary care", "Chronic disease management", "Emergency departments", "Preventive health programmes"], "answer": 2},
+      {"id": "company-b3", "section": "Our clinic network", "question": "Where are the UK clinics?", "options": ["London and Manchester", "London and Edinburgh", "Manchester and Birmingham", "Only London"], "answer": 0},
+      {"id": "company-b4", "section": "Size and regulation", "question": "Roughly how many people does HealthCore employ, and what is its annual revenue?", "options": ["About 2,000 people and 280 million dollars", "About 200 people and 28 million dollars", "About 50 people and 5 million dollars", "About 200 people and 280 million dollars"], "answer": 1},
+      {"id": "company-b5", "section": "Leadership and corporate teams", "question": "Who leads HealthCore Digital?", "options": ["Dr. Marcus Reid", "James Osei, the CTO", "Diane Foster", "Dr. Sandra Okonkwo"], "answer": 1}
+    ]
+  ]
+}

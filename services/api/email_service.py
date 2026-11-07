@@ -27,7 +27,7 @@ def _redact_emails(text: str) -> str:
 
 
 def _frontend_base_url() -> str:
-    return os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+    return os.getenv("FRONTEND_BASE_URL", "http://localhost:3001").rstrip("/")
 
 
 def build_reset_url(token: str) -> str:

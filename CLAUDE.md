@@ -208,6 +208,19 @@ cd uis/backoffice && npm run dev -- --port 3001                # pantalla /compl
 
 Sin Redis ni Celery: el pub/sub es en memoria (un proceso). El navegador conecta directo a `ws://localhost:8000` (`NEXT_PUBLIC_CHAT_WS_URL`), no por `/api-proxy`. Necesita `LLM_API_KEY` vigente y Supabase despierto. Detalle en `docs/websocket-chat.md`.
 
+### Orquestador de incorporaciones (Agentic Engineering)
+
+```bash
+services/api/.venv/bin/python -m pytest tests/onboarding                                    # 71, sin red (incluye reinicio con SIGKILL entre 2 procesos)
+(cd services/api && .venv/bin/python -m pytest tests/test_onboarding_api.py -o addopts="")   # 17
+docker compose up -d qdrant && services/api/.venv/bin/python scripts/index_onboarding_docs.py   # colección healthcore_onboarding (~20 min: 88 embeddings)
+services/api/.venv/bin/python scripts/evaluate_onboarding_retrieval.py                     # calibra DEFAULT_MIN_SCORE
+services/api/.venv/bin/python scripts/seed_onboarding.py --blocked-attempt                 # semilla en Supabase + cuentas en data/onboarding/demo-users.db.json
+services/api/.venv/bin/python scripts/onboarding_followup.py                               # barrido de plazos (cron horario)
+```
+
+Desde la raíz. Para entrar con las cuentas de la semilla: API con `SUPPLIERS_DB_PATH=data/onboarding/demo-users.db.json`, Redis + worker de Celery (`--pool=solo`). Detalle en `docs/onboarding/onboarding-orchestrator.md`.
+
 ### Auditoría OWASP Top 10 y endurecimiento del servidor
 
 ```bash
@@ -323,7 +336,7 @@ Reglas que quedan fijadas y conviene no romper:
 
 - `uis/website`: web corporativa pública (hito 1 migrado a React); contenido en `data/content.ts`, componentes de sección en `components/`.
 - `uis/backoffice`: backoffice de proveedores + auth completa (login, registro, forgot/reset password, perfil, change password) contra `services/api`. Capa de servicios en `services/` (`http.ts`, `authApi.ts`, `suppliersApi.ts`, `incidentsApi.ts`, `inventoryApi.ts`, `telemetryReportApi.ts`, `session.ts`) y tipos en `types/`. Incluye el gestor de incidencias (`/incidents` listado con filtros y cambio de estado con revert, `/incidents/new` formulario con aviso obligatorio de no introducir datos de pacientes, `/incidents/summary` métricas). Interfaz íntegramente en español (traducida el 2026-08-09 por decisión explícita del usuario; el CONTEXT original de ese hito pedía inglés para Incidents — tenerlo en cuenta si se vuelve a evaluar contra esa rúbrica). Los mensajes de error que llegan literalmente de la API (p. ej. `"Insufficient stock for supply..."`) no se traducen: son el contrato de texto exacto que exige el CONTEXT del backend. `http.ts` lanza `ApiFieldError` cuando la API responde 400 con errores por campo.
-- Tema visual "Supply Manifest console" (`app/globals.css`): oscuro y denso por defecto (acento ámbar `#FF8A3D`, LEDs cuadrados para nivel de stock, tipografía monoespaciada para SKUs/IDs/cantidades), con **toggle real a modo claro** (`components/ThemeToggle.tsx`, atributo `data-theme` en `<html>`, persistido en `localStorage`, sin flash gracias a un script inline en el `<head>` — por eso `<html>` lleva `suppressHydrationWarning`). Todo color vive como token CSS (`--bg`, `--panel`, `--text`, `--muted`, `--brand`, `--line`, `--critical`/`--warning`/`--ok`, `--success-*`/`--error-*`); nunca hardcodear un hex en un `.tsx` del backoffice.
+- Tema visual (`app/globals.css`): paleta "Turquesa clínico" desde el 2026-11-01, **claro por defecto** y oscuro en `[data-theme="dark"]` (marca `#0F766E`/`#2DD4BF`, distinta a propósito de los colores de estado; fondos traslucidos con `color-mix` sobre tokens). Navegación en barra lateral agrupada (`components/AppShell.tsx` + `types/navigation.ts`). Origen: tema "Supply Manifest console", denso, con LEDs cuadrados para nivel de stock, tipografía monoespaciada para SKUs/IDs/cantidades), con **toggle real a modo claro** (`components/ThemeToggle.tsx`, atributo `data-theme` en `<html>`, persistido en `localStorage`, sin flash gracias a un script inline en el `<head>` — por eso `<html>` lleva `suppressHydrationWarning`). Todo color vive como token CSS (`--bg`, `--panel`, `--text`, `--muted`, `--brand`, `--line`, `--critical`/`--warning`/`--ok`, `--success-*`/`--error-*`); nunca hardcodear un hex en un `.tsx` del backoffice.
 - Interfaz de inventario (Hito 5 backoffice, `app/inventory/`): 4 pantallas sobre la API de `/inventory` — `products` (lista con `current_stock` y LED de color por nivel, umbrales en `types/inventory.ts::getStockLevel`), `orders/inbound` y `orders/outbound` (formularios; el de salida muestra el stock del producto seleccionado en tiempo real, tomándolo de la lista ya cargada — no hace una petición extra — y bloquea el envío si la cantidad supera el stock, antes de tocar la API) y `orders` (historial de solo lectura, entradas/salidas con badge, más un detalle expandible por fila — ver punto de lazy loading abajo). Sin variable de entorno nueva: reutiliza `NEXT_PUBLIC_API_URL`/proxy de `http.ts`, el mismo backend que proveedores e incidencias. Rutas sin prefijo `/backoffice` (la app ya es el backoffice), a diferencia de lo sugerido en el README del hito. `clinic_id` es un número simple (1-12): el CONTEXT no da un catálogo de nombres de clínica para este módulo.
 - Lazy loading con `next/dynamic` (mismo hito de caching, ver `CACHING_REPORT.md`): `ProviderForm` en `/suppliers` vive detrás de un botón "+ Añadir proveedor", y `OrderDetailPanel` en `/inventory/orders` (IDs internos + timestamp ISO completo, de auditoría) se carga al expandir una fila. Gotcha real de Next.js 16 (confirmado en `node_modules/next/dist/docs/01-app/02-guides/lazy-loading.md`, no por intuición): `next/dynamic` solo da code-splitting real cuando se llama desde un **Client Component** — un Server Component que importa dinámicamente un Client Component no obtiene code-splitting automático, y `ssr: false` directamente no está permitido fuera de un Client Component. Por eso la portada del backoffice (`app/page.tsx`, Server Component) no lleva ningún `next/dynamic` pese a tener contenido secundario (tabla "CME snapshot") — aplicarlo ahí no habría dado ningún beneficio real.
 - `apps/talent-pipeline-tracker`: tracker de candidatos (hito 3/4) contra API externa; integración centralizada en `services/api.ts`, contratos en `types/tracker.ts`, con normalización defensiva de payloads (campos heterogéneos tipo `stage`/`step`, manejo explícito de 422) y fallback de datos en el dashboard.
@@ -507,7 +520,7 @@ Mapa del código:
 - **`data/process/rag.py`**: `chunk_document`/`load_chunks`, `embed()` y `setup()`, más los clientes (`get_llm_client`, `get_qdrant_client`) y `RagConfigError`. Carga `services/api/.env`.
 - **`data/pipelines/rag.py`**: `retrieve()`, `generate_answer()`, `query()` y el prompt en tres capas (`ASSISTANT_ROLE`, `GROUNDING_RULES`, `BUSINESS_RULES`).
 - **`services/knowledge/`**: `POST /knowledge/query` (`{question}` → `{answer}`), con autenticación obligatoria. Mismo patrón que `services/reporting/`: solo HTTP, llama a `query()`.
-- **`uis/backoffice/app/knowledge/`**: pantalla "Asistente" (`services/knowledgeApi.ts`, `types/knowledge.ts`).
+- **`uis/backoffice/app/knowledge/`**: pantalla "Asistente de políticas" (`services/knowledgeApi.ts`, `types/knowledge.ts`).
 - **`scripts/index_knowledge_base.py`** y **`scripts/evaluate_rag_retrieval.py`**, sobre **`data/eval/test-queries.json`** (14 preguntas, una por chunk, más 4 fuera de tema).
 - Qdrant en `docker-compose.yml` (servicio `qdrant`, volumen `qdrant-data`, sin `restart:`). La API en Docker lo encuentra por nombre (`QDRANT_URL=http://qdrant:6333`).
 
@@ -536,7 +549,7 @@ Rama `feature/langgraph-agent-base` apilada sobre `feature/rag-knowledge-base`, 
 Mapa del código:
 - **`services/agent/graph.py`**: `AgentState` (4 claves: `question`, `context`, `answer`, `outcome`, sin historial), `AgentNodes` (5 nodos: `receive_question`, `reject_question`, `retrieve`, `no_information`, `generate`, con las dependencias inyectables), las aristas `route_after_receive`/`route_after_retrieve` y `compile_agent_graph()` + `validate_structure()`.
 - **`services/agent/tracing.py`**: `run_agent()` recorre el grafo con `stream_mode="updates"` y escribe el trace JSON (`AGENT_TRACE_DIR`, por defecto `data/traces/agent/`, en `.gitignore`).
-- **`services/agent/router.py`**: `POST /agent/query` → `{answer, trace_id, outcome}`, con autenticación. Convive con `/knowledge/query`; la pantalla "Asistente" no cambió.
+- **`services/agent/router.py`**: `POST /agent/query` → `{answer, trace_id, outcome}`, con autenticación. Convive con `/knowledge/query`; la pantalla "Asistente de políticas" no cambió.
 - **Evals:** `data/eval/agent-eval-cases.json` (5 casos) → `scripts/record_agent_traces.py` → `data/eval/agent-traces/*.json` (versionados) → `tests/pipelines/test_agent_evals.py` (26, sin red). Tests de estructura con dobles en `tests/pipelines/test_agent_graph.py` (17) y del endpoint en `services/api/tests/test_agent.py` (6).
 
 Decisiones que conviene no romper:
@@ -840,6 +853,31 @@ Decisiones que conviene no romper:
 Hallazgos:
 - `services/api/.env` estuvo versionado el 22-23 jul 2026 (`aaded8d` → `051ca1a`, publicado en origin) con un `JWT_SECRET_KEY`. Comprobado por huella SHA-256: **el actual es distinto**. `apps/.env.local` del historial solo tenía una URL.
 - Pendiente P0: proveedor LLM y Supabase gratuito sin BAA/DPA (solo datos sintéticos).
+
+### Orquestador de incorporaciones — `docs/onboarding/onboarding-orchestrator.md`
+
+Agentic Engineering "Agente de incorporaciones", rama `feature/onboarding-orchestrator` apilada sobre `feat/final-pitch`, 2026-11-07. Stakeholder Diane Foster. Un ÚNICO agente LangGraph lleva a cada incorporación corporativa por las 7 etapas del BRIEFING (trámites → empresa → operación → cumplimiento → función → cómo trabajamos → accesos y cierre).
+
+Mapa del código:
+- **`services/onboarding/`**: `catalog.py` (tabla del BRIEFING: etapas, plazos, aprobadores, departamentos, puestos, sistemas; fuente única), `graph.py` (nodos GENERADOS desde `STAGES`: `s4_compliance__check`…; `interrupt()` en trámites, comprobación y aprobación), `runner.py` (`advance` idempotente + `sync` estado→fila + efectos; checkpointer Postgres o SQLite; hilo `onboarding-<id>`), `checks.py`, `approvals.py`, `access.py`, `followup.py`, `qa.py`, `routing.py`, `sensitive.py`, `permissions.py`, `notifications.py`, `repository.py`, `models.py` (6 tablas `onboarding_*` en Supabase), `router.py` + `schemas.py` (`/onboarding`).
+- **`data/pipelines/onboarding_docs.py`**: corpus (`docs/company-onboarding/{en,es}/*.md` + `checks/*.json`), selección por perfil, presentación, Qdrant `healthcore_onboarding`.
+- **`services/tasks/onboarding_tasks.py`**: `onboarding.advance_hire` y `onboarding.followup_sweep`.
+- **Backoffice**: `/onboarding` (vista de Personas), `/onboarding/[id]`, `/onboarding/me`; `types/onboarding.ts`, `services/onboardingApi.ts`, `components/onboarding/`, sección "Personas" del menú.
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** comprobaciones con banco fijo corregido en código (no modelo); material en inglés + español (español SOLO bajo HIPAA: no existe UK GDPR en español y nunca se traduce al vuelo); avisos en bandeja interna (sin correos); apilada sobre `feat/final-pitch`.
+- **El grafo no toca la BD**: deja `effects` con id determinista (`hire:sN:rR:...`) y `runner.persist_effects` guarda los nuevos. Lo anterior a un `interrupt()` es puro.
+- **Autorización dos veces** (API 403 + dentro del grafo), con el directorio `onboarding_staff` (rol organizativo), nunca con el `admin` de la plataforma.
+- **Accesos solo por `access.issue_access_request`** (persona o agente en la etapa 7): datos de pacientes sin `compliance_approved_at` → `blocked` + evento de seguridad + aviso a Claire.
+- **Entradas validadas a mano (400 `{"errors"}`), no con Pydantic**: el 422 repetiría el valor (un SSN). Ninguna columna para datos sensibles; texto libre por `sensitive.py`.
+- `pending_answers` (check→grade) y `last_result` (nota) son claves distintas: con una sola, la nota se borraba al pasar de etapa (lo detectó un test).
+- Si cambian los documentos o el modelo de embeddings, recalibrar `DEFAULT_MIN_SCORE` con `scripts/evaluate_onboarding_retrieval.py`.
+
+Gotchas reales:
+- `langgraph-checkpoint-sqlite==3.0.3` añadido (compatible con `langgraph-checkpoint==3.0.1`): lo usa la prueba de reinicio entre procesos y el modo local sin Supabase.
+- Las aristas de `Command(goto=…)` necesitan `destinations=` en `add_node` para que `get_graph()` las dibuje (`docs/onboarding/graph.mmd` se genera del grafo compilado).
+- Tests de API: un hash bcrypt por módulo (9 por test tardaban 42 s → 1,5 s) y fechas de inicio futuras (con una pasada, las etapas salen vencidas).
+- El proxy de embeddings tardó ~14 s por llamada el 2026-11-07: indexar las 88 secciones lleva ~20 min.
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

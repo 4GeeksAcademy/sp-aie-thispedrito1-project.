@@ -23,10 +23,10 @@ import {
 } from "../../types/incident";
 
 const STATUS_BADGE_STYLES: Record<IncidentStatus, React.CSSProperties> = {
-  open: { background: "rgba(255, 93, 93, 0.14)", color: "var(--critical)" },
-  in_progress: { background: "rgba(255, 194, 75, 0.14)", color: "var(--warning)" },
-  resolved: { background: "rgba(74, 222, 128, 0.14)", color: "var(--ok)" },
-  discarded: { background: "rgba(138, 150, 145, 0.14)", color: "var(--muted)" },
+  open: { background: "color-mix(in srgb, var(--critical) 14%, transparent)", color: "var(--critical)" },
+  in_progress: { background: "color-mix(in srgb, var(--warning) 14%, transparent)", color: "var(--warning)" },
+  resolved: { background: "color-mix(in srgb, var(--ok) 14%, transparent)", color: "var(--ok)" },
+  discarded: { background: "color-mix(in srgb, var(--muted) 14%, transparent)", color: "var(--muted)" },
 };
 
 export default function IncidentsPage() {

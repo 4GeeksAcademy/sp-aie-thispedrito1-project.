@@ -1,0 +1,20 @@
+{
+  "doc_id": "compliance-hipaa",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "hipaa-a1", "section": "The minimum necessary principle", "question": "A report only needs the number of visits per clinic. What should you export?", "options": ["All patient-level rows, just in case", "Only the counts per clinic", "The full patient records", "Whatever your access allows"], "answer": 1},
+      {"id": "hipaa-a2", "section": "Incident notification", "question": "Under HIPAA, what is the latest moment affected individuals must be notified of a breach?", "options": ["72 hours after it is discovered", "No later than 60 days after it is discovered", "At the end of the year", "Only if the press finds out"], "answer": 1},
+      {"id": "hipaa-a3", "section": "Incident notification", "question": "You suspect PHI was sent to the wrong person. What do you do?", "options": ["Investigate on your own first", "Report it to Compliance the same day", "Wait to see if anyone complains", "Delete the email and forget it"], "answer": 1},
+      {"id": "hipaa-a4", "section": "Where PHI may and may not go", "question": "Where may PHI be pasted?", "options": ["Slack, if the channel is private", "Jira, in a restricted project", "Only in Compliance-approved systems covered by a BAA", "Any AI tool, if it is popular"], "answer": 2},
+      {"id": "hipaa-a5", "section": "Access logging", "question": "What does the access log record?", "options": ["Nothing, access is anonymous", "Who accessed which record and when", "Only failed logins", "Only access from outside the office"], "answer": 1}
+    ],
+    [
+      {"id": "hipaa-b1", "section": "What HIPAA protects", "question": "Which of these is PHI?", "options": ["A patient's name together with a diagnosis", "The address of a clinic", "The total number of clinics", "A public holiday calendar"], "answer": 0},
+      {"id": "hipaa-b2", "section": "The minimum necessary principle", "question": "You have technical access to a whole patient record but need one field. What may you open?", "options": ["The whole record, since you have access", "Only the field you need", "The records of other patients too", "Nothing ever"], "answer": 1},
+      {"id": "hipaa-b3", "section": "Access logging", "question": "A colleague asks to use your login for a minute. What do you do?", "options": ["Share it, it is only a minute", "Refuse: use your own account only and never share credentials", "Share it but change the password later", "Ask IT to share it for you"], "answer": 1},
+      {"id": "hipaa-b4", "section": "Why this stage comes first", "question": "When can you receive access to a system with patient information?", "options": ["On your first day", "After passing this stage and Compliance approving it", "When your manager says so", "After the onboarding closure only if you ask"], "answer": 1},
+      {"id": "hipaa-b5", "section": "Who to ask", "question": "The official material does not answer your compliance question. Who do you ask?", "options": ["You guess the answer", "Claire Whitfield's Compliance team", "Any colleague on Slack", "Nobody"], "answer": 1}
+    ]
+  ]
+}

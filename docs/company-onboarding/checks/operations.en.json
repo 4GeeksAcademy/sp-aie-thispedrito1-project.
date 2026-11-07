@@ -1,0 +1,20 @@
+{
+  "doc_id": "operations",
+  "language": "en",
+  "sets": [
+    [
+      {"id": "operations-a1", "section": "The five steps of the patient journey", "question": "What is the order of the patient journey?", "options": ["Visit, booking, billing, documentation, follow-up", "Booking, visit, clinical documentation, billing, follow-up", "Billing, booking, visit, follow-up, documentation", "Booking, billing, visit, follow-up, documentation"], "answer": 1},
+      {"id": "operations-a2", "section": "No-shows are an operational problem", "question": "What is HealthCore's no-show rate across the network?", "options": ["5%", "14%", "22%", "35%"], "answer": 2},
+      {"id": "operations-a3", "section": "Claim denials are an operational problem", "question": "Where do most claim denials come from?", "options": ["Errors earlier in the journey, such as wrong eligibility data or missing documentation", "Patients refusing to pay", "Clinicians working extended hours", "Bilingual care"], "answer": 0},
+      {"id": "operations-a4", "section": "Referrals are an operational problem", "question": "What does every referral need until the patient is seen?", "options": ["A second referral", "An owner", "A payment", "A Slack channel"], "answer": 1},
+      {"id": "operations-a5", "section": "Billing", "question": "How is billing done in the UK?", "options": ["Only Medicare", "Commercial insurers and Medicaid", "Private payment and a small NHS contract", "There is no billing in the UK"], "answer": 2}
+    ],
+    [
+      {"id": "operations-b1", "section": "Claim denials are an operational problem", "question": "How does our 14% denial rate compare with the industry?", "options": ["It is below average", "It is about average", "It is more than double the industry average", "The industry does not measure denials"], "answer": 2},
+      {"id": "operations-b2", "section": "No-shows are an operational problem", "question": "Why is a no-show an operational problem?", "options": ["It only affects the patient", "It is a lost slot, a gap in care and lost revenue", "It improves clinic capacity", "It only matters in the UK"], "answer": 1},
+      {"id": "operations-b3", "section": "Booking", "question": "How do patients book today?", "options": ["Through a shared online booking system", "By phone in the US and through clinic reception in the UK", "Only through a mobile app", "Only by email"], "answer": 1},
+      {"id": "operations-b4", "section": "Visit and clinical documentation", "question": "How much time do clinicians spend on documentation tasks each day?", "options": ["About 5 minutes", "About 35 minutes", "About 2 hours", "No time at all"], "answer": 1},
+      {"id": "operations-b5", "section": "A generic example", "question": "In the generic example, what did a typo in the insurance plan at booking cause?", "options": ["Nothing, it was fixed automatically", "A denied claim weeks later", "A faster payment", "A new referral"], "answer": 1}
+    ]
+  ]
+}

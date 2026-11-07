@@ -1,56 +1,56 @@
-/* HealthCore Backoffice — "Supply Manifest" console theme.
-   Dense, LED-style status indicators: built for a 7am shift-start scan,
-   not a marketing dashboard. Dark is the default identity; light is a
-   same-instrument-different-lighting companion (toggled via ThemeToggle,
-   [data-theme] on <html>, persisted in localStorage) — not a full pivot
-   to a different design. See memory-bank/techContext.md for the rationale. */
+/* HealthCore Backoffice — paleta "Turquesa clínico" (2026-11-01).
+   Claro por defecto: es lo que se espera de una interfaz clínica. El oscuro
+   es la misma paleta con otra luz (ThemeToggle, [data-theme="dark"] en
+   <html>, persistido en localStorage). La marca turquesa es deliberadamente
+   distinta del rojo/ámbar/verde de estado: un botón nunca debe parecer una
+   alerta (el naranja anterior se confundía con --warning).
+   Nunca hardcodear un color: siempre var(--token) o color-mix() sobre uno. */
 
 :root {
-  --bg: #0b0f0e;
-  --panel: #121816;
-  --text: #e7ece7;
-  --muted: #8a9691;
-  --brand: #ff8a3d;
-  --brand-hover: #ffa15e;
-  --line: #23302b;
-
-  --critical: #ff5d5d;
-  --warning: #ffc24b;
-  --ok: #4ade80;
-
-  --success-bg: rgba(74, 222, 128, 0.12);
-  --success-border: rgba(74, 222, 128, 0.35);
-  --success-text: #7ee7a6;
-
-  --error-bg: rgba(255, 93, 93, 0.12);
-  --error-border: rgba(255, 93, 93, 0.35);
-  --error-text: #ff8a8a;
-
-  --led-glow: 6px;
-}
-
-:root[data-theme="light"] {
-  --bg: #f1f3f0;
+  --bg: #f4f8f8;
   --panel: #ffffff;
-  --text: #14201b;
-  --muted: #5b6b62;
-  --brand: #c2570a;
-  --brand-hover: #a8480a;
-  --line: #d8ded7;
+  --text: #0f1f1e;
+  --muted: #5b6e6c;
+  --brand: #0f766e;
+  --brand-hover: #0b5f58;
+  --brand-contrast: #ffffff;
+  --line: #dce6e5;
 
-  --critical: #c23b3b;
-  --warning: #966300;
-  --ok: #1e7a45;
+  --critical: #b42318;
+  --warning: #b25e09;
+  --ok: #15803d;
 
-  --success-bg: rgba(30, 122, 69, 0.1);
-  --success-border: rgba(30, 122, 69, 0.3);
-  --success-text: #1e7a45;
+  --success-bg: color-mix(in srgb, var(--ok) 10%, transparent);
+  --success-border: color-mix(in srgb, var(--ok) 30%, transparent);
+  --success-text: var(--ok);
 
-  --error-bg: rgba(194, 59, 59, 0.1);
-  --error-border: rgba(194, 59, 59, 0.3);
-  --error-text: #c23b3b;
+  --error-bg: color-mix(in srgb, var(--critical) 10%, transparent);
+  --error-border: color-mix(in srgb, var(--critical) 30%, transparent);
+  --error-text: var(--critical);
 
   --led-glow: 0px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1416;
+  --panel: #11201f;
+  --text: #e6f0ef;
+  --muted: #8fa3a1;
+  --brand: #2dd4bf;
+  --brand-hover: #5eead4;
+  --brand-contrast: #062320;
+  --line: #1f3330;
+
+  --critical: #f87171;
+  --warning: #fbbf24;
+  --ok: #4ade80;
+
+  --success-text: #86efac;
+  --error-text: #fca5a5;
+
+  --led-glow: 6px;
+  color-scheme: dark;
 }
 
 * {
@@ -72,7 +72,9 @@ a {
 }
 
 .shell {
-  width: min(1120px, 92vw);
+  /* Relativo al contenedor, no a la ventana: junto a la barra lateral,
+     92vw se salía por la derecha. */
+  width: min(1120px, calc(100% - 40px));
   margin: 0 auto;
 }
 
@@ -138,16 +140,16 @@ button:focus-visible {
 }
 
 button {
-  background: rgba(255, 138, 61, 0.12);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
   color: var(--brand);
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
-  border-color: rgba(255, 138, 61, 0.35);
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
 }
 
 button:hover {
-  background: rgba(255, 138, 61, 0.2);
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
 }
 
 button:disabled {
@@ -157,7 +159,7 @@ button:disabled {
 
 button.primary {
   background: var(--brand);
-  color: #17110a;
+  color: var(--brand-contrast);
   border-color: var(--brand);
 }
 
@@ -188,7 +190,7 @@ button.primary:hover {
 }
 
 .table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 .mono {
@@ -210,12 +212,12 @@ button.primary:hover {
 }
 
 .status-active {
-  background: rgba(74, 222, 128, 0.14);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
   color: var(--ok);
 }
 
 .status-suspended {
-  background: rgba(255, 93, 93, 0.14);
+  background: color-mix(in srgb, var(--critical) 14%, transparent);
   color: var(--critical);
 }
 
@@ -417,4 +419,220 @@ button.primary:hover {
 
 .rfp-list li + li {
   margin-top: 6px;
+}
+
+/* ── Armazón de la app: barra lateral + barra superior ───────────────── */
+
+.app-layout {
+  --sidebar-width: 236px;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 12px 24px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-brand strong {
+  display: block;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.app-brand small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.app-brand-mark {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  background: var(--brand);
+  box-shadow: 0 0 var(--led-glow) 0 var(--brand);
+}
+
+.app-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.app-nav-section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app-nav-title {
+  margin: 0 0 6px;
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.app-nav-link {
+  display: block;
+  padding: 7px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.app-nav-link:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.app-nav-link[aria-current="page"] {
+  color: var(--brand);
+  border-left-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+.app-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 20px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.app-topbar-title {
+  display: none;
+  font-weight: 800;
+}
+
+.app-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 8px;
+}
+
+.topbar-link:hover {
+  color: var(--text);
+}
+
+.topbar-logout {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
+  color: var(--brand);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.topbar-logout:hover {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+.app-menu-button {
+  display: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.app-content {
+  flex: 1;
+}
+
+.app-backdrop {
+  display: none;
+}
+
+/* Móvil y tablet: la barra lateral se convierte en un panel deslizante. */
+@media (max-width: 900px) {
+  .app-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(var(--sidebar-width), 82vw);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-layout[data-menu-open="true"] .app-sidebar {
+    transform: translateX(0);
+  }
+
+  .app-layout[data-menu-open="true"] .app-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .app-menu-button,
+  .app-topbar-title {
+    display: inline-block;
+  }
+
+  .app-topbar {
+    padding: 0 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-topbar-title {
+    display: none;
+  }
 }

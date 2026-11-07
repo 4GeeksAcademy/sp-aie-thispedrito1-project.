@@ -1,0 +1,20 @@
+{
+  "doc_id": "compliance-hipaa",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "hipaa-a1", "section": "El principio de mínimo necesario", "question": "Un informe solo necesita el número de visitas por clínica. ¿Qué exportas?", "options": ["Todas las filas por paciente, por si acaso", "Solo los recuentos por clínica", "Las fichas completas", "Todo lo que te permita tu acceso"], "answer": 1},
+      {"id": "hipaa-a2", "section": "Notificación de incidentes", "question": "Bajo HIPAA, ¿cuál es el plazo máximo para notificar una brecha a las personas afectadas?", "options": ["72 horas desde que se descubre", "Un máximo de 60 días desde que se descubre", "A final de año", "Solo si se entera la prensa"], "answer": 1},
+      {"id": "hipaa-a3", "section": "Notificación de incidentes", "question": "Sospechas que se envió PHI a la persona equivocada. ¿Qué haces?", "options": ["Investigar primero por tu cuenta", "Comunicarlo a Cumplimiento el mismo día", "Esperar a ver si alguien se queja", "Borrar el correo y olvidarlo"], "answer": 1},
+      {"id": "hipaa-a4", "section": "Dónde puede y dónde no puede ir la PHI", "question": "¿Dónde se puede pegar PHI?", "options": ["En Slack, si el canal es privado", "En Jira, en un proyecto restringido", "Solo en sistemas aprobados por Cumplimiento y cubiertos por un BAA", "En cualquier herramienta de IA conocida"], "answer": 2},
+      {"id": "hipaa-a5", "section": "Registro de accesos", "question": "¿Qué guarda el registro de accesos?", "options": ["Nada, el acceso es anónimo", "Quién consultó qué ficha y cuándo", "Solo los inicios de sesión fallidos", "Solo los accesos desde fuera de la oficina"], "answer": 1}
+    ],
+    [
+      {"id": "hipaa-b1", "section": "Qué protege HIPAA", "question": "¿Cuál de estos datos es PHI?", "options": ["El nombre de un paciente junto a un diagnóstico", "La dirección de una clínica", "El número total de clínicas", "Un calendario de festivos"], "answer": 0},
+      {"id": "hipaa-b2", "section": "El principio de mínimo necesario", "question": "Tienes acceso técnico a la ficha completa de un paciente pero necesitas un campo. ¿Qué puedes abrir?", "options": ["La ficha completa, ya que tienes acceso", "Solo el campo que necesitas", "También las fichas de otros pacientes", "Nunca nada"], "answer": 1},
+      {"id": "hipaa-b3", "section": "Registro de accesos", "question": "Un compañero te pide tu usuario un minuto. ¿Qué haces?", "options": ["Se lo dejas, es solo un minuto", "Te niegas: usa solo tu cuenta y nunca compartas credenciales", "Se lo dejas y luego cambias la contraseña", "Pides a IT que se lo deje"], "answer": 1},
+      {"id": "hipaa-b4", "section": "Por qué esta etapa va primero", "question": "¿Cuándo puedes recibir acceso a un sistema con información de pacientes?", "options": ["El primer día", "Tras superar esta etapa y que Cumplimiento la apruebe", "Cuando lo diga tu responsable", "Tras el cierre del onboarding, solo si lo pides"], "answer": 1},
+      {"id": "hipaa-b5", "section": "A quién preguntar", "question": "El material oficial no responde a tu duda de cumplimiento. ¿A quién preguntas?", "options": ["Supones la respuesta", "Al equipo de Cumplimiento de Claire Whitfield", "A cualquier compañero por Slack", "A nadie"], "answer": 1}
+    ]
+  ]
+}

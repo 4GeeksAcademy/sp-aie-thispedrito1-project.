@@ -179,6 +179,18 @@
   - **Decisiones del usuario:** contador en memoria (no Redis ni slowapi); ampliar el alcance al cierre de incidencias tras detectarlo. Delegada ("hazlo tu"): `SlidingWindowLimiter.check`.
   - **Hallazgo:** `services/api/.env` estuvo en el historial publicado (22-23 jul 2026) con un `JWT_SECRET_KEY`; el actual es distinto (comprobado por huella).
   - **Tests:** API 342 (+21 rate limit, +1 chat, +17 acciones irreversibles), raiz 618 (+16 anti-secretos, +7 inyeccion, +4 casos), Jest 161 (+4); batería del harness 37/37; `next build` del backoffice en verde.
+- Pila de clases #39–#45 (rfp-intake → nist-security-practices) mergeada en `main` el 2026-11-07, aprobada por el profesor: una a una y en orden, cambiando antes la base de cada PR a `main`, con merge commits. Verificado que `main` quedo identico a `feature/nist-security-practices` (diff vacio) y que las 7 ramas estan contenidas en `main`; despues se borraron las ramas locales y remotas.
+- Pitch final (rama `feat/final-pitch` sobre `main`, 2026-11-01 a 2026-11-07). Video entregado por Google Drive, fuera del repo (los MP4 no van a GitHub).
+  - **Backoffice:** navegacion en barra lateral agrupada (`components/AppShell.tsx`, `types/navigation.ts`, enlace activo por prefijo mas largo) y paleta "Turquesa clinico" con tema claro por defecto. Seccion "Inteligencia artificial" con "Asistente de politicas" y "Asistente de compliance" (renombrados para diferenciarlos).
+  - **Fix:** el enlace de restablecer contrasena apuntaba al puerto 3000 (web corporativa); ahora al backoffice (3001) en `email_service.py` y los `.env.example`.
+  - **Tests:** Jest 166 (+5 de navegacion), API 342; `tsc --noEmit` limpio.
+- Orquestador de incorporaciones (Agentic Engineering, rama `feature/onboarding-orchestrator` apilada sobre `feat/final-pitch`, 2026-11-07). Detalle en `docs/onboarding/onboarding-orchestrator.md`.
+  - **Agente unico LangGraph** con las 7 etapas del BRIEFING de Diane Foster como nodos generados desde `services/onboarding/catalog.py`; pausas reales (`interrupt()`) en tramites, comprobaciones y aprobaciones (Claire etapa 4, responsable directo etapa 5, Diane cierre); rechazo vuelve al inicio de la etapa con comentario.
+  - **Persistencia**: checkpointer Postgres (Supabase) o SQLite, hilo `onboarding-<id>`; prueba de reinicio con SIGKILL entre dos procesos reales. Ejecucion en Celery (`onboarding.advance_hire`).
+  - **Material oficial** en ingles (7 docs) y espanol (6, solo HIPAA) + bancos de preguntas fijos (2 juegos x 5); umbral 80 % / 100 % en cumplimiento; refuerzo de secciones falladas. Dudas solo con el material y cita, o derivacion (Claire/Diane, regla delegada por el usuario).
+  - **Seguridad**: identidad `onboarding-orchestrator` con capacidades mas acotadas que cualquier rol; auditoria `actor_type=agent`; bloqueo de accesos a sistemas con PHI antes de la etapa 4 (evento de seguridad + aviso a Claire); datos sensibles fuera de logs, BD, checkpoints, prompts y avisos (test que lee los bytes).
+  - **Seguimiento**: recordatorio 24 h antes, escalado al responsable; etapa 4 avisa a Diane sin escalar. Vistas `/onboarding`, `/onboarding/[id]`, `/onboarding/me`.
+  - **Tests:** 71 en `tests/onboarding`, 17 de API (backend 359), Jest 179; `tsc` y `next build` limpios.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).

@@ -1,0 +1,20 @@
+{
+  "doc_id": "role-revenue-cycle-analyst",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "rcanalyst-a1", "section": "Responsabilidades", "question": "¿Qué corrientes de ingresos cubres?", "options": ["Solo aseguradoras comerciales de EE. UU.", "Reclamaciones de EE. UU. y facturación de Reino Unido", "Solo el contrato con el NHS", "Solo el pago privado"], "answer": 1},
+      {"id": "rcanalyst-a2", "section": "Tus primeros 90 días", "question": "¿Qué informe construyes en tus primeros 90 días?", "options": ["Un informe semanal de denegaciones por causa", "Un informe anual de marketing", "Un informe de vacaciones del personal", "Un informe de limpieza de clínicas"], "answer": 0},
+      {"id": "rcanalyst-a3", "section": "Cómo trabajas con datos de pacientes", "question": "¿Qué nivel de datos usas por defecto en un análisis?", "options": ["Siempre datos por paciente", "Informes agregados; datos por paciente solo si la tarea lo exige", "Lo que sea más rápido de exportar", "Hojas de cálculo personales"], "answer": 1},
+      {"id": "rcanalyst-a4", "section": "Con quién trabajas", "question": "¿Quién dirige Ciclo de Ingresos y Facturación?", "options": ["Tom Callahan", "James Osei", "Priya Nair", "Claire Whitfield"], "answer": 0},
+      {"id": "rcanalyst-a5", "section": "Tus primeros 90 días", "question": "¿Qué tipo de mejora propones en tus primeros 90 días?", "options": ["Una validación temprana que frene una denegación antes de enviar la reclamación", "Una clínica nueva", "Una subida de precios", "Una historia clínica nueva"], "answer": 0}
+    ],
+    [
+      {"id": "rcanalyst-b1", "section": "Tus primeros 90 días", "question": "¿Cuántas causas raíz de denegación identificas primero?", "options": ["Una", "Tres", "Diez", "Todas"], "answer": 1},
+      {"id": "rcanalyst-b2", "section": "Cómo trabajas con datos de pacientes", "question": "¿Puedes exportar reclamaciones a una hoja de cálculo personal?", "options": ["Sí", "No, nunca", "Solo las pequeñas", "Solo los viernes"], "answer": 1},
+      {"id": "rcanalyst-b3", "section": "Con quién trabajas", "question": "¿Cuándo involucras a Cumplimiento?", "options": ["Siempre que los datos de facturación salgan de su sistema", "Nunca", "Solo a final de año", "Solo para la facturación de Reino Unido"], "answer": 0},
+      {"id": "rcanalyst-b4", "section": "Responsabilidades", "question": "¿A qué pagadores de EE. UU. van nuestras reclamaciones?", "options": ["Solo a Medicare", "A aseguradoras comerciales, Medicare y Medicaid", "Solo al NHS", "Solo pago privado"], "answer": 1},
+      {"id": "rcanalyst-b5", "section": "Con quién trabajas", "question": "¿Con quién trabajas los datos de reserva?", "options": ["Con las recepciones de las clínicas", "Con el ICO", "Con las aseguradoras", "Con nadie"], "answer": 0}
+    ]
+  ]
+}

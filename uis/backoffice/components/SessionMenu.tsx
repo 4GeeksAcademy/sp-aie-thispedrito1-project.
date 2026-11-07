@@ -31,13 +31,12 @@ export function SessionMenu() {
 
   return (
     <>
-      <Link href="/account/profile" className="nav-link">
+      <Link href="/account/profile" className="topbar-link">
         Mi cuenta
       </Link>
-      <button type="button" onClick={onLogout} style={{ fontSize: 14, fontWeight: 600 }}>
-        Cerrar sesion
+      <button type="button" onClick={onLogout} className="topbar-logout">
+        Cerrar sesión
       </button>
-      <span style={{ color: "var(--muted)", fontSize: 14 }}>Unidad interna · Operaciones</span>
     </>
   );
 }

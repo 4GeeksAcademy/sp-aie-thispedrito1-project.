@@ -1,0 +1,20 @@
+{
+  "doc_id": "role-digital-engineer",
+  "language": "es",
+  "sets": [
+    [
+      {"id": "digeng-a1", "section": "Tus primeros 90 días", "question": "¿Qué forma parte de tus primeros 90 días?", "options": ["Sustituir los dos sistemas de historia clínica", "Un dashboard ejecutivo semanal fiable", "Abrir una clínica nueva", "Negociar con aseguradoras"], "answer": 1},
+      {"id": "digeng-a2", "section": "Cómo trabajas con datos de pacientes", "question": "¿Qué datos debes usar siempre que sea posible?", "options": ["Datos reales de pacientes en tu portátil", "Datos de prueba o sintéticos", "Datos reales pegados en una herramienta de IA", "Datos del correo personal"], "answer": 1},
+      {"id": "digeng-a3", "section": "Con quién trabajas", "question": "¿Con qué equipo trabajas en cualquier sistema que toque datos de pacientes?", "options": ["Con el equipo de Cumplimiento de Claire Whitfield", "Solo con tu equipo", "Con las aseguradoras", "Con nadie"], "answer": 0},
+      {"id": "digeng-a4", "section": "Responsabilidades", "question": "¿Cuándo diseñas pensando en el cumplimiento?", "options": ["Después del lanzamiento", "Desde el primer día", "Solo si Cumplimiento lo pide", "Nunca"], "answer": 1},
+      {"id": "digeng-a5", "section": "Tus primeros 90 días", "question": "¿Quién acuerda contigo tus objetivos de 90 días, y cuándo?", "options": ["La CEO, a los tres meses", "Tu responsable directo, en tu primera semana", "Nadie", "Cumplimiento, al final del onboarding"], "answer": 1}
+    ],
+    [
+      {"id": "digeng-b1", "section": "Con quién trabajas", "question": "¿Con qué equipo trabajas en los recordatorios?", "options": ["Con Experiencia del Paciente de Priya Nair", "Con Ciclo de Ingresos de Tom Callahan", "Con Personas", "Solo con Operaciones Clínicas"], "answer": 0},
+      {"id": "digeng-b2", "section": "Cómo trabajas con datos de pacientes", "question": "¿Puedes copiar datos reales de pacientes a un entorno de pruebas?", "options": ["Sí, facilita las pruebas", "No, nunca", "Solo los fines de semana", "Solo muestras pequeñas"], "answer": 1},
+      {"id": "digeng-b3", "section": "Tus primeros 90 días", "question": "¿En cuántos mercados se hace el primer piloto de inasistencias?", "options": ["En todos", "En un mercado", "En tres mercados", "En ninguno"], "answer": 1},
+      {"id": "digeng-b4", "section": "Responsabilidades", "question": "¿Por qué documentas las decisiones?", "options": ["Para que otras personas puedan mantener tu trabajo", "Porque es opcional", "Para no escribir tests", "Para sustituir a Cumplimiento"], "answer": 0},
+      {"id": "digeng-b5", "section": "Cómo trabajas con datos de pacientes", "question": "Antes de que una integración nueva maneje datos de pacientes, ¿qué debe ocurrir?", "options": ["Nada", "Que se apruebe con el proceso de la etapa \"Cómo trabajamos\"", "Que el ingeniero la pruebe con datos reales", "Que el responsable lo mencione en Slack"], "answer": 1}
+    ]
+  ]
+}
