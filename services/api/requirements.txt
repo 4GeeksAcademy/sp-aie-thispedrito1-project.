@@ -56,3 +56,9 @@ langchain-mcp-adapters==0.3.2
 # readability.py lo descarga una vez dentro del venv).
 markitdown[pdf]==0.1.8
 py-readability-metrics==1.4.5
+# Gestión de proveedores y contratos: fpdf2 genera los contratos ficticios en
+# PDF (scripts/seed_supplier_contracts.py) y pdfplumber los lee página a página
+# para citar cláusula + página (ya llegaba por markitdown[pdf]; se fija aquí
+# porque ahora se importa directamente).
+fpdf2==2.8.3
+pdfplumber==0.11.10

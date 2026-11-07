@@ -191,6 +191,12 @@
   - **Seguridad**: identidad `onboarding-orchestrator` con capacidades mas acotadas que cualquier rol; auditoria `actor_type=agent`; bloqueo de accesos a sistemas con PHI antes de la etapa 4 (evento de seguridad + aviso a Claire); datos sensibles fuera de logs, BD, checkpoints, prompts y avisos (test que lee los bytes).
   - **Seguimiento**: recordatorio 24 h antes, escalado al responsable; etapa 4 avisa a Diane sin escalar. Vistas `/onboarding`, `/onboarding/[id]`, `/onboarding/me`.
   - **Tests:** 71 en `tests/onboarding`, 17 de API (backend 359), Jest 179; `tsc` y `next build` limpios.
+- Gestion de proveedores y contratos (Agentic Engineering, rama `feature/supplier-contracts` apilada sobre `feature/onboarding-orchestrator`, 2026-11-07). Detalle en `docs/supplier-contracts/supplier-contracts.md`.
+  - **Multiagente**: supervisor + especialista de precios + especialista de contratos, cada uno con identidad y lista cerrada de herramientas (`AgentRuntime`); contratos de E/S `PricingRequest`/`ContractsRequest`/`SpecialistResult`; tope de 8 consultas por peticion. El modelo (deepseek) solo planifica, con respaldo por reglas.
+  - **Datos del BRIEFING de Marcus Reid**: 7 proveedores, CSV de 12 meses con escenarios A-D, 4 contratos PDF ficticios (fpdf2) leidos con pdfplumber; cada precio con su fila y cada termino con clausula + pagina; extracciones dudosas marcadas.
+  - **Calculos deterministas** (Decimal), alertas (subida > 4 %, vencimiento 90/30, preaviso 15, BAA/DPA inmediata a Claire), brief de renegociacion con trazabilidad y recomendacion determinista (Learn by Doing delegado), borradores con aprobadores del BRIEFING (Marcus, + Claire, + Sandra > 500.000 USD) y envio solo con todas las aprobaciones.
+  - **Seguridad**: brief y borradores bloqueados sin BAA/DPA hasta autorizacion de Cumplimiento; datos bancarios/contactos ficticios nunca en BD, logs, prompts ni respuestas (test); peticiones por paciente rechazadas.
+  - **Tests:** 121 en `tests/supplier_contracts`, 10 de API (backend 369), Jest 183; `tsc` y `next build` limpios. Verificado contra Supabase real y con el modelo real.
 
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
@@ -231,6 +237,8 @@
 - Cola de tareas: la imagen `services/worker/Dockerfile` no se ha construido nunca (falta de disco el 2026-09-13); la primera vez que se levante `worker`/`flower` en Docker puede aparecer un fallo de build no detectado. Flower no tiene login: sus puertos solo se publican en `127.0.0.1`.
 - `GET /telemetry/report` responde 500 (no 400) ante fechas mal formadas en `start_date`/`end_date`: `_parse_query_datetime` no captura el `ValueError`.
 - Proxy LLM de 4Geeks inestable (2026-09-28): bloqueo `gpt-5.6-luna` (403) y `glm-5.3-flash` tuvo caidas intermitentes; ademas hubo un 503 general del proxy. `GENERATION_MODEL` es ahora `deepseek-v4-flash` (lento: 5-20 s por llamada; planificador con 20 s de limite). Un pico de latencia puede hacer caer el plan a solo RAG.
+
+- `pytest tests` (raiz, bateria completa) tiene 2 fallos previos a `feature/supplier-contracts` que pasan ejecutados solos: `test_onboarding_resume.py::test_reopening_the_checkpointer_resumes_the_same_stage` (`from conftest import Driver` recibe el conftest de otra carpeta; arreglo: usar la fixture `driver`) y `test_rfp_response.py::test_ticket_shows_progress_in_real_time` (sensible al tiempo).
 
 ## Criterio de avance para la siguiente iteracion
 - Sin errores criticos de lint en modulos clave.

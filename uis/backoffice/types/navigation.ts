@@ -20,6 +20,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Operaciones",
     items: [
       { href: "/suppliers", label: "Proveedores" },
+      { href: "/supplier-contracts", label: "Precios y contratos" },
       { href: "/incidents", label: "Incidencias" },
       { href: "/incidents/new", label: "Reportar incidencia" },
       { href: "/incidents/summary", label: "Resumen de incidencias" },

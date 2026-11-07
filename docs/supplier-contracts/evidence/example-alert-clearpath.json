@@ -1,0 +1,28 @@
+{
+  "alert_key": "price_increase:HC-S03:2026-11",
+  "recipient_role": "clinical_ops_director",
+  "summary": "Subida de precio por encima del umbral. ClearPath Labs: +7,00 % en 2026-11 (de 17,9759 USD/test a 19,2342 USD/test); supera el umbral de alerta del 4,00 %. ClearPath Labs tiene firmado su BAA (CT-HC-02 §6.1, p. 2). Impacto anual de la subida de ClearPath Labs: 37.749,00 USD ((19,2342 USD/test − 17,9759 USD/test) × 2.500 test/mes × 12). No permitida: una subida del 7,00 % supera el tope anual del IPC de EE. UU. (2,90 %) en 4,10 % (CT-HC-02 §4.2, p. 2).",
+  "details": {
+    "change_pct": "7.00",
+    "data_protection": {
+      "required": "BAA",
+      "status": "signed"
+    },
+    "annual_impact": "37749.00",
+    "permission": {
+      "verdict": "not_permitted",
+      "cap_pct": "2.9",
+      "excess_pct": "4.10",
+      "basis": "tope anual del IPC de EE. UU. (2,90 %)"
+    }
+  },
+  "refs": [
+    "price_history.csv fila 36",
+    "price_history.csv fila 37",
+    "BRIEFING Umbrales y alertas",
+    "CT-HC-02.pdf §6.1, p. 2",
+    "calculations.annual_impact (precio nuevo − anterior) × volumen mensual × 12",
+    "CT-HC-02.pdf §4.2, p. 2",
+    "BRIEFING Datos de referencia"
+  ]
+}

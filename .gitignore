@@ -48,3 +48,7 @@ data/raw/rfp/
 
 # Orquestador de incorporaciones: checkpointer SQLite local y cuentas de demo
 data/onboarding/
+# Proveedores y contratos: datos generados por scripts/seed_supplier_contracts.py
+# (contratos con datos bancarios ficticios) y cuentas de demo.
+data/raw/supplier-contracts/
+data/supplier_contracts/
