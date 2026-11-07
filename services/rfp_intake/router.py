@@ -13,6 +13,9 @@ Parte 3: `POST .../sections/{department_id}/decision` y `POST
 grafo (400 con errores por campo), la guardan en la fila y encolan
 `rfp_approval.advance_ticket` (202). La API nunca reanuda el grafo: una
 revisión puede tardar un minuto y no debe bloquear la petición HTTP.
+
+Tiempo real (Parte 1): `GET /rfp-tickets/events` es un stream SSE con el
+evento `rfp_ticket_created`. Hereda el JWT del router como el resto de rutas.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from kombu.exceptions import OperationalError
 from redis.exceptions import RedisError
 from sqlmodel import Session
@@ -44,6 +48,7 @@ from data.pipelines.rfp_intake.models import (
 from data.pipelines.rfp_intake.runner import pdf_path_for, relative_to_root
 from database import get_inventory_db
 from security import get_current_user
+from services.rfp_intake.events import SSE_HEADERS, RfpEventHub, event_stream, get_rfp_event_hub
 from services.rfp_intake.schemas import (
     ArbitrationDecisionRequest,
     RfpDecisionQueued,
@@ -124,6 +129,21 @@ def list_rfp_tickets(
             )
         )
     return items
+
+
+# Declarada antes de `/{ticket_id}`: si no, "events" se intentaría leer como
+# UUID y daría 422.
+@router.get(
+    "/events",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}, "description": "Stream SSE (`rfp_ticket_created`)."}},
+)
+async def stream_rfp_events(hub: RfpEventHub = Depends(get_rfp_event_hub)) -> StreamingResponse:
+    """Avisa de cada RFP nueva en cuanto el clasificador la acepta. El JWT se
+    comprueba al conectar (dependencia del router): sin token, 401 y ni un
+    evento. Detalle y estrategia de reconexión en docs/sse-notifications.md."""
+    subscription = await hub.subscribe()
+    return StreamingResponse(event_stream(subscription, hub), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 def _get_or_404(session: Session, ticket_id: uuid.UUID):

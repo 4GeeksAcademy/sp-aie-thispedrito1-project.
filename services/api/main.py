@@ -40,6 +40,7 @@ from services.agent.router import router as agent_router  # noqa: E402
 from services.knowledge.router import router as knowledge_router  # noqa: E402
 from services.reporting.router import router as reporting_router  # noqa: E402
 from services.rfp_intake.router import router as rfp_intake_router  # noqa: E402  (registra las tablas rfp_*)
+from services.rfp_intake.events import install_shutdown_signal_hook, shutdown_hub as shutdown_rfp_event_hub  # noqa: E402
 from services.tasks.router import router as tasks_router  # noqa: E402
 import services.tasks.dead_letters  # noqa: E402,F401  (registers task_dead_letters on SQLModel.metadata)
 from data.pipelines.monthly_clinic_supply_performance.models import ensure_reporting_schema  # noqa: E402
@@ -143,6 +144,19 @@ def flag_expiring_supplies() -> None:
             inventory_alerts.flag_expiring_supplies(session)
     except Exception as exc:  # missing DATABASE_URL, or Supabase unreachable
         print(f"[telemetry] skipping expiry check: {exc}", file=sys.stderr)
+
+
+@app.on_event("startup")
+def hook_rfp_streams_into_shutdown_signals() -> None:
+    """Sin esto, una pestaña con /rfps abierta impide que la API se apague
+    (ver install_shutdown_signal_hook)."""
+    install_shutdown_signal_hook()
+
+
+@app.on_event("shutdown")
+async def close_rfp_event_stream() -> None:
+    """Cierra los streams SSE abiertos y la suscripción a Redis del hub."""
+    await shutdown_rfp_event_hub()
 
 
 @app.exception_handler(Exception)

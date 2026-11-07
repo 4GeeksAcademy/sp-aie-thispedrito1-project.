@@ -5,6 +5,11 @@ const BASE_URL =
   (globalThis as { process?: { env?: { NEXT_PUBLIC_API_URL?: string } } }).process?.env?.NEXT_PUBLIC_API_URL ||
   "/api-proxy";
 
+/** URL completa de una ruta de la API (la usa también el stream SSE de RFPs, que no pasa por requestJson). */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`;
+}
+
 type RequestOptions = {
   authRequired?: boolean;
 };
@@ -69,7 +74,7 @@ function extractFieldErrors(payload: unknown): FieldError[] | null {
   return null;
 }
 
-function redirectToLogin() {
+export function redirectToLogin() {
   if (typeof window === "undefined") return;
   clearAuthToken();
   if (!window.location.pathname.startsWith("/login")) {

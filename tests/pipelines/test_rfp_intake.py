@@ -542,3 +542,64 @@ def test_stale_analyzing_ticket_becomes_error(session, tmp_path):
     session.commit()
     assert repository.recover_stale(session, ticket) is True
     assert ticket.status == STATUS_ERROR and "Reprocesar" in ticket.error_message
+
+
+# --------------------------------------------------------------------------
+# Aviso en tiempo real `rfp_ticket_created` (Sistemas en Tiempo Real, Parte 1)
+# `published_rfp_events` (conftest) graba lo que iría a Redis.
+# --------------------------------------------------------------------------
+
+import json  # noqa: E402
+
+from data.pipelines.rfp_intake import notifications  # noqa: E402
+
+
+def test_valid_rfp_publishes_one_ticket_created_event_while_still_analyzing(session, tmp_path, published_rfp_events):
+    ticket = new_ticket(session, tmp_path)
+    run_intake(session, ticket.ticket_id, graph=graph_for(MERIDIAN, meridian_llm()))
+
+    assert len(published_rfp_events) == 1
+    channel, raw = published_rfp_events[0]
+    assert channel == notifications.RFP_EVENTS_CHANNEL
+    message = json.loads(raw)
+    assert message["event"] == "rfp_ticket_created"
+    data = message["data"]
+    # Campos del BRIEFING de tiempo real (§3), en su orden y ninguno más.
+    assert list(data) == ["ticket_id", "rfp_id", "client_name", "client_country", "program_type", "status", "created_at"]
+    assert data["ticket_id"] == str(ticket.ticket_id) and data["rfp_id"] == ticket.rfp_id
+    assert data["client_name"] == MERIDIAN_PLAN["client_name"] and data["client_country"] == "US"
+    # Se avisa al empezar el procesamiento, no al terminarlo.
+    assert data["status"] == STATUS_ANALYZING
+    assert data["created_at"].endswith("Z")
+
+
+def test_not_an_rfp_publishes_nothing(session, tmp_path, published_rfp_events):
+    ticket = new_ticket(session, tmp_path)
+    llm = FakeLlm(classifier={"is_rfp": False, "confidence": 0.9, "document_kind": "vendor_pitch", "reason": "Pitch"})
+    run_intake(session, ticket.ticket_id, graph=graph_for(MEDFLOW, llm))
+    assert published_rfp_events == []
+
+
+def test_rfp_with_phi_publishes_nothing(session, tmp_path, published_rfp_events):
+    ticket = new_ticket(session, tmp_path)
+    run_intake(session, ticket.ticket_id, graph=graph_for(PHI_RFP, meridian_llm()))
+    assert published_rfp_events == []
+
+
+def test_redis_down_does_not_break_the_analysis(session, tmp_path, monkeypatch):
+    def broken_publisher():
+        def publish(channel, message):
+            raise ConnectionError("redis down")
+        return publish
+
+    monkeypatch.setattr(notifications, "_redis_publisher", broken_publisher)
+    ticket = new_ticket(session, tmp_path)
+    assert run_intake(session, ticket.ticket_id, graph=graph_for(MERIDIAN, meridian_llm())) == STATUS_COMPLETE
+
+
+def test_ticket_created_payload_never_carries_fields_outside_the_allowlist():
+    ticket = RfpTicket(rfp_id="RFP-TEST", raw_pdf_path="x.pdf", created_by="u")
+    metadata = {"client_name": "Westbrook Manufacturing", "client_country": "US", "program_type": ["occupational_health"],
+                "covered_population": 800, "summary": "texto libre del documento"}
+    payload = notifications.ticket_created_payload(ticket, metadata)
+    assert set(payload) == set(notifications.TICKET_CREATED_FIELDS)

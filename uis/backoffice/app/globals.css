@@ -287,6 +287,97 @@ button.primary:hover {
   color: var(--critical);
 }
 
+/* Tiempo real (/rfps): aviso de RFP nueva por SSE e indicador de conexión. */
+.rfp-arrivals {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.rfp-arrivals:empty {
+  display: none;
+}
+
+.rfp-arrival {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--brand);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand) 10%, var(--panel));
+}
+
+/* Recuperada al reconectar: no llegó en directo. */
+.rfp-arrival-recovered {
+  border-style: dashed;
+  border-left-style: solid;
+}
+
+.rfp-arrival-title {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.rfp-row-new td {
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.rfp-badge-new {
+  background: var(--brand);
+  color: var(--bg);
+}
+
+.rfp-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--muted);
+}
+
+.rfp-live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.rfp-live-live::before {
+  background: var(--ok);
+  box-shadow: 0 0 var(--led-glow) var(--ok);
+}
+
+.rfp-live-reconnecting {
+  color: var(--warning);
+}
+
+.rfp-live-reconnecting::before {
+  background: var(--warning);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rfp-arrival {
+    animation: rfp-arrival-in 240ms ease-out;
+  }
+}
+
+@keyframes rfp-arrival-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Parte 2: borrador provisional (agotó las iteraciones sin pasar la evaluación). */
 .rfp-status-review {
   background: color-mix(in srgb, var(--critical) 10%, transparent);

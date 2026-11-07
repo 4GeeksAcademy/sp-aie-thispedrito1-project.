@@ -25,7 +25,7 @@ from typing import Any, Dict, Optional
 from sqlmodel import Session
 
 from data.pipelines import ROOT_DIR
-from data.pipelines.rfp_intake import repository
+from data.pipelines.rfp_intake import notifications, repository
 from data.pipelines.rfp_intake.departments import DEPARTMENTS, country_rules
 from data.pipelines.rfp_intake.graph import OUTCOME_COMPLETE, OUTCOME_PHI, compile_rfp_intake_graph
 from data.pipelines.rfp_intake.trace import entry as trace_entry
@@ -156,6 +156,11 @@ def _run_with_trace(graph: Any, payload: Dict[str, Any], session: Session, ticke
             continue
         for node, update in chunk.items():
             update = update or {}
+            if node == "orchestrate":
+                # Solo corre si el clasificador aceptó el documento: es el
+                # momento "RFP válida, empieza el procesamiento" del BRIEFING
+                # de tiempo real, y ya hay cliente y país que mostrar.
+                notifications.notify_ticket_created(ticket, update.get("metadata") or {})
             department_id = ((update.get("worker_results") or [{}])[0].get("department_id")
                              if node == "department_worker" else None)
             entries.append(trace_entry(

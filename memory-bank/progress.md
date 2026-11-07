@@ -157,6 +157,13 @@
   - **Verificado** con deepseek y Supabase reales: `scripts/run_rfp_e2e.py --live` con Thames Valley (UK) → `terminado` en GBP con DPA; cadena completa por la UI en Chrome con Meridian (Celery encadena las 3 partes, aprobar B con A pausado, PHI en comentario rechazado, solicitar cambios, arbitraje de Tom con reduccion a 500, timeout del proxy reintentado sin perder decisiones, documento final y 60 pasos de traza).
   - **Tests:** raiz 546 (+39 en `test_rfp_approval.py`, +1 E2E en `test_rfp_e2e.py`), API 264 (+6 en `test_rfp_approval_api.py`), Jest 119 (+9 en `rfpApproval.test.ts`); `npm run lint` (next build) en verde.
 
+- Notificaciones en tiempo real de RFPs por SSE (rama `feature/sse-notifications` apilada sobre `feature/rfp-approval-completion`, 2026-10-27, Sistemas en Tiempo Real Parte 1 de 2). Diseno, respuestas a las preguntas de diseno y verificacion en `docs/sse-notifications.md`.
+  - **Que hace:** el worker de la Parte 1 publica `rfp_ticket_created` en Redis al terminar `orchestrate` (RFP valida, ticket aun `analizando`); `GET /rfp-tickets/events` (mismo JWT) lo reenvia por SSE con keep-alive; `/rfps` muestra un aviso destacado y la fila NUEVA sin recargar, con reconexion por backoff (1-30 s) y vigilante de 45 s.
+  - **Decisiones del usuario:** avisar al clasificar (no al subir); mantener el polling solo para estados; sin caso opcional. Delegada ("hazlo tu"): criterio de `findMissedTickets` (excluye `descartado`, `error` y `analizando` sin cliente). Recuperacion: refetch de la lista al reconectar y en cada refresco + deduplicacion por `ticket_id`.
+  - **Encontrado en la prueba real:** la API no se apagaba con un stream abierto (uvicorn espera a las conexiones antes del shutdown; el parche de `Server.handle_exit` llegaba tarde, arreglado envolviendo el manejador de senal en el startup); el proxy de Next.js no cierra la respuesta si la API muere de golpe (lo cubre el vigilante); una RFP clasificada durante el corte podia no avisar nunca si al reconectar seguia sin cliente (ahora se compara tambien en cada refresco).
+  - **Verificado** en Chrome con Redis y Supabase reales: aviso en directo por el proxy, deduplicacion, backoff visible, recuperacion de un ticket insertado durante el corte (borrado despues), filtro de un `patient_name` inyectado. No verificado: subida real con worker + deepseek.
+  - **Tests:** raiz 551 (+5), API 275 (+11 en `test_rfp_events.py`), Jest 141 (+22 en `rfpEvents.test.ts` y `useRfpEvents.test.tsx`); `npm run lint` (next build) en verde.
+
 ## En curso
 - Consolidacion de modelo canonico de datos para candidatos (evitar divergencias stage/step y campos alternos).
 - Mejora de robustez de tipos en frontend.

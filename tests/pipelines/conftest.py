@@ -22,3 +22,18 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def published_rfp_events(monkeypatch):
+    """El runner de la Parte 1 publica `rfp_ticket_created` en Redis. En los
+    tests nunca sale nada a Redis (con uno local encendido, el backoffice
+    mostraría avisos falsos): se graba en esta lista de (canal, mensaje)."""
+    from data.pipelines.rfp_intake import notifications
+
+    published = []
+    monkeypatch.setattr(notifications, "_redis_publisher", lambda: lambda channel, message: published.append((channel, message)))
+    return published
