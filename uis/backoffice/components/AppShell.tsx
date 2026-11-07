@@ -9,7 +9,7 @@ import { NAV_SECTIONS, isActivePath, visibleSections } from "../types/navigation
 import { SessionMenu } from "./SessionMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
-const PUBLIC_ROUTES = new Set(["/login", "/register", "/forgot-password", "/reset-password"]);
+const PUBLIC_ROUTES = new Set(["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback/microsoft"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

@@ -38,6 +38,8 @@ from routes.telemetry import router as telemetry_router  # noqa: E402
 from routes.users import router as users_router  # noqa: E402
 from routes.access import router as access_router  # noqa: E402
 from routes.internal_reports import router as internal_reports_router  # noqa: E402
+from routes.federated import router as federated_router  # noqa: E402
+from routes.mock_microsoft import router as mock_microsoft_router  # noqa: E402
 from security import get_current_user  # noqa: E402
 from services.agent.router import router as agent_router  # noqa: E402
 from services.agent.chat.router import router as agent_chat_router  # noqa: E402  (registra chat_sessions/chat_messages)
@@ -98,6 +100,8 @@ app.add_middleware(
 
 app.include_router(suppliers_router)
 app.include_router(auth_router)
+app.include_router(federated_router)
+app.include_router(mock_microsoft_router)
 app.include_router(users_router)
 app.include_router(access_router)
 app.include_router(internal_reports_router)

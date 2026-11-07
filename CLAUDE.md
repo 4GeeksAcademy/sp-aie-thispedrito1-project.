@@ -274,6 +274,18 @@ services/api/.venv/bin/python scripts/seed_roles_permissions.py     # 3 roles, 6
 
 Desde la raíz. La contraseña de la semilla es aleatoria (o `ROLES_SEED_PASSWORD`) y el script la imprime. Pantallas `/internal-reports` y `/admin/access` (solo Admin). Detalle en `docs/roles-permissions/roles-permissions.md`.
 
+### Autenticación federada con Microsoft
+
+```bash
+services/api/.venv/bin/python scripts/seed_federated_auth.py      # Marcus vinculado, Priya sin vincular, Alex sin contraseña → data/federated_auth/demo-users.db.json
+(cd services/api && MICROSOFT_IDP_MODE=mock SUPPLIERS_DB_PATH=../../data/federated_auth/demo-users.db.json .venv/bin/uvicorn main:app --port 8000)
+(cd uis/backoffice && npm run dev -- --port 3001)                 # /login → "Iniciar sesión con Microsoft"; /account/profile → vincular
+(cd services/api && .venv/bin/python -m pytest tests/test_federated_auth.py -o addopts="")   # 49
+(cd uis/backoffice && npx jest __tests__/federated.test.ts)                                   # 8
+```
+
+Desde la raíz. `MICROSOFT_IDP_MODE=mock` usa el simulador de la propia API (`/dev/mock-microsoft/authorize`); `microsoft` + `MICROSOFT_CLIENT_ID/SECRET/TENANT_ID` usa Entra real (single-tenant). Detalle en `docs/federated-auth/federated-auth.md`.
+
 ### Tests (ver TESTING.md en la raíz para el plan completo)
 
 ```bash
@@ -988,6 +1000,32 @@ Gotchas reales:
 - **TinyDB compartía un manejador de archivo entre hilos**: `/admin/access` pide tres listados a la vez y `GET /roles` daba 500 (`JSONDecodeError`). Lo destapó Chrome, no los tests. `database.LockedJSONStorage` serializa lecturas/escrituras (RLock de proceso); `test_concurrent_reads_of_the_shared_tinydb_do_not_corrupt` falla sin él. Con varios workers de uvicorn seguiría habiendo carreras entre procesos.
 - `useAsyncData` ahora muestra el mensaje de un 403 (ya en español vía `http.ts`/`FORBIDDEN_MESSAGES`) en vez del genérico "verifica que la API esté activa".
 - Tests: hash bcrypt una vez por módulo y tokens con `create_access_token` (sin login) para no tardar.
+
+### Autenticación federada con Microsoft — `docs/federated-auth/federated-auth.md`
+
+Plataforma – Autenticación Federada, rama `feature/federated-auth` apilada sobre `feature/roles-permissions`, 2026-11-07. BRIEFING del currículo (`content/contexts/federated-authentication/`). Regla del CTO: el login federado **nunca crea cuentas**; solo entra a cuentas aprovisionadas por IT que su dueño vinculó desde el perfil con sesión de contraseña.
+
+Mapa del código (`services/api/`):
+- `federated_config.py` (modo `mock`/`microsoft`/desactivado, lista blanca `OAUTH_REDIRECT_URI`, rechaza tenants `common`/`organizations`/`consumers`), `federated_providers.py` (PKCE, `validate_id_token`, `MicrosoftProvider` real con JWKS cacheado, `MockMicrosoftProvider` + `MOCK_IDENTITIES`), `federated_repository.py` (TinyDB: `federated_identities`, `oauth_states`, `federated_audit_events`), `federated_rules.py` (reglas puras y códigos de motivo; `unlink_block_reason` = Learn by Doing **delegado**), `federated_models.py`.
+- `routes/federated.py` (`/auth/federated`: `providers`, `{provider}/login/start`, `{provider}/link/start`, `{provider}/callback`, `links`, `DELETE {provider}`, `audit` solo admin) y `routes/mock_microsoft.py` (simulador, 404 fuera de modo `mock`, fuera de OpenAPI).
+- Backoffice: `/auth/callback/microsoft` (ruta "abierta" en `AuthGuard.OPEN_ROUTES`: funciona con y sin sesión), botón en `/login`, `components/FederatedAccountsPanel.tsx` en `/account/profile`, `types/federated.ts`, `services/federatedApi.ts`. `http.ts` traduce `detail.code` con `FEDERATED_MESSAGES` en cualquier estado HTTP.
+- Semilla `scripts/seed_federated_auth.py` (encima de la de Roles y Permisos).
+
+Decisiones que conviene no romper:
+- **Decisiones del usuario:** flujo real + simulador; callback en el backoffice (3001), no en el 3000 del BRIEFING; cuenta de semilla sin contraseña (Alex Morgan).
+- **El propósito (`login`/`link`) se guarda con el `state` en el servidor**; el callback nunca lo toma del navegador. Un `state` de login no vincula aunque llegue con sesión, y el de vinculación exige la misma cuenta que lo empezó.
+- **Nunca buscar la cuenta por email** en el login federado (test `test_matching_email_is_not_a_link`).
+- **`provisioned_by_it` ausente = no** (falla cerrado): las cuentas antiguas no pueden vincular hasta que IT/la semilla las marque (`AuthRepository.set_federation_profile`). Ningún endpoint del usuario lo escribe.
+- **Sin tokens de Microsoft en disco**: el id_token se valida y se descarta (test que busca `eyJ` en la TinyDB). `state` guardado como huella SHA-256, un solo uso, 10 min.
+- **Misma sesión que la contraseña**: `create_access_token` idéntico; cuenta desactivada → 401 y `account_inactive` en el siguiente login federado.
+- **Cuentas sin contraseña** (`hashed_password` null): `authenticate_user` devuelve None (antes habría dado 500) y `/auth/change-password` da 400 orientando a "Olvidé mi contraseña". Desvincular el último método → 409 `last_access_method` + aviso en la UI.
+- Errores como `{"detail": {"code", "message"}}`; el texto en español lo pone el backoffice por código.
+
+Gotchas y residuales:
+- El simulador valida `redirect_uri` igual que Entra: nunca redirige a una URI fuera de la lista (página de error 400).
+- `useRef` en el callback: React estricto ejecuta el efecto dos veces en dev y el `code` es de un solo uso.
+- Candados de proceso para unicidad del vínculo y consumo del `state` (un worker de uvicorn).
+- No probado contra un tenant de Entra real; el canje real se cubre con `httpx.MockTransport`. En modo simulado el `oid` aparece en el log de acceso de uvicorn (URL del simulador).
 
 ### Rendimiento frontend — `AUDIT.md` + `REPORT.md` + `audit/`
 

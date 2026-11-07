@@ -149,7 +149,22 @@ class AuthRepository:
         self._users.remove(user.id == user_id)
         return True
 
-    def set_password(self, user_id: str, hashed_password: str) -> dict[str, Any] | None:
+    def set_federation_profile(
+        self, user_id: str, *, provisioned_by_it: bool, audience: str = "staff"
+    ) -> dict[str, Any] | None:
+        """Autenticación federada (BRIEFING §4): IT marca a la persona como
+        aprovisionada antes de que pueda vincular Microsoft. Solo lo escribe
+        la semilla / un proceso de IT; ningún endpoint del usuario."""
+        user = Query()
+        if not self._users.contains(user.id == user_id):
+            return None
+        self._users.update(
+            {"provisioned_by_it": provisioned_by_it, "audience": audience}, user.id == user_id
+        )
+        found = self._users.get(user.id == user_id)
+        return dict(found) if found else None
+
+    def set_password(self, user_id: str, hashed_password: str | None) -> dict[str, Any] | None:
         user = Query()
         if not self._users.contains(user.id == user_id):
             return None

@@ -1,4 +1,5 @@
 import { FORBIDDEN_MESSAGES } from "../types/access";
+import { FEDERATED_MESSAGES } from "../types/federated";
 import { clearAuthToken, getAuthToken } from "./session";
 import { track } from "./telemetry";
 
@@ -84,6 +85,13 @@ export function redirectToLogin() {
 }
 
 function extractErrorMessage(status: number, payload: unknown): string {
+  // Autenticación federada: { detail: { code, message } } en 400/401/403/
+  // 404/409/502/503. Los códigos son seguros de mostrar (los fija la API),
+  // por eso van antes del mensaje genérico de los 5xx.
+  if (isObjectRecord(payload) && isObjectRecord(payload.detail)) {
+    const { code } = payload.detail;
+    if (typeof code === "string" && FEDERATED_MESSAGES[code]) return FEDERATED_MESSAGES[code];
+  }
   if (status >= 500) {
     return "El servidor tuvo un problema inesperado. Inténtalo de nuevo en unos minutos.";
   }
