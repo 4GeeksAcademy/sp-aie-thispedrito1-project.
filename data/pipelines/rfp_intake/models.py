@@ -31,13 +31,36 @@ STATUS_ANALYZING = "analizando"
 STATUS_DISCARDED = "descartado"
 STATUS_COMPLETE = "analisis_completo"
 STATUS_ERROR = "error"
-STATUSES = (STATUS_ANALYZING, STATUS_DISCARDED, STATUS_COMPLETE, STATUS_ERROR)
+# Parte 2 (README + BRIEFING §2.3), mismos nombres literales. Más
+# `evaluacion_completa` (decisión del usuario, 2026-10-21): las tres secciones
+# aprobaron; quedarse en `en_evaluación` parecería que sigue trabajando, y los
+# estados de la Parte 3 (`esperando_aprobación`, `terminado`) están vetados aquí.
+STATUS_DRAFTING = "generando_borrador"
+STATUS_EVALUATING = "en_evaluación"
+STATUS_NEEDS_REVIEW = "needs_human_review"
+STATUS_EVALUATED = "evaluacion_completa"
+STATUSES = (
+    STATUS_ANALYZING, STATUS_DISCARDED, STATUS_COMPLETE, STATUS_ERROR,
+    STATUS_DRAFTING, STATUS_EVALUATING, STATUS_NEEDS_REVIEW, STATUS_EVALUATED,
+)
+# Estados en los que un worker está trabajando: `recover_stale` los vigila.
+IN_PROGRESS_STATUSES = (STATUS_ANALYZING, STATUS_DRAFTING, STATUS_EVALUATING)
 
 DISCARD_NOT_RFP = "not_rfp"
 DISCARD_PHI = "phi_detected"
 
 # Siguiente etapa del mismo ticket: la recogerá la Parte 2 (generadores).
 NEXT_STAGE_DRAFTING = "generando_borrador"
+# Bandera para la Parte 3. Es `next_stage`, no `status`: la Parte 2 no
+# escribe estados de la Parte 3.
+NEXT_STAGE_APPROVAL = "esperando_aprobación"
+
+# Estado de cada sección dentro de la Parte 2 (`draft_status`).
+SECTION_PENDING = "pendiente"
+SECTION_DRAFTING = STATUS_DRAFTING
+SECTION_EVALUATING = STATUS_EVALUATING
+SECTION_PASSED = "aprobada_por_evaluadores"
+SECTION_NEEDS_REVIEW = STATUS_NEEDS_REVIEW
 
 
 def utcnow() -> datetime:
@@ -67,6 +90,11 @@ class RfpTicket(SQLModel, table=True):
     # payload del synthesizer. `next_stage` es la bandera que la Parte 2 lee.
     handoff_payload: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
     next_stage: Optional[str] = Field(default=None, index=True, max_length=32)
+    # Parte 2: handoff hacia la Parte 3 (borrador + EvaluationResult por
+    # departamento). Columna aparte: `handoff_payload` es el contrato de la
+    # Parte 1 y la Parte 2 lo lee, nunca lo pisa.
+    response_handoff: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
+    response_task_id: Optional[str] = Field(default=None, max_length=64)
     created_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     updated_at: datetime = Field(default_factory=utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
     completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
@@ -122,7 +150,37 @@ class RfpDepartmentSection(SQLModel, table=True):
     unsupported_claims_removed: int = Field(default=0)
     # Partes 2 y 3: vacías en la Parte 1.
     draft_content: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    # Último EvaluationResult (forma del README). El historial guarda los
+    # anteriores, para que Ventas vea qué se corrigió en cada vuelta.
     evaluation_results: Optional[dict[str, Any]] = Field(default=None, sa_column=_json_column())
+    evaluation_history: List[dict[str, Any]] = Field(default_factory=list, sa_column=_json_column())
+    draft_status: Optional[str] = Field(default=None, max_length=32)
+    draft_iterations: int = Field(default=0)
+    drafted_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     approval_status: Optional[str] = Field(default=None, max_length=32)
     approver: Optional[str] = Field(default=None, max_length=64)
     approved_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+# Columnas añadidas por la Parte 2 a tablas que la Parte 1 ya creó en
+# Supabase. `create_all` no altera tablas existentes; esto sí, y es
+# idempotente (IF NOT EXISTS). Las bases nuevas (SQLite de tests, Supabase
+# limpio) ya las reciben de `create_all` y aquí no pasa nada.
+_PART2_COLUMNS = (
+    ("rfp_tickets", "response_handoff", "JSONB"),
+    ("rfp_tickets", "response_task_id", "VARCHAR(64)"),
+    ("rfp_department_sections", "evaluation_history", "JSONB"),
+    ("rfp_department_sections", "draft_status", "VARCHAR(32)"),
+    ("rfp_department_sections", "draft_iterations", "INTEGER NOT NULL DEFAULT 0"),
+    ("rfp_department_sections", "drafted_at", "TIMESTAMP WITH TIME ZONE"),
+)
+
+
+def ensure_rfp_response_columns(engine: Any) -> None:
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as connection:
+        for table, column, ddl in _PART2_COLUMNS:
+            connection.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}"))
