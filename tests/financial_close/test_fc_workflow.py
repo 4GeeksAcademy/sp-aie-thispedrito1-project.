@@ -143,3 +143,19 @@ def test_model_text_does_not_change_figures(session, engine, fake_llm):
     without = _close(session, engine)
     assert with_model.figures_sha256 == without.figures_sha256
     assert with_model.trace["narrative_sources"][LAB_US] == "model"
+
+
+def test_the_close_agent_is_recorded_as_a_process_in_the_audit_log(session, engine):
+    from services.audit import catalog as audit_catalog
+    from services.audit.models import AuditLogEntry
+
+    row = _close(session, engine)
+    entry = session.exec(select(AuditLogEntry)).one()
+    assert (entry.actor_type, entry.actor_id) == ("process", audit_catalog.PROCESS_FINANCIAL_CLOSE_AGENT)
+    assert entry.action == "financial_report_prepared" and entry.resource_id == str(row.id)
+    assert entry.department_id == audit_catalog.department_id("revenue_cycle")
+    assert entry.origin.startswith("process:financial_close_agent:pid")
+    # Ninguna cifra ni texto del informe: solo periodo, versión y la huella.
+    assert PATIENT_NAME not in entry.details and set(json.loads(entry.details)) == {
+        "period", "version", "trigger", "figures_sha256"
+    }

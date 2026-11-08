@@ -21,6 +21,7 @@ from typing import List, Optional
 from sqlalchemy import Column, Date, DateTime, Numeric, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
+from services.audit.models import AuditLogEntry
 from telemetry_models import _JSONBOrJSON
 
 REPORT_PENDING = "pending_review"
@@ -219,4 +220,6 @@ FC_TABLES: List = [
     FcDistribution.__table__,
     FcNotification.__table__,
     FcAgentAction.__table__,
+    # Registro de Auditoría: la preparación del informe por el agente se audita.
+    AuditLogEntry.__table__,
 ]

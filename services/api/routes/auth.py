@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import sys
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
@@ -29,6 +30,8 @@ from security import (
 )
 from auth_repository import AuthRepository
 from email_service import send_password_reset_email
+from security import resolve_access
+from services.audit.writer import anonymous_actor, commit_record, human_actor, request_origin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 auth_repo = AuthRepository()
@@ -61,12 +64,53 @@ def _emit_login_outcome(
         )
 
 
+def _audit_login(
+    *, request: Request, email: str, user: dict[str, Any] | None, login_method: str, db_session: Session | None
+) -> None:
+    """Registro de Auditoría: login correcto y fallido.
+
+    Mismo criterio que la telemetría de login: el login NO depende de
+    Supabase (decisión del proyecto), así que sin base de datos se avisa por
+    stderr (sin email ni id) y el login sigue. Un fallo no distingue "no
+    existe" de "contraseña incorrecta" (anti-enumeración): sale como actor
+    anónimo con la huella HMAC del identificador, nunca el email."""
+    if db_session is None:
+        print("[audit] login event not recorded: audit database unavailable", file=sys.stderr)
+        return
+    origin = request_origin(request)
+    try:
+        if user:
+            commit_record(
+                db_session,
+                actor=human_actor(str(user["id"]), origin),
+                action="login_succeeded",
+                resource_id=str(user["id"]),
+                department_id=resolve_access(user).get("department_id"),
+                details={"login_method": login_method},
+            )
+        else:
+            commit_record(
+                db_session,
+                actor=anonymous_actor(origin),
+                action="login_failed",
+                outcome="denied",
+                details={
+                    "login_method": login_method,
+                    "identifier_hash": telemetry_service.hash_identifier(email),
+                },
+            )
+    except Exception as exc:  # noqa: BLE001 - un fallo de auditoría no tumba el login
+        db_session.rollback()
+        print(f"[audit] login event not recorded: {type(exc).__name__}", file=sys.stderr)
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(
-    payload: LoginRequest, db_session: Session | None = Depends(get_inventory_db_optional)
+    payload: LoginRequest, request: Request, db_session: Session | None = Depends(get_inventory_db_optional)
 ) -> TokenResponse:
     user = authenticate_user(email=str(payload.email), password=payload.password)
     _emit_login_outcome(email=str(payload.email), user=user, login_method="password", db_session=db_session)
+    _audit_login(request=request, email=str(payload.email), user=user, login_method="password", db_session=db_session)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
@@ -76,12 +120,16 @@ def login(
 
 @router.post("/token", response_model=TokenResponse)
 def oauth_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db_session: Session | None = Depends(get_inventory_db_optional),
 ) -> TokenResponse:
     user = authenticate_user(email=form_data.username, password=form_data.password)
     _emit_login_outcome(
         email=form_data.username, user=user, login_method="oauth2_token", db_session=db_session
+    )
+    _audit_login(
+        request=request, email=form_data.username, user=user, login_method="oauth2_token", db_session=db_session
     )
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")

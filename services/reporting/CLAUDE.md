@@ -1,0 +1,1 @@
+Endpoints del pipeline de negocio. Las reglas están en la sección 1 de `data/CLAUDE.md`: léela antes de cambiar nada aquí. Sin `TTLCache` (escribe otro proceso); `POST /reporting/pipeline-runs` encola en Celery (ver `services/tasks/CLAUDE.md`).

@@ -48,6 +48,17 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: "Pacientes",
+    items: [{ href: "/patients", label: "Fichas (sintéticas)" }],
+  },
+  {
+    // Fuera de "Administración" a propósito: esa sección es solo de Admin, y
+    // el registro lo abre todo el mundo (el Empleado ve "quién accedió a mis
+    // pacientes"); la API recorta el resto por rol y departamento.
+    title: "Cumplimiento",
+    items: [{ href: "/audit-log", label: "Registro de auditoría" }],
+  },
+  {
     title: "Personas",
     items: [
       { href: "/onboarding", label: "Incorporaciones" },

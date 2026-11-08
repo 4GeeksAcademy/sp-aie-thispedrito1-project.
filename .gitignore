@@ -61,3 +61,5 @@ data/financial_close/
 data/roles_permissions/
 # Autenticación federada: cuentas de demo de scripts/seed_federated_auth.py.
 data/federated_auth/
+# Registro de Auditoría: cuentas de demo de scripts/seed_audit_log.py.
+data/audit_log/
